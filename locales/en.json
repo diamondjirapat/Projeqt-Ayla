@@ -1,0 +1,291 @@
+{
+  "commands": {
+    "ping": {
+      "name": "ping",
+      "description": "Check bot latency",
+      "response_title": "🏓 Pong!",
+      "response_description": "Latency: {latency}ms"
+    },
+    "info": {
+      "name": "info",
+      "description": "Display bot information",
+      "title": "Bot Information",
+      "servers": "Servers",
+      "users": "Users",
+      "version": "Discord.py Version"
+    },
+    "profile": {
+      "name": "profile",
+      "description": "Display user profile from database",
+      "title": "{username}'s Profile",
+      "registered": "Registered",
+      "last_updated": "Last Updated",
+      "not_found": "User not found in database"
+    },
+    "kick": {
+      "name": "kick",
+      "description": "Kick a member from the server",
+      "title": "Member Kicked",
+      "kick_description": "{member} has been kicked",
+      "reason": "Reason",
+      "moderator": "Moderator",
+      "no_permission": "❌ I don't have permission to kick this member.",
+      "error": "❌ An error occurred: {error}"
+    },
+    "ban": {
+      "name": "ban",
+      "description": "Ban a member from the server",
+      "title": "Member Banned",
+      "ban_description": "{member} has been banned",
+      "reason": "Reason",
+      "moderator": "Moderator",
+      "no_permission": "❌ I don't have permission to ban this member.",
+      "error": "❌ An error occurred: {error}"
+    },
+    "purge": {
+      "name": "purge",
+      "description": "Delete multiple messages",
+      "title": "Messages Purged",
+      "purge_description": "Deleted {count} messages",
+      "moderator": "Moderator",
+      "invalid_amount": "❌ Amount must be between 1 and 100.",
+      "no_permission": "❌ I don't have permission to delete messages.",
+      "error": "❌ An error occurred: {error}"
+    },
+    "setlang": {
+      "name": "setlang",
+      "command_description": "Set server language (Admin only)",
+      "title": "✅ Server Language Updated",
+      "description": "Server language has been set to **{language}**\n\nThis will be the default language for:\n• Users who haven't set a personal language\n• Static embeds (music player, etc.)\n• Server-wide messages",
+      "invalid_language": "❌ Invalid language. Available: {languages}",
+      "no_permission": "❌ You need 'Manage Server' permission to change language."
+    }
+  },
+  "errors": {
+    "command_not_found": "Command not found",
+    "missing_permissions": "❌ You don't have permission to use this command.",
+    "missing_argument": "❌ Missing required argument: {param}",
+    "bad_argument": "❌ Invalid argument provided.",
+    "unexpected_error": "❌ An unexpected error occurred."
+  },
+  "general": {
+    "no_reason": "No reason provided",
+    "unknown": "Unknown",
+    "test_command": "✅ Bot is working! Commands are being processed.",
+    "language_update_error": "❌ An error occurred while updating your language.",
+    "reload": {
+      "title": "🔄 Reload Complete",
+      "reloaded": "✅ Reloaded ({count})",
+      "failed": "❌ Failed ({count})",
+      "success": "✅ Reloaded: `{extension}`",
+      "not_loaded": "❌ Extension `{extension}` is not loaded.",
+      "not_found": "❌ Extension `{extension}` not found.",
+      "error": "❌ Failed to reload `{extension}`: {error}"
+    }
+  },
+  "languages": {
+    "en": "English",
+    "th": "Thai"
+  },
+  "prefix": {
+    "info_title": "🔧 Prefix Information",
+    "current_prefix": "Current Prefix",
+    "personal_prefix": "Your Personal Prefix",
+    "server_prefix": "Server Prefix",
+    "default_prefix": "Default Prefix",
+    "not_set": "Not set",
+    "using_default": "Using default",
+    "priority_explanation": "**Priority Order:**\n1. Personal prefix (highest)\n2. Server prefix\n3. Default prefix\n4. Mention: {mention}",
+    "how_it_works": "How It Works",
+    "commands_help": "`prefix set <prefix>` - Set your personal prefix\n`prefix remove` - Remove your personal prefix\n`prefix server <prefix>` - Set server prefix (Admin)\n`prefix server reset` - Reset server prefix (Admin)",
+    "commands": "Commands",
+    "set_success_title": "✅ Personal Prefix Set",
+    "set_success": "✅ Personal Prefix Set",
+    "set_failed_title": "❌ Failed to Set Prefix",
+    "set_failed": "❌ Failed to Set Prefix",
+    "remove_success_title": "✅ Personal Prefix Removed",
+    "remove_success": "✅ Personal Prefix Removed",
+    "remove_failed_title": "❌ No Prefix to Remove",
+    "remove_failed": "❌ No Prefix to Remove",
+    "server_set_success_title": "✅ Server Prefix Set",
+    "server_set_success": "✅ Server Prefix Set",
+    "server_set_failed_title": "❌ Failed to Set Server Prefix",
+    "server_set_failed": "❌ Failed to Set Server Prefix",
+    "server_reset_success_title": "✅ Server Prefix Reset",
+    "server_reset_success": "✅ Server Prefix Reset",
+    "server_reset_failed_title": "❌ No Custom Prefix to Reset",
+    "server_reset_failed": "❌ No Custom Prefix to Reset",
+    "example_usage": "Example Usage",
+    "note": "Note",
+    "personal_prefix_note": "Users with personal prefixes will still use their own prefix.",
+    "your_current_prefix_title": "Your Current Prefix",
+    "your_current_prefix": "Your Current Prefix",
+    "example": "Example",
+    "hello": "👋 Hello {username}!",
+    "my_prefix_here": "My prefix here is `{prefix}`",
+    "quick_start": "Quick Start",
+    "help_command": "`{prefix}help` - Show all commands\n`{prefix}prefix` - Manage prefixes",
+    "mention_alternative": "You can also use {mention} as a prefix!"
+  },
+  "help": {
+    "title": "🤖 Bot Commands",
+    "description": "Here are the available command categories. Click a button to view detailed commands for that category:",
+    "category_format": "📁 {name}",
+    "commands_available": "{count} commands available",
+    "tip": "💡 Tip",
+    "tip_text": "Use `{prefix}help <command>` for detailed help on a specific command",
+    "command_not_found_title": "Command Not Found",
+    "command_not_found": "No command named '{command}' found.",
+    "help_for": "Help: {command}",
+    "no_description": "No description available",
+    "usage": "Usage",
+    "aliases": "Aliases",
+    "commands_label": "Commands",
+    "commands_continued": "Commands (continued {page})",
+    "back_to_menu": "Click 'Back' to return to the main help menu",
+    "all_commands_in": "All commands in the {category} category:"
+  },
+  "language": {
+    "your_language_title": "Your Language",
+    "current_language": "Current language: {language} ({code})",
+    "no_personal_language": "No personal language set. Using server default.",
+    "available_languages": "Available Languages",
+    "usage": "Usage",
+    "updated_title": "Language Updated",
+    "updated": "Your personal language has been set to {language}",
+    "invalid_language": "❌ Invalid language. Available: {languages}"
+  },
+  "music": {
+    "player": {
+      "now_playing": "🎵 Now Playing",
+      "paused": "⏸️ Paused",
+      "stopped": "⏹️ Stopped",
+      "queue_empty": "Queue is empty",
+      "duration": "Duration: {duration}",
+      "position": "Position: {position}",
+      "volume": "Volume: {volume}%",
+      "loop_off": "🔁 Loop: Off",
+      "loop_track": "🔂 Loop: Track",
+      "loop_queue": "🔁 Loop: Queue",
+      "queue_length": "Queue: {length} tracks",
+      "requested_by": "Requested by {user}",
+      "no_track": "No track playing"
+    },
+    "commands": {
+      "play": {
+        "added_to_queue": "✅ Added to queue: **{title}**",
+        "now_playing": "🎵 Now playing: **{title}**",
+        "playlist_added": "✅ Added **{count}** tracks from playlist **{name}**",
+        "no_query": "❌ Please provide a song name or URL",
+        "not_in_voice": "❌ You need to be in a voice channel",
+        "no_results": "❌ No results found for: {query}",
+        "loading": "🔍 Searching for: {query}..."
+      },
+      "pause": {
+        "paused": "⏸️ Paused the player",
+        "already_paused": "❌ Player is already paused",
+        "nothing_playing": "❌ Nothing is playing"
+      },
+      "resume": {
+        "resumed": "▶️ Resumed the player",
+        "not_paused": "❌ Player is not paused",
+        "nothing_playing": "❌ Nothing is playing"
+      },
+      "skip": {
+        "skipped": "⏭️ Skipped: **{title}**",
+        "nothing_playing": "❌ Nothing is playing"
+      },
+      "stop": {
+        "stopped": "⏹️ Stopped the player and cleared the queue",
+        "nothing_playing": "❌ Nothing is playing"
+      },
+      "volume": {
+        "set": "🔊 Volume set to {volume}%",
+        "current": "🔊 Current volume: {volume}%",
+        "invalid": "❌ Volume must be between 0 and 100"
+      },
+      "queue": {
+        "title": "📋 Music Queue",
+        "empty": "❌ Queue is empty",
+        "current": "**Now Playing:**\n",
+        "upcoming": "**Up Next:**",
+        "track_format": "`{position}.` {title} - {duration}"
+      },
+      "loop": {
+        "off": "🔁 Loop disabled",
+        "track": "🔂 Loop: Current track",
+        "queue": "🔁 Loop: Entire queue",
+        "invalid_mode": "Invalid loop mode. Use: off, track, or queue"
+      },
+      "shuffle": {
+        "shuffled": "🔀 Queue shuffled"
+      },
+      "disconnect": {
+        "not_connected": "❌ Not connected to a voice channel",
+        "disconnected": "👋 Disconnected from voice channel"
+      },
+      "musicchannel": {
+        "set": "✅ Music channel set to {channel}\n\n**How to use:**\nJust type a song name or URL in that channel!\nYour messages will be auto-deleted to keep it clean.",
+        "removed": "❌ Music channel removed",
+        "current": "🎵 Current music channel: {channel}",
+        "none": "❌ No music channel set\n\nUse `!musicchannel set` to set one!",
+        "setting_up": "🔄 Setting up music channel in {channel}...",
+        "cleaning": "🧹 Cleaned {count} messages...",
+        "warning_permissions": "⚠️ Warning: Cannot delete messages (missing permissions). Continuing anyway...",
+        "warning_error": "⚠️ Warning: Could not clean channel. Continuing anyway..."
+      }
+    },
+    "lastfm": {
+      "link": {
+        "success": "✅ Last.fm account linked: **{username}**",
+        "already_linked": "❌ You already have a Last.fm account linked",
+        "invalid_user": "❌ Last.fm user not found: {username}",
+        "no_username": "❌ Please provide your Last.fm username"
+      },
+      "unlink": {
+        "success": "✅ Last.fm account unlinked",
+        "not_linked": "❌ You don't have a Last.fm account linked"
+      },
+      "scrobbled": "📊 Scrobbled to Last.fm: {track}"
+    },
+    "errors": {
+      "no_player": "❌ No music player found",
+      "connection_failed": "❌ Failed to connect to voice channel",
+      "track_failed": "❌ Failed to load track: {error}",
+      "lastfm_error": "❌ Last.fm error: {error}",
+      "wavelink_not_installed": "❌ Wavelink is not installed. Please install it with: pip install wavelink",
+      "no_permission": "❌ You don't have permission to use this command",
+      "command_error": "❌ An error occurred: {error}",
+      "no_nodes": "❌ No connected music nodes found."
+    }
+  },
+  "reactionrole": {
+    "help": "**Reaction Roles Commands:**\n`!reactionrole add <message_id> <emoji> <role>` - Add a reaction role\n`!reactionrole remove <message_id> [emoji]` - Remove reaction role(s)\n`!reactionrole list` - List all reaction roles\n`!reactionrole create <channel> <title> [description]` - Create a new reaction role message\n`!reactionrole update <message_id>` - Update message to show roles\n`!reactionrole reload` - Reload from database\n`!reactionrole debug [message_id]` - Debug information",
+    "add": {
+      "invalid_message_id": "❌ Invalid message ID. Please provide a valid number.",
+      "role_too_high": "❌ I cannot assign this role because it's higher than my highest role.",
+      "message_not_found": "❌ Message not found. Make sure the message ID is correct and in this server.",
+      "invalid_emoji": "❌ Invalid emoji. Please use a valid emoji.",
+      "success": "✅ Reaction role added! {emoji} → {role} on message {message_id}"
+    },
+    "remove": {
+      "invalid_message_id": "❌ Invalid message ID. Please provide a valid number.",
+      "not_found": "❌ No reaction roles found for this message.",
+      "success_emoji": "✅ Removed reaction role {emoji} from message {message_id}",
+      "success_all": "✅ Removed all reaction roles from message {message_id}"
+    },
+    "list": {
+      "empty": "❌ No reaction roles configured in this server.",
+      "title": "📋 Reaction Roles"
+    },
+    "create": {
+      "success": "✅ Reaction role message created in {channel}!\nMessage ID: `{message_id}`\nUse `!reactionrole add {message_id} <emoji> <role>` to add roles.",
+      "no_permission": "❌ I don't have permission to send messages in that channel.",
+      "failed": "❌ Failed to create message: {error}"
+    },
+    "errors": {
+      "no_permission": "❌ You need the 'Manage Roles' permission to use this command.",
+      "command_error": "❌ An error occurred: {error}"
+    }
+  }
+}
