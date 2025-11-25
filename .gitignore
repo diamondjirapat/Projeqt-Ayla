@@ -221,6 +221,6 @@ ENV/
 .DS_Store
 Thumbs.db
 
-*bot.log
-*./logs
-*./plugins
+bot.log
+/logs
+/plugins
