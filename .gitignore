@@ -220,3 +220,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+bot.log
+./logs
