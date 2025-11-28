@@ -18,9 +18,7 @@ class DiscordBot(commands.Bot):
 
         intents = discord.Intents.default()
         if Config.INTENTS_ALL:
-            intents.all()
-            intents.message_content = True
-
+            intents = discord.Intents.all()
         else:
             intents.message_content = True
             intents.guilds = True
