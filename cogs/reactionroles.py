@@ -19,15 +19,13 @@ class ReactionRolesCog(commands.Cog):
         self.guild_model = GuildModel()
         self.reaction_roles: Dict[int, Dict[int, Dict[str, int]]] = {}
 
-    async def cog_load(self):
-        """Load reaction roles from a database when cog loads"""
-        await self.load_reaction_roles()
+    # async def cog_load(self):
+    #     """Load reaction roles from a database when cog loads"""
+    #     pass
 
     async def load_reaction_roles(self):
         """Load all reaction roles from a database"""
         try:
-            await self.bot.wait_until_ready()
-
             loaded_count = 0
             for guild in self.bot.guilds:
                 guild_data = await self.guild_model.get_guild(guild.id)
@@ -49,11 +47,17 @@ class ReactionRolesCog(commands.Cog):
             import traceback
             logger.error(traceback.format_exc())
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Load reaction roles when bot is ready"""
+        await self.load_reaction_roles()
+
     def get_reaction_roles(self, guild_id: int) -> Dict[int, Dict[str, int]]:
         """Get reaction roles for a guild"""
         return self.reaction_roles.get(guild_id, {})
 
-    async def _update_message_embed(self, message: discord.Message, guild_id: int, message_id: int, ctx: commands.Context = None):
+    async def _update_message_embed(self, message: discord.Message, guild_id: int, message_id: int,
+                                    ctx: commands.Context = None):
         """Update a message's embed to show configured reaction roles"""
         try:
             # Get the configured roles
@@ -93,7 +97,7 @@ class ReactionRolesCog(commands.Cog):
                         inline=True
                     )
 
-            embed.set_footer(text=ctx.guild.name,icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+            embed.set_footer(text=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
 
             await message.edit(embed=embed)
             logger.debug(f"Updated embed for message {message_id}")
@@ -152,7 +156,6 @@ class ReactionRolesCog(commands.Cog):
         })
 
         return True
-
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -244,7 +247,8 @@ class ReactionRolesCog(commands.Cog):
             # Unicode emoji
             emoji_str = str(payload.emoji)
 
-        logger.debug(f"Reaction remove: guild={guild_id}, message={message_id}, emoji={emoji_str}, user={payload.user_id}")
+        logger.debug(
+            f"Reaction remove: guild={guild_id}, message={message_id}, emoji={emoji_str}, user={payload.user_id}")
 
         if guild_id not in self.reaction_roles:
             return
@@ -339,7 +343,8 @@ class ReactionRolesCog(commands.Cog):
 
         await self.save_reaction_role(ctx.guild.id, msg_id, emoji_to_save, role.id)
 
-        logger.info(f"Saved reaction role: guild={ctx.guild.id}, message={msg_id}, emoji={emoji_to_save}, role={role.name}")
+        logger.info(
+            f"Saved reaction role: guild={ctx.guild.id}, message={msg_id}, emoji={emoji_to_save}, role={role.name}")
         logger.info(f"Current cache for guild: {self.reaction_roles.get(ctx.guild.id, {})}")
 
         await self._update_message_embed(message, ctx.guild.id, msg_id)
@@ -378,10 +383,10 @@ class ReactionRolesCog(commands.Cog):
 
             if emoji:
                 await ctx.send(await i18n.t(ctx, "reactionrole.remove.success_emoji",
-                                           emoji=emoji, message_id=msg_id))
+                                            emoji=emoji, message_id=msg_id))
             else:
                 await ctx.send(await i18n.t(ctx, "reactionrole.remove.success_all",
-                                           message_id=msg_id))
+                                            message_id=msg_id))
         else:
             await ctx.send(await i18n.t(ctx, "reactionrole.remove.not_found"))
 
@@ -423,19 +428,19 @@ class ReactionRolesCog(commands.Cog):
         description="Description text"
     )
     async def rr_create(self, ctx: commands.Context, channel: discord.TextChannel,
-                       title: str, *, description: str = None):
+                        title: str, *, description: str = None):
         """Create a new reaction role message"""
         embed = discord.Embed(
             title=title,
             description=description,
             color=discord.Color(0x555555)
         )
-        embed.set_footer(text=ctx.guild.name,icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_footer(text=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
 
         try:
             message = await channel.send(embed=embed)
             await ctx.send(await i18n.t(ctx, "reactionrole.create.success",
-                                       channel=channel.mention, message_id=message.id))
+                                        channel=channel.mention, message_id=message.id))
         except discord.Forbidden:
             await ctx.send(await i18n.t(ctx, "reactionrole.create.no_permission"))
         except Exception as e:
@@ -505,7 +510,7 @@ class ReactionRolesCog(commands.Cog):
                     inline=True
                 )
 
-        embed.set_footer(text=ctx.guild.name,icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_footer(text=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
 
         try:
             await message.edit(embed=embed)
