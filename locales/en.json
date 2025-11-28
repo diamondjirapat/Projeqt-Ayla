@@ -287,5 +287,30 @@
       "no_permission": "❌ You need the 'Manage Roles' permission to use this command.",
       "command_error": "❌ An error occurred: {error}"
     }
+  },
+  "autorole": {
+    "info": {
+      "title": "🎭 Auto-Role Settings",
+      "current_role": "Current Auto-Role",
+      "not_set": "No auto-role is currently set.\n\nNew members will not receive any role automatically.",
+      "role_not_found": "⚠️ The configured auto-role no longer exists.",
+      "usage_label": "Usage",
+      "usage_text": "`{prefix}autorole set <role>` - Set auto-role\n`{prefix}autorole remove` - Remove auto-role\n`{prefix}autorole` - View current settings"
+    },
+    "set": {
+      "success_title": "✅ Auto-Role Set",
+      "success_description": "New members will automatically receive {role} when they join!",
+      "role_too_high": "❌ I cannot assign this role because it's higher than my highest role.",
+      "role_managed": "❌ This role is managed by an integration and cannot be assigned manually."
+    },
+    "remove": {
+      "success_title": "✅ Auto-Role Removed",
+      "success_description": "New members will no longer receive a role automatically.",
+      "not_set": "❌ No auto-role is currently set."
+    },
+    "errors": {
+      "no_permission": "❌ You need the 'Manage Roles' permission to use this command.",
+      "command_error": "❌ An error occurred: {error}"
+    }
   }
 }
