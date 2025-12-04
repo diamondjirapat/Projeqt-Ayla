@@ -1,11 +1,5 @@
 {
   "commands": {
-    "ping": {
-      "name": "ping",
-      "description": "Check bot latency",
-      "response_title": "🏓 Pong!",
-      "response_description": "Latency: {latency}ms"
-    },
     "info": {
       "name": "info",
       "description": "Display bot information",
