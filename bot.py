@@ -114,9 +114,6 @@ class DiscordBot(commands.Bot):
     
     async def close(self):
         logger.info("Shutting down bot...")
-        
-
-        
         await db_manager.disconnect()
         await super().close()
 
