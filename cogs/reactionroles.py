@@ -165,57 +165,41 @@ class ReactionRolesCog(commands.Cog):
 
         guild_id = payload.guild_id
         if not guild_id:
-            logger.debug("No guild_id in reaction payload")
+            return
+
+        if guild_id not in self.reaction_roles:
             return
 
         message_id = payload.message_id
+        if message_id not in self.reaction_roles[guild_id]:
+            return
 
         if payload.emoji.id:
-            # Custom emoji
             emoji_str = f"<{'a' if payload.emoji.animated else ''}:{payload.emoji.name}:{payload.emoji.id}>"
         else:
-            # Unicode emoji
             emoji_str = str(payload.emoji)
 
-        logger.debug(f"Reaction add: guild={guild_id}, message={message_id}, emoji={emoji_str}, user={payload.user_id}")
-
-        if guild_id not in self.reaction_roles:
-            logger.debug(f"Guild {guild_id} not in reaction_roles cache")
-            return
-        if message_id not in self.reaction_roles[guild_id]:
-            logger.debug(f"Message {message_id} not in reaction_roles for guild {guild_id}")
-            logger.debug(f"Available messages: {list(self.reaction_roles[guild_id].keys())}")
-            return
         if emoji_str not in self.reaction_roles[guild_id][message_id]:
-            logger.debug(f"Emoji {emoji_str} not configured for message {message_id}")
-            logger.debug(f"Available emojis: {list(self.reaction_roles[guild_id][message_id].keys())}")
             return
 
         role_id = self.reaction_roles[guild_id][message_id][emoji_str]
         guild = self.bot.get_guild(guild_id)
-        if not guild:
-            logger.error(f"Guild {guild_id} not found")
-            return
+        if not guild: return
 
         role = guild.get_role(role_id)
-        if not role:
-            logger.warning(f"Role {role_id} not found in guild {guild_id}")
-            return
+        if not role: return
 
-        member = guild.get_member(payload.user_id)
+        member = payload.member
         if not member:
             try:
                 member = await guild.fetch_member(payload.user_id)
-                logger.debug(f"Fetched member {member.name} from API")
             except discord.NotFound:
-                logger.warning(f"Member {payload.user_id} not found in guild {guild_id}")
-                return
-            except Exception as e:
-                logger.error(f"Failed to fetch member {payload.user_id}: {e}")
                 return
 
+        if member.bot:
+            return
+
         if role in member.roles:
-            logger.debug(f"Member {member.name} already has role {role.name}")
             return
 
         try:
@@ -225,8 +209,6 @@ class ReactionRolesCog(commands.Cog):
             logger.error(f"❌ Missing permissions to add role {role.name} in {guild.name}")
         except Exception as e:
             logger.error(f"❌ Failed to add role: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
