@@ -68,18 +68,27 @@ class DiscordBot(commands.Bot):
 
             except Exception as e:
                 logger.error(f"Failed to load cog {cog_name}: {e}")
-    
-    async def on_ready(self):
-        logger.info(f"{self.user} has connected to Discord!")
-        logger.info(f"Bot is in {len(self.guilds)} guilds")
 
+    async def update_status(self):
         activity = discord.Activity(
             type=discord.ActivityType.listening,
             name=f" {len(self.guilds)} servers | @{self.user.name} help"
         )
         await self.change_presence(activity=activity)
 
+    async def on_ready(self):
+        logger.info(f"{self.user} has connected to Discord!")
+        logger.info(f"Bot is in {len(self.guilds)} guilds")
+        await self.update_status()
         logger.info("I18n system initialized")
+
+    async def on_guild_join(self, guild):
+        logger.info(f"Joined new guild: {guild.name} ({guild.id})")
+        await self.update_status()
+
+    async def on_guild_remove(self, guild):
+        logger.info(f"Left guild: {guild.name} ({guild.id})")
+        await self.update_status()
     
 
     async def on_message(self, message):
