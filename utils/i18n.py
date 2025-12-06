@@ -149,21 +149,28 @@ class I18nManager:
         """
         if locale is None:
             locale = self.default_locale
-        
+
         if locale not in self.translations:
             locale = self.default_locale
 
         keys = key.split('.')
         value = self.translations[locale]
-        
+
         try:
             for k in keys:
                 value = value[k]
 
             if kwargs:
-                return value.format(**kwargs)
+                try:
+                    return value.format(**kwargs)
+                except KeyError as e:
+                    logger.warning(f"Missing key '{e}' for translation '{key}' in '{locale}'")
+                    return value
+                except ValueError as e:
+                    logger.error(f"Formatting error for '{key}': {e}")
+                    return value
             return value
-            
+
         except (KeyError, TypeError):
             if locale != self.default_locale:
                 return self.get_text(key, self.default_locale, **kwargs)
