@@ -41,10 +41,10 @@ class General(commands.Cog):
     @commands.hybrid_command(name='info')
     async def info_command(self, ctx: commands.Context):
         """Display bot information"""
-        title = await i18n.t(ctx, 'commands.info.title', static_embed=True)
-        servers_label = await i18n.t(ctx, 'commands.info.servers', static_embed=True)
-        users_label = await i18n.t(ctx, 'commands.info.users', static_embed=True)
-        version_label = await i18n.t(ctx, 'commands.info.version', static_embed=True)
+        title = await i18n.t(ctx, 'commands.info.title')
+        servers_label = await i18n.t(ctx, 'commands.info.servers')
+        users_label = await i18n.t(ctx, 'commands.info.users')
+        version_label = await i18n.t(ctx, 'commands.info.version')
         
         embed = discord.Embed(
             title=title,
