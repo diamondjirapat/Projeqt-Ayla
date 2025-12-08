@@ -66,20 +66,22 @@
     "no_reason": "No reason provided",
     "unknown": "Unknown",
     "test_command": "✅ Bot is working! Commands are being processed.",
-    "language_update_error": "❌ An error occurred while updating your language.",
-    "reload": {
-      "title": "🔄 Reload Complete",
-      "reloaded": "✅ Reloaded ({count})",
-      "failed": "❌ Failed ({count})",
-      "success": "✅ Reloaded: `{extension}`",
-      "not_loaded": "❌ Extension `{extension}` is not loaded.",
-      "not_found": "❌ Extension `{extension}` not found.",
-      "error": "❌ Failed to reload `{extension}`: {error}"
-    }
+    "language_update_error": "❌ An error occurred while updating your language."
   },
   "languages": {
+    "info_title": "\uD83C\uDF10 Language Settings",
+    "info_description": "Language priority system explained",
+    "priority_text": "**Priority Order:**\n1. Your personal language (highest)\n2. Server language\n3. Default language (English)\n\n**Static embeds** (music player, etc.) always use server language.",
     "en": "English",
-    "th": "Thai"
+    "th": "Thai",
+    "no_user_locale": "**Your Language:** Not set\n",
+    "user_locale": "**Your Language:** {lang_name} ({user_locale})\n",
+    "server_locale": "**Server Language:** {lang_name} ({guild_locale})\n",
+    "effective_lang": "\n**You're currently using:** {effective_lang_name} ({effective_locale})",
+    "commands_text": "`{prefix}mylang <code>` - Set your personal language\n",
+    "commands_text2": "`{prefix}setlang <code>` - Set server language (Admin only)\n",
+    "commands_text3": "\n**Available:** English (en), ไทย (th)",
+    "tip": "Tip: Personal language overrides server language for you!"
   },
   "prefix": {
     "info_title": "🔧 Prefix Information",

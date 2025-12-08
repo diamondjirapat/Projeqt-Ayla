@@ -1,3 +1,5 @@
+from sys import prefix
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -21,9 +23,12 @@ class Language(commands.Cog):
     @commands.hybrid_command(name='langinfo')
     async def language_info(self, ctx: commands.Context):
         """Show language priority and current settings"""
+        title = await i18n.t(ctx, "languages.info_title")
+        description = await i18n.t(ctx, "languages.info_description")
+
         embed = discord.Embed(
-            title="🌐 Language Settings",
-            description="Language priority system explained",
+            title=title,
+            description=description,
             color=discord.Color.blue()
         )
 
@@ -31,11 +36,7 @@ class Language(commands.Cog):
         guild_locale = await i18n.get_guild_locale(ctx.guild.id) if ctx.guild else None
         effective_locale = await i18n.get_locale(ctx)
 
-        priority_text = "**Priority Order:**\n"
-        priority_text += "1️⃣ Your personal language (highest)\n"
-        priority_text += "2️⃣ Server language\n"
-        priority_text += "3️⃣ Default language (English)\n\n"
-        priority_text += "**Static embeds** (music player, etc.) always use server language."
+        priority_text = await i18n.t(ctx, "languages.priority_text")
         
         embed.add_field(
             name="📊 How It Works",
@@ -46,36 +47,37 @@ class Language(commands.Cog):
         settings_text = ""
         if user_locale:
             lang_name = await i18n.t(ctx, f'languages.{user_locale}')
-            settings_text += f"**Your Language:** {lang_name} ({user_locale})\n"
+            settings_text += await i18n.t(ctx, f"languages.user_locale", lang_name=lang_name, user_locale=user_locale)
         else:
-            settings_text += "**Your Language:** Not set\n"
+            settings_text += await i18n.t(ctx, "languages.no_user_locale")
         
         if guild_locale and ctx.guild:
             lang_name = await i18n.t(ctx, f'languages.{guild_locale}')
-            settings_text += f"**Server Language:** {lang_name} ({guild_locale})\n"
+            settings_text += await i18n.t(ctx, "languages.server_locale", lang_name=lang_name, guild_locale=guild_locale)
         else:
             settings_text += "**Server Language:** Not set (using English)\n"
         
         effective_lang_name = await i18n.t(ctx, f'languages.{effective_locale}')
-        settings_text += f"\n**You're currently using:** {effective_lang_name} ({effective_locale})"
+        settings_text += await i18n.t(ctx, "languages.effective_lang", effective_lang_name=effective_lang_name, effective_locale=effective_locale)
         
         embed.add_field(
             name="⚙️ Current Settings",
             value=settings_text,
             inline=False
         )
-
-        commands_text = f"`{ctx.prefix}mylang <code>` - Set your personal language\n"
-        commands_text += f"`{ctx.prefix}setlang <code>` - Set server language (Admin only)\n"
-        commands_text += f"\n**Available:** English (en), ไทย (th)"
+        prefix = ctx.prefix
+        commands_text = await i18n.t(ctx, "languages.commands_text", prefix=prefix)
+        commands_text += await i18n.t(ctx, "languages.commands_text2", prefix=prefix)
+        commands_text += await i18n.t(ctx, "languages.commands_text3")
         
         embed.add_field(
             name="🔧 Commands",
             value=commands_text,
             inline=False
         )
-        
-        embed.set_footer(text="Tip: Personal language overrides server language for you!")
+
+        text = await i18n.t(ctx, "languages.tip")
+        embed.set_footer(text=text)
         
         await ctx.send(embed=embed)
     
