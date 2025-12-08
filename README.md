@@ -112,10 +112,8 @@ Required:
 - `MONGODB_URI` - MongoDB connection string
 
 Music System:
-- `LAVALINK_HOST` - Lavalink server host
-- `LAVALINK_PORT` - Lavalink server port
+- `LAVALINK_URI` - Lavalink server host+port
 - `LAVALINK_PASSWORD` - Lavalink server password
-- `LAVALINK_SSL` - Use SSL connection (true/false)
 
 Optional:
 - `PREFIX` - Default command prefix (default: `!`)
