@@ -130,12 +130,12 @@ class I18nManager:
                 user_locale = await self.get_user_locale(user.id)
                 if user_locale:
                     return user_locale
-            
+
             if guild:
                 guild_locale = await self.get_guild_locale(guild.id)
                 if guild_locale:
                     return guild_locale
-            
+
             return self.default_locale
     
     def get_text(self, key: str, locale: str = None, **kwargs) -> str:
@@ -190,8 +190,12 @@ class I18nManager:
             static_embed: Whether this is for a static embed
             **kwargs: Format arguments
         """
-        locale = await self.get_locale(ctx, static_embed)
-        return self.get_text(key, locale, **kwargs)
+        try:
+            locale = await self.get_locale(ctx, static_embed)
+            return self.get_text(key, locale, **kwargs)
+        except Exception as e:
+            logger.error(f"Error getting translation for '{key}': {e}")
+            # return f"Error getting translation for '{key}': {e}"
     
     def clear_cache(self):
         """Clear the locale cache (useful for testing or manual refresh)"""
