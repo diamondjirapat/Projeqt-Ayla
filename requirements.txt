@@ -4,4 +4,4 @@ pymongo>=4.9,<4.10
 python-dotenv==1.0.0
 aiohttp==3.12.14
 pylast==5.2.0
-yt-dlp==2025.7.21
+wavelink>=3.0.0
