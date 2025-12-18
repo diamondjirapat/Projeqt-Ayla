@@ -2,15 +2,15 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from database.connection import db_manager
 
+
 class BaseModel:
-    """Base model for database operations"""
-    
     def __init__(self, collection_name: str):
         self.collection_name = collection_name
-    
+
     @property
     def collection(self):
         return db_manager.get_collection(self.collection_name)
+
 
 class UserModel(BaseModel):
     def __init__(self):
@@ -21,7 +21,7 @@ class UserModel(BaseModel):
         user_data = {
             'user_id': user_id,
             'username': username,
-            'locale': kwargs.get('locale', 'en'),
+            'locale': kwargs.get('locale', None),
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow(),
             **kwargs
@@ -32,9 +32,8 @@ class UserModel(BaseModel):
         return user_data
     
     async def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """Get user by ID"""
         return await self.collection.find_one({'user_id': user_id})
-    
+
     async def update_user(self, user_id: int, update_data: Dict[str, Any]) -> bool:
         """Update user data"""
         update_data['updated_at'] = datetime.utcnow()
@@ -43,6 +42,35 @@ class UserModel(BaseModel):
             {'$set': update_data}
         )
         return result.modified_count > 0
+
+    async def update_lastfm(self, user_id: int, username: str, session_key: str):
+        """Update Last.fm data"""
+        await self.collection.update_one(
+            {'user_id': user_id},
+            {'$set': {
+                'lastfm': {
+                    'username': username,
+                    'session_key': session_key,
+                    'scrobbling': True
+                }
+            }},
+            upsert=True
+        )
+
+    async def add_playlist(self, user_id: int, name: str, url: str):
+        """Add a personal playlist bookmark"""
+        await self.collection.update_one(
+            {'user_id': user_id},
+            {'$set': {f'playlists.{name}': url}},
+            upsert=True
+        )
+
+    async def remove_playlist(self, user_id: int, name: str):
+        await self.collection.update_one(
+            {'user_id': user_id},
+            {'$unset': {f'playlists.{name}': ""}}
+        )
+
 
 class GuildModel(BaseModel):
     def __init__(self):
@@ -64,14 +92,26 @@ class GuildModel(BaseModel):
         return guild_data
     
     async def get_guild(self, guild_id: int) -> Optional[Dict[str, Any]]:
-        """Get guild by ID"""
         return await self.collection.find_one({'guild_id': guild_id})
-    
+
     async def update_guild(self, guild_id: int, update_data: Dict[str, Any]) -> bool:
-        """Update guild data"""
         update_data['updated_at'] = datetime.utcnow()
         result = await self.collection.update_one(
             {'guild_id': guild_id},
             {'$set': update_data}
         )
         return result.modified_count > 0
+
+    async def add_playlist(self, guild_id: int, name: str, url: str):
+        """Add a server playlist bookmark"""
+        await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {f'playlists.{name}': url}},
+            upsert=True
+        )
+
+    async def remove_playlist(self, guild_id: int, name: str):
+        await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$unset': {f'playlists.{name}': ""}}
+        )
