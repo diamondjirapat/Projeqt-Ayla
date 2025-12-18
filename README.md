@@ -1,4 +1,4 @@
-# Discord Bot
+# Projeqt-Ayla
 
 A modular Discord bot built with discord.py 2.6.4 and MongoDB.
 
