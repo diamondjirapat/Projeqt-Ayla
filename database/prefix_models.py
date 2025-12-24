@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, Dict, Any, List
 from database.connection import db_manager
 
@@ -25,7 +25,7 @@ class UserPrefixModel(PrefixModel):
                     '$set': {
                         'user_id': user_id,
                         'prefix': prefix,
-                        'updated_at': datetime.utcnow()
+                        'updated_at': datetime.now(UTC)
                     }
                 },
                 upsert=True
@@ -65,7 +65,7 @@ class GuildPrefixModel(PrefixModel):
                     '$set': {
                         'guild_id': guild_id,
                         'prefix': prefix,
-                        'updated_at': datetime.utcnow()
+                        'updated_at': datetime.now(UTC)
                     }
                 },
                 upsert=True

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, Dict, Any
 from database.connection import db_manager
 
@@ -22,8 +22,8 @@ class UserModel(BaseModel):
             'user_id': user_id,
             'username': username,
             'locale': kwargs.get('locale', None),
-            'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow(),
+            'created_at': datetime.now(UTC),
+            'updated_at': datetime.now(UTC)
             **kwargs
         }
         
@@ -36,7 +36,7 @@ class UserModel(BaseModel):
 
     async def update_user(self, user_id: int, update_data: Dict[str, Any]) -> bool:
         """Update user data"""
-        update_data['updated_at'] = datetime.utcnow()
+        update_data['updated_at'] = datetime.now(UTC)
         result = await self.collection.update_one(
             {'user_id': user_id},
             {'$set': update_data}
@@ -55,6 +55,20 @@ class UserModel(BaseModel):
                 }
             }},
             upsert=True
+        )
+
+    async def remove_lastfm(self, user_id: int):
+        """Remove Last.fm data"""
+        await self.collection.update_one(
+            {'user_id': user_id},
+            {'$unset': {'lastfm': ""}}
+        )
+
+    async def toggle_lastfm_scrobbling(self, user_id: int, enabled: bool):
+        """Toggle scrobbling status"""
+        await self.collection.update_one(
+            {'user_id': user_id},
+            {'$set': {'lastfm.scrobbling': enabled}}
         )
 
     async def add_playlist(self, user_id: int, name: str, url: str):
@@ -82,8 +96,8 @@ class GuildModel(BaseModel):
             'guild_id': guild_id,
             'name': name,
             'locale': kwargs.get('locale', 'en'),
-            'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow(),
+            'created_at': datetime.now(UTC),
+            'updated_at': datetime.now(UTC)
             **kwargs
         }
         
@@ -95,7 +109,7 @@ class GuildModel(BaseModel):
         return await self.collection.find_one({'guild_id': guild_id})
 
     async def update_guild(self, guild_id: int, update_data: Dict[str, Any]) -> bool:
-        update_data['updated_at'] = datetime.utcnow()
+        update_data['updated_at'] = datetime.now(UTC)
         result = await self.collection.update_one(
             {'guild_id': guild_id},
             {'$set': update_data}
