@@ -1,8 +1,9 @@
 # NOTE: This file is 100% AI generated.
-import aiohttp
 import hashlib
 import logging
-import urllib.parse
+
+import aiohttp
+
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,9 @@ class LastFMHandler:
             'track': title,
             'timestamp': str(timestamp)
         }
-        await self._request('track.scrobble', params, session_key=session_key, post=True)
+        logger.info(f"Sending scrobble request: {params}")
+        result = await self._request('track.scrobble', params, session_key=session_key, post=True)
+        logger.info(f"Scrobble result: {result}")
 
     async def get_username_from_session(self, session_key):
         """Get username from session key"""
