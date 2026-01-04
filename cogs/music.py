@@ -22,6 +22,7 @@ class Music(commands.Cog):
         self.user_model = UserModel()
         self.guild_model = GuildModel()
         self.timeout_tasks = {}
+        self.selecting_users = set()
 
     def start_timeout(self, guild_id, player):
         """Starts a 3-minute disconnect timer"""
@@ -231,11 +232,13 @@ class Music(commands.Cog):
             embed.title = await i18n.t(channel, "music.player.idle.title", static_embed=True)
             embed.description = await i18n.t(channel, "music.player.idle.description_disconnect", static_embed=True)
             embed.set_image(
-                url="https://cdn.discordapp.com/attachments/1392428575461871717/1456259032431202431/aaaaaaaaaaaaaa.png")
+                url="https://cdn.discordapp.com/attachments/1392428575461871717/1457324945955885217/P_idel.png")
 
         elif not player.playing:
             embed.title = await i18n.t(channel, "music.player.idle.title", static_embed=True)
             embed.description = await i18n.t(channel, "music.player.idle.description_empty", static_embed=True)
+            embed.set_image(
+                url="https://cdn.discordapp.com/attachments/1392428575461871717/1457324945955885217/P_idel.png")
         else:
             track = player.current
             now_playing_title = await i18n.t(channel, "music.player.now_playing", static_embed=True)
@@ -280,6 +283,10 @@ class Music(commands.Cog):
         channel_id = await self.guild_model.get_music_channel(message.guild.id)
         if not channel_id or message.channel.id != channel_id:
             return
+            
+        if message.author.id in self.selecting_users:
+            return
+            
         try:
             await message.delete()
         except:
@@ -357,6 +364,8 @@ class Music(commands.Cog):
         def check(m):
             return m.author.id == ctx.author.id and m.channel.id == response_channel.id and m.content.isdigit()
 
+        self.selecting_users.add(ctx.author.id)
+
         try:
             while True:
                 response = await self.bot.wait_for('message', check=check, timeout=60)
@@ -392,6 +401,8 @@ class Music(commands.Cog):
                 await msg.edit(content=timeout_text, delete_after=5)
             except:
                 pass
+        finally:
+            self.selecting_users.discard(ctx.author.id)
 
     @commands.hybrid_command(name="play", aliases=["p"])
     @app_commands.describe(query="Song name, URL, or playlist name")
