@@ -502,102 +502,102 @@ class ReactionRolesCog(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ Failed to update message: {str(e)}")
 
-    @reactionrole.command(name='reload')
-    @commands.has_permissions(administrator=True)
-    async def rr_reload(self, ctx: commands.Context):
-        """Reload reaction roles from a database (Admin only)"""
-        await ctx.send("🔄 Reloading reaction roles from database...")
+    # @reactionrole.command(name='reload')
+    # @commands.has_permissions(administrator=True)
+    # async def rr_reload(self, ctx: commands.Context):
+    #     """Reload reaction roles from a database (Admin only)"""
+    #     await ctx.send("🔄 Reloading reaction roles from database...")
 
-        try:
-            old_count = sum(len(msgs) for msgs in self.reaction_roles.values())
-            self.reaction_roles.clear()
+    #     try:
+    #         old_count = sum(len(msgs) for msgs in self.reaction_roles.values())
+    #         self.reaction_roles.clear()
 
-            await self.load_reaction_roles()
+    #         await self.load_reaction_roles()
 
-            new_count = sum(len(msgs) for msgs in self.reaction_roles.values())
+    #         new_count = sum(len(msgs) for msgs in self.reaction_roles.values())
 
-            embed = discord.Embed(
-                title="✅ Reaction Roles Reloaded",
-                description=f"Cleared {old_count} cached entries\nLoaded {new_count} entries from database",
-                color=discord.Color.green()
-            )
-            await ctx.send(embed=embed)
-            logger.info(f"Manually reloaded reaction roles for guild {ctx.guild.id}")
-        except Exception as e:
-            await ctx.send(f"❌ Failed to reload: {str(e)}")
-            logger.error(f"Failed to reload reaction roles: {e}")
+    #         embed = discord.Embed(
+    #             title="✅ Reaction Roles Reloaded",
+    #             description=f"Cleared {old_count} cached entries\nLoaded {new_count} entries from database",
+    #             color=discord.Color.green()
+    #         )
+    #         await ctx.send(embed=embed)
+    #         logger.info(f"Manually reloaded reaction roles for guild {ctx.guild.id}")
+    #     except Exception as e:
+    #         await ctx.send(f"❌ Failed to reload: {str(e)}")
+    #         logger.error(f"Failed to reload reaction roles: {e}")
 
-    @reactionrole.command(name='debug')
-    @commands.has_permissions(administrator=True)
-    async def rr_debug(self, ctx: commands.Context, message_id: str = None):
-        """Debug reaction roles (Admin only)"""
-        embed = discord.Embed(
-            title="🔍 Reaction Roles Debug",
-            color=discord.Color.blue()
-        )
+    # @reactionrole.command(name='debug')
+    # @commands.has_permissions(administrator=True)
+    # async def rr_debug(self, ctx: commands.Context, message_id: str = None):
+    #     """Debug reaction roles (Admin only)"""
+    #     embed = discord.Embed(
+    #         title="🔍 Reaction Roles Debug",
+    #         color=discord.Color.blue()
+    #     )
 
-        # Show cache status
-        guild_cache = self.reaction_roles.get(ctx.guild.id, {})
-        embed.add_field(
-            name="Cache Status",
-            value=f"Messages tracked: {len(guild_cache)}\nGuilds in cache: {len(self.reaction_roles)}",
-            inline=False
-        )
+    #     # Show cache status
+    #     guild_cache = self.reaction_roles.get(ctx.guild.id, {})
+    #     embed.add_field(
+    #         name="Cache Status",
+    #         value=f"Messages tracked: {len(guild_cache)}\nGuilds in cache: {len(self.reaction_roles)}",
+    #         inline=False
+    #     )
 
-        if message_id:
-            try:
-                msg_id = int(message_id)
-                if msg_id in guild_cache:
-                    emoji_roles = guild_cache[msg_id]
-                    role_list = []
-                    for emoji, role_id in emoji_roles.items():
-                        role = ctx.guild.get_role(role_id)
-                        role_list.append(f"`{emoji}` → {role.mention if role else f'(Deleted: {role_id})'}")
+    #     if message_id:
+    #         try:
+    #             msg_id = int(message_id)
+    #             if msg_id in guild_cache:
+    #                 emoji_roles = guild_cache[msg_id]
+    #                 role_list = []
+    #                 for emoji, role_id in emoji_roles.items():
+    #                     role = ctx.guild.get_role(role_id)
+    #                     role_list.append(f"`{emoji}` → {role.mention if role else f'(Deleted: {role_id})'}")
 
-                    embed.add_field(
-                        name=f"Message {msg_id}",
-                        value="\n".join(role_list) if role_list else "No roles configured",
-                        inline=False
-                    )
-                else:
-                    embed.add_field(
-                        name=f"Message {msg_id}",
-                        value="❌ Not found in cache",
-                        inline=False
-                    )
-            except ValueError:
-                embed.add_field(name="Error", value="Invalid message ID", inline=False)
-        else:
-            if guild_cache:
-                for msg_id, emoji_roles in list(guild_cache.items())[:5]:  # Limit to 5
-                    role_list = []
-                    for emoji, role_id in emoji_roles.items():
-                        role = ctx.guild.get_role(role_id)
-                        role_list.append(f"`{emoji}` → {role.mention if role else f'(Deleted)'}")
+    #                 embed.add_field(
+    #                     name=f"Message {msg_id}",
+    #                     value="\n".join(role_list) if role_list else "No roles configured",
+    #                     inline=False
+    #                 )
+    #             else:
+    #                 embed.add_field(
+    #                     name=f"Message {msg_id}",
+    #                     value="❌ Not found in cache",
+    #                     inline=False
+    #                 )
+    #         except ValueError:
+    #             embed.add_field(name="Error", value="Invalid message ID", inline=False)
+    #     else:
+    #         if guild_cache:
+    #             for msg_id, emoji_roles in list(guild_cache.items())[:5]:  # Limit to 5
+    #                 role_list = []
+    #                 for emoji, role_id in emoji_roles.items():
+    #                     role = ctx.guild.get_role(role_id)
+    #                     role_list.append(f"`{emoji}` → {role.mention if role else f'(Deleted)'}")
 
-                    embed.add_field(
-                        name=f"Message {msg_id}",
-                        value="\n".join(role_list[:3]) if role_list else "No roles",
-                        inline=False
-                    )
-            else:
-                embed.add_field(
-                    name="No Messages",
-                    value="No reaction roles configured",
-                    inline=False
-                )
+    #                 embed.add_field(
+    #                     name=f"Message {msg_id}",
+    #                     value="\n".join(role_list[:3]) if role_list else "No roles",
+    #                     inline=False
+    #                 )
+    #         else:
+    #             embed.add_field(
+    #                 name="No Messages",
+    #                 value="No reaction roles configured",
+    #                 inline=False
+    #             )
 
-        bot_member = ctx.guild.me
-        perms = bot_member.guild_permissions
-        embed.add_field(
-            name="Bot Permissions",
-            value=f"Manage Roles: {'✅' if perms.manage_roles else '❌'}\n"
-                  f"Add Reactions: {'✅' if perms.add_reactions else '❌'}\n"
-                  f"Read Messages: {'✅' if perms.read_messages else '❌'}",
-            inline=False
-        )
+    #     bot_member = ctx.guild.me
+    #     perms = bot_member.guild_permissions
+    #     embed.add_field(
+    #         name="Bot Permissions",
+    #         value=f"Manage Roles: {'✅' if perms.manage_roles else '❌'}\n"
+    #               f"Add Reactions: {'✅' if perms.add_reactions else '❌'}\n"
+    #               f"Read Messages: {'✅' if perms.read_messages else '❌'}",
+    #         inline=False
+    #     )
 
-        await ctx.send(embed=embed)
+    #     await ctx.send(embed=embed)
 
     async def cog_command_error(self, ctx, error):
         """Handle reaction role command errors"""
