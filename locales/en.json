@@ -154,6 +154,9 @@
   "music": {
     "player": {
       "now_playing": "🎵 Now Playing",
+      "artist": "👤 **Artist:** {artist}",
+      "duration_label": "⏳ **Duration:** {duration}",
+      "requester_label": "Requested by {user}",
       "paused": "⏸️ Paused",
       "stopped": "⏹️ Stopped",
       "queue_empty": "Queue is empty",
@@ -165,7 +168,44 @@
       "loop_queue": "🔁 Loop: Queue",
       "queue_length": "Queue: {length} tracks",
       "requested_by": "Requested by {user}",
-      "no_track": "No track playing"
+      "no_track": "No track playing",
+      "idle": {
+        "title": "💤 Idle",
+        "description_disconnect": "Join a voice channel and type a song name or link here to play!",
+        "description_empty": "Queue is empty. Add more songs!"
+      }
+    },
+    "static_response": {
+      "processed": "✅ I've processed your request in {channel}.\n",
+      "tip": "💡 **Tip**: You can use the player directly in {channel}!"
+    },
+    "playlist": {
+      "saved_personal": "✅ Saved personal playlist: `{name}`",
+      "deleted_personal": "🗑️ Deleted personal playlist: `{name}`",
+      "no_personal": "You have no saved playlists.",
+      "personal_title": "Your Playlists",
+      "saved_server": "✅ Saved server playlist: `{name}`",
+      "no_server": "No server playlists.",
+      "server_title": "Server Playlists"
+    },
+    "ui": {
+      "select_track": "🔍 **Select a track to play:**",
+      "resume": "Resume",
+      "pause": "Pause",
+      "loop_off": "Loop",
+      "loop_track": "Loop Track",
+      "loop_queue": "Loop Queue",
+      "shuffle": "Shuffle",
+      "stop": "Stop",
+      "previous": "Previous",
+      "next": "Skip",
+      "authorize": "🔗 Authorize on Last.fm",
+      "verify": "✅ Verify Login",
+      "login_expired": "❌ This login session has expired. Please run `/lastfm login` again.",
+      "not_for_you": "This button is not for you.",
+      "selection_instructions": "Please type a number (1-5) to select a track, or 0 to cancel.",
+      "selection_cancelled": "❌ Selection cancelled.",
+      "selection_timeout": "❌ Selection timed out."
     },
     "commands": {
       "play": {
@@ -175,7 +215,8 @@
         "no_query": "❌ Please provide a song name or URL",
         "not_in_voice": "❌ You need to be in a voice channel",
         "no_results": "❌ No results found for: {query}",
-        "loading": "🔍 Searching for: {query}..."
+        "loading": "🔍 Searching for: {query}...",
+        "voice_channel_mismatch": "❌ You must be in the same voice channel as the bot to use this command."
       },
       "pause": {
         "paused": "⏸️ Paused the player",
@@ -188,7 +229,7 @@
         "nothing_playing": "❌ Nothing is playing"
       },
       "skip": {
-        "skipped": "⏭️ Skipped: **{title}**",
+        "skipped": "⏭️ Skipped",
         "nothing_playing": "❌ Nothing is playing"
       },
       "stop": {
@@ -252,7 +293,8 @@
       "wavelink_not_installed": "❌ Wavelink is not installed. Please install it with: pip install wavelink",
       "no_permission": "❌ You don't have permission to use this command",
       "command_error": "❌ An error occurred: {error}",
-      "no_nodes": "❌ No connected music nodes found."
+      "no_nodes": "❌ No connected music nodes found.",
+      "no_history": "❌ No previous songs in history."
     }
   },
   "reactionrole": {
