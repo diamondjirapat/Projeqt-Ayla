@@ -1,5 +1,6 @@
 from datetime import datetime, UTC
 from typing import Optional, Dict, Any
+
 from database.connection import db_manager
 
 
@@ -129,3 +130,40 @@ class GuildModel(BaseModel):
             {'guild_id': guild_id},
             {'$unset': {f'playlists.{name}': ""}}
         )
+
+    async def set_music_channel(self, guild_id: int, channel_id: int):
+        """Set the static music channel ID"""
+        await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {'music.channel_id': channel_id}},
+            upsert=True
+        )
+
+    async def get_music_channel(self, guild_id: int) -> Optional[int]:
+        """Get the static music channel ID"""
+        data = await self.collection.find_one({'guild_id': guild_id})
+        if data and 'music' in data:
+            return data['music'].get('channel_id')
+        return None
+
+    async def remove_music_channel(self, guild_id: int):
+        """Remove the static music channel"""
+        await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$unset': {'music': ""}}
+        )
+
+    async def set_music_message(self, guild_id: int, message_id: int):
+        """Set the static music embed message ID"""
+        await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {'music.message_id': message_id}},
+            upsert=True
+        )
+
+    async def get_music_message(self, guild_id: int) -> Optional[int]:
+        """Get the static music embed message ID"""
+        data = await self.collection.find_one({'guild_id': guild_id})
+        if data and 'music' in data:
+            return data['music'].get('message_id')
+        return None
