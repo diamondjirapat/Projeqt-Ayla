@@ -25,17 +25,25 @@ class General(commands.Cog):
         """Checks bot latency (Websocket and API)"""
         websocket_latency = round(self.bot.latency * 1000)
         start_time = time.time()
+
         temp_message = await ctx.send("Pinging...")
         end_time = time.time()
+
         api_latency = round((end_time - start_time) * 1000)
 
+        title = await i18n.t(ctx, 'commands.ping.title')
+        process_time = time.time()
+
+        bot_latency = round((process_time - start_time) * 1000)
+
         embed = discord.Embed(
-            title="🏓 Pong!",
+            title=title,
             color=discord.Color.blue()
         )
 
         embed.add_field(name="Websocket Latency 📡", value=f"{websocket_latency}ms", inline=True)
         embed.add_field(name="API Latency 📝", value=f"{api_latency}ms", inline=True)
+        embed.add_field(name="Bot Process Time 📊", value=f"{bot_latency}ms", inline=True)
         await temp_message.edit(content=None, embed=embed)
     
     @commands.hybrid_command(name='info')
