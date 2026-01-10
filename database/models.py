@@ -167,3 +167,18 @@ class GuildModel(BaseModel):
         if data and 'music' in data:
             return data['music'].get('message_id')
         return None
+
+    async def set_default_volume(self, guild_id: int, volume: int):
+        """Set the default music volume for the guild"""
+        await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {'music.default_volume': volume}},
+            upsert=True
+        )
+
+    async def get_default_volume(self, guild_id: int) -> int:
+        """Get the default music volume for the guild (defaults to 20)"""
+        data = await self.collection.find_one({'guild_id': guild_id})
+        if data and 'music' in data:
+            return data['music'].get('default_volume', 20)
+        return 20
