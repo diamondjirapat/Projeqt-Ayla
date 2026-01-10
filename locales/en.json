@@ -53,6 +53,9 @@
       "description": "Server language has been set to **{language}**\n\nThis will be the default language for:\n• Users who haven't set a personal language\n• Static embeds (music player, etc.)\n• Server-wide messages",
       "invalid_language": "❌ Invalid language. Available: {languages}",
       "no_permission": "❌ You need 'Manage Server' permission to change language."
+    },
+    "ping": {
+      "title": "🏓 Pong!"
     }
   },
   "errors": {
@@ -239,7 +242,8 @@
       "volume": {
         "set": "🔊 Volume set to {volume}%",
         "current": "🔊 Current volume: {volume}%",
-        "invalid": "❌ Volume must be between 0 and 100"
+        "invalid": "❌ Volume must be between 0 and 100",
+        "default_set": "🔊 Default volume set to **{volume}%**."
       },
       "queue": {
         "title": "📋 Music Queue",
@@ -255,7 +259,19 @@
         "invalid_mode": "Invalid loop mode. Use: off, track, or queue"
       },
       "shuffle": {
-        "shuffled": "🔀 Queue shuffled"
+        "shuffled": "🔀 Queue shuffled",
+        "success": "🔀 Queue shuffled successfully!"
+      },
+      "move": {
+        "success": "✅ Moved track from **{from_index}** to **{to_index}**",
+        "invalid_index": "❌ Invalid index provided."
+      },
+      "remove": {
+        "success": "🗑️ Removed **{title}** from the queue",
+        "invalid_index": "❌ Invalid index provided."
+      },
+      "clear": {
+        "success": "🗑️ Queue cleared."
       },
       "disconnect": {
         "not_connected": "❌ Not connected to a voice channel",
@@ -270,6 +286,14 @@
         "cleaning": "🧹 Cleaned {count} messages...",
         "warning_permissions": "⚠️ Warning: Cannot delete messages (missing permissions). Continuing anyway...",
         "warning_error": "⚠️ Warning: Could not clean channel. Continuing anyway..."
+      },
+      "247": {
+        "enabled": "✅ **24/7 Mode** enabled. The bot will stay in the voice channel.",
+        "disabled": "❌ **24/7 Mode** disabled. The bot will disconnect when idle."
+      },
+      "autoplay": {
+        "enabled": "✅ **Autoplay** enabled. Songs will be added automatically.",
+        "disabled": "❌ **Autoplay** disabled."
       }
     },
     "lastfm": {
