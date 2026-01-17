@@ -63,7 +63,10 @@
     "missing_permissions": "❌ You don't have permission to use this command.",
     "missing_argument": "❌ Missing required argument: {param}",
     "bad_argument": "❌ Invalid argument provided.",
-    "unexpected_error": "❌ An unexpected error occurred."
+    "unexpected_error": "❌ เกิดข้อผิดพลาดที่ไม่คาดคิด",
+    "bot_missing_permissions": "❌ I don't have permission to do that (check my role hierarchy).",
+    "check_failure": "❌ You don't have permission to use this command or my role is lower.",
+    "forbidden": "❌ I don't have permission to do this (check my role hierarchy)."
   },
   "general": {
     "no_reason": "No reason provided",
@@ -156,7 +159,7 @@
   },
   "music": {
     "player": {
-      "now_playing": "🎵 Now Playing",
+      "now_playing": "🎵 Now Playing `{position}. {title}`",
       "artist": "👤 **Artist:** {artist}",
       "duration_label": "⏳ **Duration:** {duration}",
       "requester_label": "Requested by {user}",
