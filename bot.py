@@ -116,10 +116,23 @@ class DiscordBot(commands.Bot):
             error_msg = await i18n.t(ctx, 'errors.bad_argument')
             await ctx.send(error_msg)
         
-        else:
-            logger.error(f"Unhandled error in {ctx.command}: {error}")
-            error_msg = await i18n.t(ctx, 'errors.unexpected_error')
+        elif isinstance(error, commands.BotMissingPermissions):
+            perms = ', '.join(error.missing_permissions)
+            error_msg = await i18n.t(ctx, 'errors.bot_missing_permissions', perms=perms)
             await ctx.send(error_msg)
+
+        elif isinstance(error, commands.CheckFailure):
+             error_msg = await i18n.t(ctx, 'errors.check_failure')
+             await ctx.send(error_msg)
+
+        elif isinstance(error, commands.CommandInvokeError):
+             if isinstance(error.original, discord.Forbidden):
+                error_msg = await i18n.t(ctx, 'errors.forbidden')
+                await ctx.send(error_msg)
+             else:
+                  logger.error(f"Unhandled error in {ctx.command}: {error}")
+                  error_msg = await i18n.t(ctx, 'errors.unexpected_error')
+                  await ctx.send(error_msg)
     
     async def close(self):
         logger.info("Shutting down bot...")
