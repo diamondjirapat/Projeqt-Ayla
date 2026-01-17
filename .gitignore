@@ -224,3 +224,4 @@ Thumbs.db
 bot.log
 /logs
 /plugins
+*.zip
