@@ -18,7 +18,10 @@ class Config:
     # Last.fm
     LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
     LASTFM_API_SECRET = os.getenv('LASTFM_API_SECRET')
-
+    
+    # Banner
+    BANNER_URL = os.getenv('BANNER_URL')
+    
     @classmethod
     def validate(cls):
         if not cls.DISCORD_TOKEN:
