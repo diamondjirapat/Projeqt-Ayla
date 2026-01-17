@@ -24,7 +24,7 @@ class UserModel(BaseModel):
             'username': username,
             'locale': kwargs.get('locale', None),
             'created_at': datetime.now(UTC),
-            'updated_at': datetime.now(UTC)
+            'updated_at': datetime.now(UTC),
             **kwargs
         }
         
@@ -98,7 +98,7 @@ class GuildModel(BaseModel):
             'name': name,
             'locale': kwargs.get('locale', 'en'),
             'created_at': datetime.now(UTC),
-            'updated_at': datetime.now(UTC)
+            'updated_at': datetime.now(UTC),
             **kwargs
         }
         
