@@ -13,6 +13,7 @@ from config import Config
 from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 from utils.lastfm import lastfm_handler
+from utils.queue import CustomPlayer
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,16 @@ class Music(commands.Cog):
         self.guild_model = GuildModel()
         self.timeout_tasks = {}
         self.selecting_users = set()
+        self.autoplay_played_uris = {}  # guild_id -> set of played URIs to avoid repeats
 
     def start_timeout(self, guild_id, player):
         """Starts a 3-minute disconnect timer"""
         if guild_id in self.timeout_tasks:
             self.timeout_tasks[guild_id].cancel()
+        
+        # Bypass 24/7
+        if hasattr(player, "twenty_four_seven") and player.twenty_four_seven:
+            return
 
         async def _timeout():
             await asyncio.sleep(180)
@@ -37,6 +43,37 @@ class Music(commands.Cog):
                 #     await player.home_channel.send("💤 I've been idle for too long. Disconnected to save resources.")
 
         self.timeout_tasks[guild_id] = self.bot.loop.create_task(_timeout())
+
+    async def _fetch_autoplay_track(self, player: wavelink.Player, last_track: wavelink.Playable) -> wavelink.Playable | None:
+        """Fetch a recommended track based on the last played track's artist"""
+        guild_id = player.guild.id
+
+        if guild_id not in self.autoplay_played_uris:
+            self.autoplay_played_uris[guild_id] = set()
+
+        if last_track.uri:
+            self.autoplay_played_uris[guild_id].add(last_track.uri)
+
+        if len(self.autoplay_played_uris[guild_id]) > 50:
+            self.autoplay_played_uris[guild_id] = set(list(self.autoplay_played_uris[guild_id])[-50:])
+
+        query = f"{last_track.author}"
+
+        try:
+            tracks = await wavelink.Playable.search(query)
+            if not tracks:
+                return None
+
+            for track in tracks:
+                if track.uri and track.uri not in self.autoplay_played_uris[guild_id]:
+                    if track.title.lower() != last_track.title.lower():
+                        track.extras.requester = "AutoPlay 🎵"
+                        return track
+            
+            return None
+        except Exception as e:
+            logger.warning(f"AutoPlay fallback search failed: {e}")
+            return None
 
     def cancel_timeout(self, guild_id):
         """Cancels the disconnect timer"""
@@ -84,6 +121,10 @@ class Music(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
         player: wavelink.Player = payload.player
+
+        if not player:
+            return
+
         track = payload.track
 
         player.current_track_start_time = int(time.time())
@@ -97,9 +138,19 @@ class Music(commands.Cog):
                 if player.home_channel.id == static_channel_id:
                     return
 
-            title = await i18n.t(player.home_channel, "music.player.now_playing", static_embed=False)
-            embed = discord.Embed(title=title, description=f"**[{track.title}]({track.uri})**",
-                                  color=discord.Color.from_rgb(255, 255, 255))
+            position = len(player.history) + 1
+            title = await i18n.t(player.home_channel, "music.player.now_playing", static_embed=True, position=position, title=track.title)
+            
+            # Detect Spotify
+            is_spotify = track.uri and "spotify" in track.uri.lower()
+            embed_color = discord.Color.green() if is_spotify else discord.Color.from_rgb(255, 255, 255)
+            source_indicator = "🎵 Spotify" if is_spotify else ""
+            
+            description = f"**[{track.title}]({track.uri})**"
+            if source_indicator:
+                description = f"{source_indicator}\n{description}"
+            
+            embed = discord.Embed(title=title, description=description, color=embed_color)
 
             artist_label = await i18n.t(player.home_channel, "music.player.artist", artist=track.author)
             duration_label = await i18n.t(player.home_channel, "music.player.duration_label",
@@ -136,59 +187,61 @@ class Music(commands.Cog):
         if not player:
             return
 
-        if not hasattr(player, 'history'):
+        if not hasattr(player, "history"):
             player.history = []
 
         if payload.reason != "LOAD_FAILED" and payload.reason != "CLEANUP":
             player.history.append(payload.track)
+            if player.autoplay == wavelink.AutoPlayMode.enabled:
+                if player.queue.is_empty:
+                    await asyncio.sleep(0.5) # wait to avoid infinite skip loop
+                    if player.queue.is_empty and not player.playing:
+                        recommended = await self._fetch_autoplay_track(player, payload.track)
+                        if recommended:
+                            logger.info(f"AutoPlay fallback: Playing '{recommended.title}' by {recommended.author}")
+                            vol = await self.guild_model.get_default_volume(player.guild.id)
+                            await player.play(recommended, volume=vol)
+                        else:
+                            self.start_timeout(player.guild.id, player)
+                            await self.update_static_embed(player.guild.id)
+            elif not player.queue.is_empty:
+                await player.play(player.queue.get())
+            else:
+                self.start_timeout(player.guild.id, player)
+                await self.update_static_embed(player.guild.id)
 
-        if not player.queue.is_empty:
-            await player.play(player.queue.get())
-        else:
-
-            self.start_timeout(player.guild.id, player)
-            await self.update_static_embed(player.guild.id)
-
-        # logger.info(f"Track ended: {payload.track.title} (Reason: {payload.reason})")
-
-        # if not lastfm_handler.enabled:
-        #     logger.info("Last.fm not enabled, skipping scrobble")
-        #     return
-
-        # if payload.reason.lower() != "finished":
-        #     logger.info(f"Track not finished (Reason: {payload.reason}), skipping scrobble")
-        #     return
-
-        track = payload.track
-
-        if player.channel:
+        if payload.reason == "FINISHED" and player.channel:
+            track = payload.track
             member_ids = [m.id for m in player.channel.members if not m.bot]
 
-            timestamp = getattr(player, 'current_track_start_time', int(time.time() - (track.length / 1000)))
-            # logger.info(f"Attempting to scrobble track: {track.title} for members: {member_ids} at {timestamp}")
+            timestamp = getattr(player, "current_track_start_time", int(time.time() - (track.length / 1000)))
 
             for user_id in member_ids:
                 user_data = await self.user_model.get_user(user_id)
-                if user_data and user_data.get('lastfm', {}).get('scrobbling'):
-                    logger.info(f"Scrobbling for user {user_id}")
-                    await lastfm_handler.scrobble(
-                        user_data['lastfm']['session_key'],
-                        track.author,
-                        track.title,
-                        timestamp
-                    )
-                # else:
-                #     logger.info(f"User {user_id} has no Last.fm data or scrobbling disabled")
+                if not user_data:
+                    continue
+
+                lastfm = user_data.get("lastfm", {})
+                if not lastfm.get("scrobbling"):
+                    continue
+
+                await lastfm_handler.scrobble(lastfm["session_key"], track.author, track.title, timestamp)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
+        # Check if bot disconnected
+        if member.id == self.bot.user.id and before.channel and not after.channel:
+            await self.update_static_embed(member.guild.id)
+            return
+
         player: wavelink.Player = wavelink.Pool.get_node().get_player(member.guild.id)
         if not player or not player.channel:
             return
 
         # Check if bot is alone
         if len(player.channel.members) == 1 and player.channel.members[0].id == self.bot.user.id:
-            self.start_timeout(member.guild.id, player)
+            if not getattr(player, "twenty_four_seven", False):
+                self.start_timeout(member.guild.id, player)
         elif len(player.channel.members) > 1:
             self.cancel_timeout(member.guild.id)
 
@@ -232,23 +285,32 @@ class Music(commands.Cog):
             embed.title = await i18n.t(channel, "music.player.idle.title", static_embed=True)
             embed.description = await i18n.t(channel, "music.player.idle.description_disconnect", static_embed=True)
             embed.set_image(
-                url="https://cdn.discordapp.com/attachments/1392428575461871717/1457324945955885217/P_idel.png")
+                url=Config.BANNER_URL)
 
         elif not player.playing:
             embed.title = await i18n.t(channel, "music.player.idle.title", static_embed=True)
             embed.description = await i18n.t(channel, "music.player.idle.description_empty", static_embed=True)
             embed.set_image(
-                url="https://cdn.discordapp.com/attachments/1392428575461871717/1457324945955885217/P_idel.png")
+                url=Config.BANNER_URL)
         else:
             track = player.current
-            now_playing_title = await i18n.t(channel, "music.player.now_playing", static_embed=True)
+            position = len(player.history) + 1 if hasattr(player, 'history') else 1
+            now_playing_title = await i18n.t(channel, "music.player.now_playing", static_embed=True, position=position, title=track.title)
             artist_label = await i18n.t(channel, "music.player.artist", artist=track.author, static_embed=True)
             duration_label = await i18n.t(channel, "music.player.duration_label",
                                           duration=f"{track.length // 1000 // 60}:{track.length // 1000 % 60:02d}",
                                           static_embed=True)
 
+            # Detect Spotify source
+            is_spotify = track.uri and "spotify" in track.uri.lower()
+            if is_spotify:
+                embed.color = discord.Color.green()
+                source_indicator = "🎵 Spotify\n"
+            else:
+                source_indicator = ""
+
             embed.title = now_playing_title
-            embed.description = f"**[{track.title}]({track.uri})**\n\n{artist_label}\n{duration_label}"
+            embed.description = f"{source_indicator}**[{track.title}]({track.uri})**\n\n{artist_label}\n{duration_label}"
             if track.artwork: embed.set_thumbnail(url=track.artwork)
             if hasattr(track.extras, 'requester'):
                 req_text = await i18n.t(channel, "music.player.requester_label", user=track.extras.requester,
@@ -277,7 +339,8 @@ class Music(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author.bot: return
+        if message.author.bot:
+            return
 
         # Check static channel
         channel_id = await self.guild_model.get_music_channel(message.guild.id)
@@ -286,13 +349,19 @@ class Music(commands.Cog):
             
         if message.author.id in self.selecting_users:
             return
+
+        ctx = await self.bot.get_context(message)
+        if ctx.valid:
+            try:
+                await message.delete()
+            except:
+                pass
+            return
             
         try:
             await message.delete()
         except:
             pass
-
-        ctx = await self.bot.get_context(message)
 
         query = message.content
         await self._play_logic(ctx, query, message.channel)
@@ -312,7 +381,7 @@ class Music(commands.Cog):
         player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
         if not player:
             try:
-                player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
+                player = await ctx.author.voice.channel.connect(cls=CustomPlayer)
                 player.home_channel = response_channel
             except Exception:
                 msg = await i18n.t(ctx, "music.commands.play.not_in_voice")
@@ -323,8 +392,14 @@ class Music(commands.Cog):
 
         url_pattern = re.compile(r'https?://(?:www\.)?.+')
         is_url = url_pattern.match(query)
+        SPOTIFY_URL_PATTERN = re.compile(r'https?://open\.spotify\.com/(track|album|playlist|artist)/([a-zA-Z0-9]+)')
+        is_spotify = SPOTIFY_URL_PATTERN.match(query) is not None
 
-        tracks: wavelink.Search = await wavelink.Playable.search(query)
+        try:
+            tracks: wavelink.Search = await wavelink.Playable.search(query)
+        except wavelink.LavalinkLoadException as e:
+            msg = await i18n.t(ctx, "music.errors.track_failed", error=str(e))
+            return await response_channel.send(msg, delete_after=5)
         if not tracks:
             msg = await i18n.t(ctx, "music.commands.play.no_results", query=query)
             return await response_channel.send(msg, delete_after=5)
@@ -335,17 +410,24 @@ class Music(commands.Cog):
                 for track in tracks:
                     track.extras.requester = ctx.author.mention
                 await player.queue.put_wait(tracks)
+                source_label = "🎵 Spotify" if is_spotify else ""
                 msg = await i18n.t(ctx, "music.commands.play.playlist_added", count=len(tracks), name=tracks.name)
+                if source_label:
+                    msg = f"{source_label} | {msg}"
                 await response_channel.send(msg, delete_after=5)
             else:
                 track = tracks[0]
                 track.extras.requester = ctx.author.mention
                 await player.queue.put_wait(track)
+                source_label = "🎵 Spotify" if is_spotify else ""
                 msg = await i18n.t(ctx, "music.commands.play.added_to_queue", title=track.title)
+                if source_label:
+                    msg = f"{source_label} | {msg}"
                 await response_channel.send(msg, delete_after=5)
 
             if not player.playing:
-                await player.play(player.queue.get(), volume=30)
+                vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                await player.play(player.queue.get(), volume=vol)
 
             await self.update_static_embed(ctx.guild.id)
             return
@@ -388,7 +470,8 @@ class Music(commands.Cog):
                     await player.queue.put_wait(track)
 
                     if not player.playing:
-                        await player.play(player.queue.get(), volume=30)
+                        vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                        await player.play(player.queue.get(), volume=vol)
 
                     added_text = await i18n.t(ctx, "music.commands.play.added_to_queue", title=track.title)
                     await msg.edit(content=added_text, delete_after=5)
@@ -445,14 +528,14 @@ class Music(commands.Cog):
         """Save a personal playlist"""
         await self.user_model.add_playlist(ctx.author.id, name, url)
         msg = await i18n.t(ctx, "music.playlist.saved_personal", name=name)
-        await ctx.send(msg)
+        await ctx.send(msg, delete_after=10)
 
     @playlist.command(name="delete")
     async def playlist_delete(self, ctx, name: str):
         """Delete a personal playlist"""
         await self.user_model.remove_playlist(ctx.author.id, name)
         msg = await i18n.t(ctx, "music.playlist.deleted_personal", name=name)
-        await ctx.send(msg)
+        await ctx.send(msg, delete_after=10)
 
     @playlist.command(name="list")
     async def playlist_list(self, ctx):
@@ -460,7 +543,7 @@ class Music(commands.Cog):
         data = await self.user_model.get_user(ctx.author.id)
         if not data or 'playlists' not in data:
             msg = await i18n.t(ctx, "music.playlist.no_personal")
-            return await ctx.send(msg)
+            return await ctx.send(msg, delete_after=10)
 
         title = await i18n.t(ctx, "music.playlist.personal_title")
         embed = discord.Embed(title=title, color=discord.Color.blue())
@@ -478,14 +561,14 @@ class Music(commands.Cog):
     async def server_save(self, ctx, name: str, url: str):
         await self.guild_model.add_playlist(ctx.guild.id, name, url)
         msg = await i18n.t(ctx, "music.playlist.saved_server", name=name)
-        await ctx.send(msg)
+        await ctx.send(msg, delete_after=10)
 
     @serverplaylist.command(name="list")
     async def server_list(self, ctx):
         data = await self.guild_model.get_guild(ctx.guild.id)
         if not data or 'playlists' not in data:
             msg = await i18n.t(ctx, "music.playlist.no_server")
-            return await ctx.send(msg)
+            return await ctx.send(msg, delete_after=10)
 
         title = await i18n.t(ctx, "music.playlist.server_title")
         embed = discord.Embed(title=title, color=discord.Color.gold())
@@ -502,22 +585,24 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx):
             return
 
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: wavelink.Player | None = cast(wavelink.Player, ctx.voice_client)
+
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await response_channel.send(msg, delete_after=5)
 
-        if not hasattr(player, 'history') or not player.history:
+        if not hasattr(player, "history") or not player.history:
             msg = await i18n.t(ctx, "music.errors.no_history")
             return await response_channel.send(msg, delete_after=5)
 
-        previous_track = player.history.pop()
+        previous_track = player.history[-1]
 
-        if player.playing:
-            current_track = player.current
-            player.queue.put_at(0, current_track)
+        if player.current:
+            player.queue.put_at(0, player.current)
 
+        player.history.pop()
         player.queue.put_at(0, previous_track)
+
         await player.skip(force=True)
 
         await response_channel.send(f"⏮️ Playing previous song: **{previous_track.title}**", delete_after=5)
@@ -574,25 +659,118 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await response_channel.send(msg, delete_after=5)
 
+        # if player.queue.is_empty:
+        #     msg = await i18n.t(ctx, "music.commands.queue.empty")
+        #     return await response_channel.send(msg, delete_after=5)
+
+        title = await i18n.t(ctx, "music.commands.queue.title")
+        view = QueuePaginationView(player, title=title)
+        
+        if not view.full_playlist:
+             msg = await i18n.t(ctx, "music.commands.queue.empty")
+             return await response_channel.send(msg, delete_after=5)
+             
+        msg = await response_channel.send(embed=view.get_embed(), view=view)
+        view.message = msg
+
+    @commands.hybrid_command(name="shuffle")
+    async def shuffle(self, ctx: commands.Context):
+        """Shuffle the queue"""
+        await self.handle_command_cleanup(ctx)
+        response_channel = await self.get_response_channel(ctx)
+
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+        if not player:
+            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+            return await response_channel.send(msg, delete_after=5)
+
         if player.queue.is_empty:
             msg = await i18n.t(ctx, "music.commands.queue.empty")
             return await response_channel.send(msg, delete_after=5)
 
-        title = await i18n.t(ctx, "music.commands.queue.title")
-        view = QueuePaginationView(player.queue, title=title)
-        msg = await response_channel.send(embed=view.get_embed(), view=view)
-        view.message = msg
+        player.queue.shuffle()
+        msg = await i18n.t(ctx, "music.commands.shuffle.success")
+        await response_channel.send(msg, delete_after=5)
+        await self.update_static_embed(ctx.guild.id)
 
-    @commands.hybrid_command(name="volume", aliases=["v", "vol"])
-    async def volume(self, ctx: commands.Context, volume: int):
+    @commands.hybrid_command(name="move")
+    async def move(self, ctx: commands.Context, index_from: int, index_to: int):
+        """Move a song from one position to another"""
+        await self.handle_command_cleanup(ctx)
+        response_channel = await self.get_response_channel(ctx)
+
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+        if not player:
+            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+            return await response_channel.send(msg, delete_after=5)
+
+        try:
+            player.queue.move(index_from - 1, index_to - 1)
+            msg = await i18n.t(ctx, "music.commands.move.success", from_index=index_from, to_index=index_to)
+            await response_channel.send(msg, delete_after=5)
+            await self.update_static_embed(ctx.guild.id)
+        except IndexError:
+            msg = await i18n.t(ctx, "music.commands.move.invalid_index")
+            await response_channel.send(msg, delete_after=5)
+
+    @commands.hybrid_command(name="remove")
+    async def remove(self, ctx: commands.Context, index: int):
+        """Remove a song from the queue"""
+        await self.handle_command_cleanup(ctx)
+        response_channel = await self.get_response_channel(ctx)
+
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+        if not player:
+            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+            return await response_channel.send(msg, delete_after=5)
+
+        try:
+            removed_track = player.queue.remove(index - 1)
+            msg = await i18n.t(ctx, "music.commands.remove.success", title=removed_track.title)
+            await response_channel.send(msg, delete_after=5)
+            await self.update_static_embed(ctx.guild.id)
+        except IndexError:
+            msg = await i18n.t(ctx, "music.commands.remove.invalid_index")
+            await response_channel.send(msg, delete_after=5)
+
+    @commands.hybrid_command(name="clear")
+    async def clear(self, ctx: commands.Context):
+        """Clear the queue"""
+        await self.handle_command_cleanup(ctx)
+        response_channel = await self.get_response_channel(ctx)
+
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+        if not player:
+            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+            return await response_channel.send(msg, delete_after=5)
+
+        player.queue.clear()
+        msg = await i18n.t(ctx, "music.commands.clear.success")
+        await response_channel.send(msg, delete_after=5)
+        await self.update_static_embed(ctx.guild.id)
+
+    @commands.hybrid_group(name="volume", aliases=["v", "vol"])
+    async def volume(self, ctx: commands.Context, volume: int = None):
         """Set volume (0-100)"""
+        if volume is None:
+             if ctx.invoked_subcommand is None:
+                 await self.handle_command_cleanup(ctx)
+                 response_channel = await self.get_response_channel(ctx)
+                 player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+                 if not player:
+                      msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+                      return await response_channel.send(msg, delete_after=5)
+                 msg = await i18n.t(ctx, "music.commands.volume.current", volume=player.volume)
+                 return await response_channel.send(msg, delete_after=5)
+             return
+
         await self.handle_command_cleanup(ctx)
         response_channel = await self.get_response_channel(ctx)
 
         if not await self.check_voice_channel(ctx):
             return
 
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await response_channel.send(msg, delete_after=5)
@@ -605,6 +783,18 @@ class Music(commands.Cog):
         msg = await i18n.t(ctx, "music.commands.volume.set", volume=volume)
         await response_channel.send(msg, delete_after=5)
         await self.update_static_embed(ctx.guild.id)
+
+    @volume.command(name="default")
+    @commands.has_permissions(manage_guild=True)
+    async def volume_default(self, ctx: commands.Context, volume: int):
+        """Set the default volume for the server"""
+        if not 0 <= volume <= 100:
+            msg = await i18n.t(ctx, "music.commands.volume.invalid")
+            return await ctx.send(msg, delete_after=5)
+
+        await self.guild_model.set_default_volume(ctx.guild.id, volume)
+        msg = await i18n.t(ctx, "music.commands.volume.default_set", volume=volume)
+        await ctx.send(msg, delete_after=10)
 
     @commands.hybrid_group(name="musicchannel")
     @commands.has_permissions(manage_channels=True)
@@ -627,6 +817,53 @@ class Music(commands.Cog):
         msg = await i18n.t(ctx, "music.commands.musicchannel.removed")
         await ctx.send(msg)
 
+    @commands.hybrid_command(name="247", aliases=["24/7"])
+    async def twenty_four_seven(self, ctx: commands.Context):
+        """Toggle 24/7 mode"""
+        await self.handle_command_cleanup(ctx)
+        response_channel = await self.get_response_channel(ctx)
+
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+        if not player:
+            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+            return await response_channel.send(msg, delete_after=5)
+
+        player.twenty_four_seven = not player.twenty_four_seven
+        
+        if not player.twenty_four_seven:
+            if player.queue.is_empty and not player.playing:
+                 self.start_timeout(ctx.guild.id, player)
+
+            elif len(player.channel.members) == 1:
+                 self.start_timeout(ctx.guild.id, player)
+        else:
+            self.cancel_timeout(ctx.guild.id)
+
+        status = "enabled" if player.twenty_four_seven else "disabled"
+        msg = await i18n.t(ctx, f"music.commands.247.{status}")
+        await response_channel.send(msg, delete_after=5)
+
+    @commands.hybrid_command(name="autoplay")
+    async def autoplay(self, ctx: commands.Context):
+        """Toggle Autoplay mode"""
+        await self.handle_command_cleanup(ctx)
+        response_channel = await self.get_response_channel(ctx)
+
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+        if not player:
+            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+            return await response_channel.send(msg, delete_after=5)
+
+        if player.autoplay == wavelink.AutoPlayMode.enabled:
+            player.autoplay = wavelink.AutoPlayMode.disabled
+            status = "disabled"
+        else:
+            player.autoplay = wavelink.AutoPlayMode.enabled
+            status = "enabled"
+
+        msg = await i18n.t(ctx, f"music.commands.autoplay.{status}")
+        await response_channel.send(msg, delete_after=5)
+
     @commands.hybrid_group(name="lastfm")
     async def lastfm(self, ctx):
         """Last.fm integration"""
@@ -637,7 +874,7 @@ class Music(commands.Cog):
         """Login to Last.fm"""
         url, token = await lastfm_handler.get_auth_data()
         if not url or not token:
-            return await ctx.send("Last.fm is not configured on this bot.")
+            return await ctx.send("Last.fm is not configured on this bot.", delete_after=10)
 
         view = LastFMAuthView(ctx.author.id, url, token, self.user_model)
         await ctx.send("Please authorize the bot by clicking the button below, then click **Verify Login**.", view=view)
@@ -648,20 +885,20 @@ class Music(commands.Cog):
         user_data = await self.user_model.get_user(ctx.author.id)
         if not user_data or 'lastfm' not in user_data:
             msg = await i18n.t(ctx, "music.lastfm.unlink.not_linked")
-            return await ctx.send(msg)
+            return await ctx.send(msg, delete_after=10)
 
         lfm = user_data['lastfm']
         username = lfm.get('username', 'Unknown')
         scrobbling = lfm.get('scrobbling', True)
 
         status = "✅ Enabled" if scrobbling else "❌ Disabled"
-        await ctx.send(f"👤 **Last.fm Account:** `{username}`\n📡 **Scrobbling:** {status}")
+        await ctx.send(f"👤 **Last.fm Account:** `{username}`\n📡 **Scrobbling:** {status}", delete_after=10)
 
     @lastfm.command(name="logout")
     async def lastfm_logout(self, ctx):
         """Unlink your Last.fm account"""
         await self.user_model.remove_lastfm(ctx.author.id)
-        await ctx.send("✅ Successfully unlinked your Last.fm account.")
+        await ctx.send("✅ Successfully unlinked your Last.fm account.", delete_after=10)
 
     @lastfm.command(name="scrobble")
     @app_commands.describe(state="Enable or disable scrobbling (on/off)")
@@ -729,7 +966,8 @@ class NowPlayingView(discord.ui.View):
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         cog = interaction.client.get_cog("Music")
-        if not cog: return
+        if not cog:
+            return
 
         if not hasattr(self.player, 'history') or not self.player.history:
             from utils.i18n import i18n
@@ -781,13 +1019,27 @@ class NowPlayingView(discord.ui.View):
 
 
 class QueuePaginationView(discord.ui.View):
-    def __init__(self, queue, title="Music Queue", per_page=10):
+    def __init__(self, player, title="Music Queue", per_page=10):
         super().__init__(timeout=60)
-        self.queue = queue
+        self.player = player
         self.title = title
         self.per_page = per_page
-        self.current_page = 0
-        self.total_pages = max(1, (len(queue) + per_page - 1) // per_page)
+
+        history = list(player.history) if hasattr(player, 'history') else []
+        current = [player.current] if player.current else []
+        queue = list(player.queue)
+
+        self.full_playlist = history + current + queue
+        self.current_index = len(history) if current else -1
+
+        self.total_pages = max(1, (len(self.full_playlist) + per_page - 1) // per_page)
+
+        # Auto-set page to current song
+        if self.current_index != -1:
+            self.current_page = self.current_index // per_page
+        else:
+            self.current_page = 0
+
         self.message = None
         self.update_buttons()
 
@@ -798,15 +1050,23 @@ class QueuePaginationView(discord.ui.View):
     def get_embed(self):
         start = self.current_page * self.per_page
         end = start + self.per_page
-        current_items = self.queue[start:end]
+        current_items = self.full_playlist[start:end]
 
-        embed = discord.Embed(title=f"{self.title} ({len(self.queue)} songs)", color=discord.Color.blue())
+        embed = discord.Embed(title=f"{self.title} ({len(self.full_playlist)} songs)", color=discord.Color.blue())
         queue_list = ""
         for i, track in enumerate(current_items):
-            queue_list += f"{start + i + 1}. [{track.title}]({track.uri}) - {track.author}\n"
+            global_index = start + i
+            num = global_index + 1
+
+            if global_index == self.current_index:
+                line = f"▶️ **{num}. [{track.title}]({track.uri}) - {track.author}**"
+            else:
+                line = f"{num}. [{track.title}]({track.uri}) - {track.author}"
+
+            queue_list += line + "\n"
 
         embed.description = queue_list or "Queue is empty."
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages}")
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} | Loop: {self.player.queue.mode}")
         return embed
 
     async def on_timeout(self):
