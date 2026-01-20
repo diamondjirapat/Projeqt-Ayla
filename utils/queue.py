@@ -81,4 +81,4 @@ class CustomPlayer(wavelink.Player):
             self.queue = CustomQueue()
 
         self.twenty_four_seven = False
-        self.custom_autoplay = False
+
