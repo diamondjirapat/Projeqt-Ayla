@@ -16,6 +16,11 @@ class General(commands.Cog):
         self.user_model = UserModel()
         self.guild_model = GuildModel()
     
+    async def cog_before_invoke(self, ctx: commands.Context):
+        """Automatically defer slash commands to prevent timeout"""
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
+    
     @commands.Cog.listener()
     async def on_ready(self):
         logger.info(f'{self.__class__.__name__} cog loaded')
