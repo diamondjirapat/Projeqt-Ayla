@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import asyncio
 import logging
@@ -41,6 +42,9 @@ class DiscordBot(commands.Bot):
             return
 
         await self.load_cogs()
+        
+        # Register app command error handler
+        self.tree.on_error = self.on_app_command_error
 
         try:
             synced = await self.tree.sync()
@@ -133,6 +137,50 @@ class DiscordBot(commands.Bot):
                   logger.error(f"Unhandled error in {ctx.command}: {error}")
                   error_msg = await i18n.t(ctx, 'errors.unexpected_error')
                   await ctx.send(error_msg)
+    
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Global error handler for slash commands"""
+        from utils.i18n import i18n
+        
+        logger.error(f"App command error: {error}")
+        async def send_error(message: str):
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(message, ephemeral=True)
+                else:
+                    await interaction.response.send_message(message, ephemeral=True)
+            except discord.HTTPException:
+                pass
+        
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await send_error(f"⏳ Command on cooldown. Try again in {error.retry_after:.1f}s")
+        
+        elif isinstance(error, app_commands.MissingPermissions):
+            error_msg = await i18n.t(interaction, 'errors.missing_permissions')
+            await send_error(error_msg)
+        
+        elif isinstance(error, app_commands.BotMissingPermissions):
+            perms = ', '.join(error.missing_permissions)
+            error_msg = await i18n.t(interaction, 'errors.bot_missing_permissions', perms=perms)
+            await send_error(error_msg)
+        
+        elif isinstance(error, app_commands.CheckFailure):
+            error_msg = await i18n.t(interaction, 'errors.check_failure')
+            await send_error(error_msg)
+        
+        elif isinstance(error, app_commands.CommandInvokeError):
+            if isinstance(error.original, discord.Forbidden):
+                error_msg = await i18n.t(interaction, 'errors.forbidden')
+                await send_error(error_msg)
+            else:
+                logger.error(f"Unhandled app command error: {error.original}", exc_info=error.original)
+                error_msg = await i18n.t(interaction, 'errors.unexpected_error')
+                await send_error(error_msg)
+        
+        else:
+            logger.error(f"Unknown app command error type: {type(error)}", exc_info=error)
+            error_msg = await i18n.t(interaction, 'errors.unexpected_error')
+            await send_error(error_msg)
     
     async def close(self):
         logger.info("Shutting down bot...")
