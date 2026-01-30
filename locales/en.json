@@ -186,13 +186,55 @@
       "tip": "💡 **Tip**: You can use the player directly in {channel}!"
     },
     "playlist": {
-      "saved_personal": "✅ Saved personal playlist: `{name}`",
-      "deleted_personal": "🗑️ Deleted personal playlist: `{name}`",
-      "no_personal": "You have no saved playlists.",
-      "personal_title": "Your Playlists",
-      "saved_server": "✅ Saved server playlist: `{name}`",
-      "no_server": "No server playlists.",
-      "server_title": "Server Playlists"
+      "created": "✅ Created playlist: `{name}`",
+      "created_server": "✅ Created server playlist: `{name}`",
+      "create_failed": "❌ Failed to create playlist: `{name}`",
+      "deleted_personal": "🗑️ Deleted playlist: `{name}`",
+      "deleted_server": "🗑️ Deleted server playlist: `{name}`",
+      "no_personal": "You have no saved playlists. Use `playlist create <name>` to create one!",
+      "personal_title": "📂 Your Playlists",
+      "no_server": "No server playlists. Admins can use `serverplaylist create <name>` to create one.",
+      "server_title": "📁 Server Playlists",
+      "track_added": "✅ Added **{title}** to playlist `{playlist}`",
+      "track_added_server": "✅ Added **{title}** to server playlist `{playlist}`",
+      "track_removed": "🗑️ Removed track #{index} from `{playlist}`",
+      "remove_failed": "❌ Failed to remove track. Check the playlist name and track number.",
+      "track_not_found": "❌ Could not find that track.",
+      "no_track_to_add": "❌ No track to add. Play a song first or provide a URL.",
+      "playlist_not_found": "❌ Playlist `{name}` not found.",
+      "empty_playlist": "❌ This playlist is empty. Add tracks with `playlist add`.",
+      "playing": "🎵 Playing **{count}** tracks from `{name}`",
+      "no_tracks_loaded": "❌ Failed to load any tracks from this playlist.",
+      "error": "❌ Error: {error}",
+      "view_empty": "Empty",
+      "view_empty_desc": "No tracks in this playlist yet.\nUse `playlist add` to add songs!",
+      "view_empty_server": "No tracks in this playlist yet.",
+      "view_tracks": "Tracks",
+      "view_no_tracks": "No tracks",
+      "track_count": "{count} tracks",
+      "view_footer": "Use 'playlist view <name>' to see tracks",
+      "importing": "🔄 Importing playlist... This may take a moment.",
+      "import_success": "✅ Imported **{count}** tracks from `{source}` to playlist `{name}`",
+      "import_failed": "❌ Failed to import playlist. Make sure the URL is a valid playlist.",
+      "import_not_playlist": "❌ The URL doesn't point to a playlist. Please use a YouTube or Spotify playlist URL.",
+      "imported_desc": "**Imported Playlist**\nSource: [Link]({source_url})\nTracks: {track_count}",
+      "created_field": "📅 Created",
+      "modifications_field": "✏️ Modifications",
+      "modifications_value": "Additions: {additions}\nRemovals: {removals}",
+      "modifications_footer": "Note: Use 'play' command to see added tracks",
+      "loading_imported": "⏱️ Loading imported playlist **{name}**...",
+      "load_failed": "❌ Failed to load source tracks.",
+      "added_tracks": "✅ Added {count} tracks from **{name}**!",
+      "loading_additions": "⏳ Loading {count} additions...",
+      "loading_additions_progress": "✅ Added {count} source tracks!\n⏳ Loading additions: {loaded}/{total}...",
+      "added_with_additions": "✅ Added {count} source tracks + {additions} additions from **{name}**!",
+      "load_error": "❌ Error loading playlist: {error}",
+      "empty_import": "❌ Playlist is empty.",
+      "imported_linked": "✅ Imported **{name}** linked to **{source}** ({count} tracks)!",
+      "imported_linked_server": "✅ Imported **{name}** linked to **{source}** ({count} tracks) for the server!",
+      "list_imported_type": "🌍 Imported ({count} tracks)",
+      "list_imported_additions": " + {additions} added",
+      "list_unknown_type": "❌ Unknown playlist type"
     },
     "ui": {
       "select_track": "🔍 **Select a track to play:**",
@@ -217,6 +259,8 @@
       "settings_autoplay_off": "🎵 Autoplay: OFF",
       "settings_247_on": "🌙 24/7: ON ✓",
       "settings_247_off": "🌙 24/7: OFF",
+      "settings_volume_5": "🔊 Volume: 5%",
+      "settings_volume_10": "🔊 Volume: 10%",
       "settings_volume_25": "🔊 Volume: 25%",
       "settings_volume_50": "🔊 Volume: 50%",
       "settings_volume_75": "🔊 Volume: 75%",
@@ -232,6 +276,14 @@
       "settings_saved_server": "📁 Saved **{title}** to server playlists as `{name}`",
       "settings_no_track": "❌ No track is currently playing",
       "settings_no_permission": "❌ You need 'Manage Server' permission to save to server playlists",
+      "settings_desc_autoplay": "Toggle autoplay mode",
+      "settings_desc_247": "Toggle 24/7 mode",
+      "settings_desc_volume": "Set volume to {volume}%",
+      "settings_desc_save_user": "Save current track to your playlist",
+      "settings_desc_save_server": "Save current track to server playlist",
+      "choose_playlist_save": "🎵 Choose a playlist to save to...",
+      "unknown_playlist_type": "Unknown type",
+      "tracks_count": "{count} tracks",
       "my_playlists_button": "📂 My Playlists",
       "server_playlists_button": "📁 Server Playlists",
       "select_playlist": "🎵 Select a playlist to play:",
@@ -242,7 +294,22 @@
       "not_in_voice": "❌ You need to be in a voice channel to play music.",
       "connect_failed": "❌ Failed to connect: {error}",
       "no_tracks_playlist": "❌ No tracks found for playlist: {name}",
-      "playlist_error": "❌ Error playing playlist: {error}"
+      "playlist_error": "❌ Error playing playlist: {error}",
+      "no_playlist_selected": "❌ No playlist selected.",
+      "playlist_empty": "❌ This playlist is empty.",
+      "loading_playlist": "⏱️ Loading imported playlist **{name}**...",
+      "loading_failed": "❌ Failed to load source tracks.",
+      "loading_failed_url": "❌ Failed to load source tracks from URL.",
+      "added_tracks": "✅ Added {count} tracks from **{name}**!",
+      "loading_additions": "⏳ Loading {count} additions...",
+      "loading_additions_custom": "⏳ Loading {count} custom additions...",
+      "loading_additions_progress": "✅ Added {count} source tracks!\n⏳ Loading additions: {loaded}/{total}...",
+      "added_with_additions": "✅ Added {count} source tracks + {additions} additions from **{name}**!",
+      "added_with_additions_custom": "✅ Added {count} source tracks + {additions} custom additions from **{name}**!",
+      "playlist_load_error": "❌ Error loading playlist: {error}",
+      "playlist_empty_import": "❌ Playlist is empty.",
+      "imported_linked": "✅ Imported **{name}** linked to **{source}** ({count} tracks)!",
+      "imported_linked_server": "✅ Imported **{name}** linked to **{source}** ({count} tracks) for the server!"
     },
     "commands": {
       "play": {
@@ -296,6 +363,9 @@
         "shuffled": "🔀 Queue shuffled",
         "success": "🔀 Queue shuffled successfully!"
       },
+      "previous": {
+        "playing": "⏮️ Playing previous song: **{title}**"
+      },
       "move": {
         "success": "✅ Moved track from **{from_index}** to **{to_index}**",
         "invalid_index": "❌ Invalid index provided."
@@ -328,6 +398,15 @@
       "autoplay": {
         "enabled": "✅ **Autoplay** enabled. Songs will be added automatically.",
         "disabled": "❌ **Autoplay** disabled."
+      },
+      "queue_view": {
+        "songs_count": "{count} songs",
+        "empty_desc": "Queue is empty.",
+        "page_footer": "Page {current}/{total} | Loop: {loop_mode}",
+        "previous_btn": "Previous",
+        "next_btn": "Next",
+        "cancel_btn": "Cancel",
+        "title_with_count": "{title} ({count} songs)"
       }
     },
     "lastfm": {
@@ -341,7 +420,18 @@
         "success": "✅ Last.fm account unlinked",
         "not_linked": "❌ You don't have a Last.fm account linked"
       },
-      "scrobbled": "📊 Scrobbled to Last.fm: {track}"
+      "scrobbled": "📊 Scrobbled to Last.fm: {track}",
+      "not_configured": "Last.fm is not configured on this bot.",
+      "authorize_prompt": "Please authorize the bot by clicking the button below, then click **Verify Login**.",
+      "info_status": "👤 **Last.fm Account:** `{username}`\n📡 **Scrobbling:** {status}",
+      "scrobbling_enabled": "✅ Enabled",
+      "scrobbling_disabled": "❌ Disabled",
+      "logout_success": "✅ Successfully unlinked your Last.fm account.",
+      "login_first": "❌ You need to login first with `/lastfm login`.",
+      "scrobble_toggled": "✅ Scrobbling has been **{status}**.",
+      "login_success": "✅ Successfully logged in as **{username}**!",
+      "not_authorized": "❌ Not authorized yet. Please authorize first.",
+      "verification_error": "❌ Error during verification: `{error}`"
     },
     "errors": {
       "no_player": "❌ No music player found",
