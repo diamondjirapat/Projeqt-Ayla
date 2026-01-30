@@ -71,20 +71,136 @@ class UserModel(BaseModel):
             {'user_id': user_id},
             {'$set': {'lastfm.scrobbling': enabled}}
         )
-
-    async def add_playlist(self, user_id: int, name: str, url: str):
-        """Add a personal playlist bookmark"""
-        await self.collection.update_one(
+    
+    async def create_playlist(self, user_id: int, name: str) -> bool:
+        """Create a new empty playlist"""
+        key = name.lower().replace(" ", "_")
+        result = await self.collection.update_one(
             {'user_id': user_id},
-            {'$set': {f'playlists.{name}': url}},
+            {'$set': {f'playlists.{key}': {
+                'name': name,
+                'created_at': datetime.now(UTC),
+                'tracks': []
+            }}},
             upsert=True
         )
-
-    async def remove_playlist(self, user_id: int, name: str):
-        await self.collection.update_one(
+        return result.modified_count > 0 or result.upserted_id is not None
+    
+    async def delete_playlist(self, user_id: int, name: str) -> bool:
+        """Delete an entire playlist"""
+        key = name.lower().replace(" ", "_")
+        result = await self.collection.update_one(
             {'user_id': user_id},
-            {'$unset': {f'playlists.{name}': ""}}
+            {'$unset': {f'playlists.{key}': ""}}
         )
+        return result.modified_count > 0
+    
+    async def add_track_to_playlist(self, user_id: int, playlist_name: str, track_info: Dict[str, Any]) -> bool:
+        """Add a track to a playlist"""
+        key = playlist_name.lower().replace(" ", "_")
+        track_data = {
+            'title': track_info.get('title', 'Unknown'),
+            'url': track_info.get('url', ''),
+            'author': track_info.get('author', 'Unknown'),
+            'added_at': datetime.now(UTC)
+        }
+        result = await self.collection.update_one(
+            {'user_id': user_id, f'playlists.{key}': {'$exists': True}},
+            {'$push': {f'playlists.{key}.tracks': track_data}}
+        )
+        return result.modified_count > 0
+    
+    async def remove_track_from_playlist(self, user_id: int, playlist_name: str, index: int) -> bool:
+        """Remove a track from a playlist by index"""
+        key = playlist_name.lower().replace(" ", "_")
+        user_data = await self.get_user(user_id)
+        if not user_data or 'playlists' not in user_data:
+            return False
+        playlist = user_data['playlists'].get(key)
+        if not playlist or 'tracks' not in playlist:
+            return False
+        if index < 0 or index >= len(playlist['tracks']):
+            return False
+        
+        track_to_remove = playlist['tracks'][index]
+        result = await self.collection.update_one(
+            {'user_id': user_id},
+            {'$pull': {f'playlists.{key}.tracks': track_to_remove}}
+        )
+        return result.modified_count > 0
+    
+    async def get_playlist(self, user_id: int, name: str) -> Optional[Dict[str, Any]]:
+        """Get a specific playlist with all tracks"""
+        key = name.lower().replace(" ", "_")
+        user_data = await self.get_user(user_id)
+        if user_data and 'playlists' in user_data:
+            return user_data['playlists'].get(key)
+        return None
+    
+    async def get_all_playlists(self, user_id: int) -> Dict[str, Dict[str, Any]]:
+        """Get all playlists with their metadata (name and track count)"""
+        user_data = await self.get_user(user_id)
+        if user_data and 'playlists' in user_data:
+            return user_data['playlists']
+        return {}
+
+    async def import_playlist(self, user_id: int, name: str, source_url: str, track_count: int) -> bool:
+        """Create a new imported playlist"""
+        key = name.lower().replace(" ", "_")
+        result = await self.collection.update_one(
+            {'user_id': user_id},
+            {'$set': {f'playlists.{key}': {
+                'name': name,
+                'type': 'imported',
+                'source_url': source_url,
+                'source_track_count': track_count,
+                'created_at': datetime.now(UTC),
+                'modifications': {
+                    'reorder': [],
+                    'additions': [],
+                    'removals': []
+                }
+            }}},
+            upsert=True
+        )
+        return result.modified_count > 0 or result.upserted_id is not None
+
+    async def add_playlist_modification(self, user_id: int, playlist_name: str, mod_type: str, data: Any) -> bool:
+        """Add a modification to an imported playlist (additions or removals)"""
+        key = playlist_name.lower().replace(" ", "_")
+        
+        playlist = await self.get_playlist(user_id, playlist_name)
+        if not playlist or playlist.get('type') != 'imported':
+            return False
+            
+        update_op = {}
+        if mod_type == 'additions':
+            data['added_at'] = datetime.now(UTC)
+            update_op = {'$push': {f'playlists.{key}.modifications.additions': data}}
+        elif mod_type == 'removals':
+            update_op = {'$push': {f'playlists.{key}.modifications.removals': data}}
+        else:
+            return False
+            
+        result = await self.collection.update_one(
+            {'user_id': user_id},
+            update_op
+        )
+        return result.modified_count > 0
+
+    async def update_playlist_reorder(self, user_id: int, playlist_name: str, track_ids: list) -> bool:
+        """Update the reorder list for an imported playlist"""
+        key = playlist_name.lower().replace(" ", "_")
+        
+        playlist = await self.get_playlist(user_id, playlist_name)
+        if not playlist or playlist.get('type') != 'imported':
+            return False
+            
+        result = await self.collection.update_one(
+            {'user_id': user_id},
+            {'$set': {f'playlists.{key}.modifications.reorder': track_ids}}
+        )
+        return result.modified_count > 0
 
 
 class GuildModel(BaseModel):
@@ -116,20 +232,137 @@ class GuildModel(BaseModel):
             {'$set': update_data}
         )
         return result.modified_count > 0
-
-    async def add_playlist(self, guild_id: int, name: str, url: str):
-        """Add a server playlist bookmark"""
-        await self.collection.update_one(
+    
+    async def create_playlist(self, guild_id: int, name: str) -> bool:
+        """Create a new empty server playlist"""
+        key = name.lower().replace(" ", "_")
+        result = await self.collection.update_one(
             {'guild_id': guild_id},
-            {'$set': {f'playlists.{name}': url}},
+            {'$set': {f'playlists.{key}': {
+                'name': name,
+                'created_at': datetime.now(UTC),
+                'tracks': []
+            }}},
             upsert=True
         )
-
-    async def remove_playlist(self, guild_id: int, name: str):
-        await self.collection.update_one(
+        return result.modified_count > 0 or result.upserted_id is not None
+    
+    async def delete_playlist(self, guild_id: int, name: str) -> bool:
+        """Delete an entire server playlist"""
+        key = name.lower().replace(" ", "_")
+        result = await self.collection.update_one(
             {'guild_id': guild_id},
-            {'$unset': {f'playlists.{name}': ""}}
+            {'$unset': {f'playlists.{key}': ""}}
         )
+        return result.modified_count > 0
+    
+    async def add_track_to_playlist(self, guild_id: int, playlist_name: str, track_info: Dict[str, Any]) -> bool:
+        """Add a track to a server playlist"""
+        key = playlist_name.lower().replace(" ", "_")
+        track_data = {
+            'title': track_info.get('title', 'Unknown'),
+            'url': track_info.get('url', ''),
+            'author': track_info.get('author', 'Unknown'),
+            'added_at': datetime.now(UTC)
+        }
+        result = await self.collection.update_one(
+            {'guild_id': guild_id, f'playlists.{key}': {'$exists': True}},
+            {'$push': {f'playlists.{key}.tracks': track_data}}
+        )
+        return result.modified_count > 0
+    
+    async def remove_track_from_playlist(self, guild_id: int, playlist_name: str, index: int) -> bool:
+        """Remove a track from a server playlist by index"""
+        key = playlist_name.lower().replace(" ", "_")
+        guild_data = await self.get_guild(guild_id)
+        if not guild_data or 'playlists' not in guild_data:
+            return False
+        playlist = guild_data['playlists'].get(key)
+        if not playlist or 'tracks' not in playlist:
+            return False
+        if index < 0 or index >= len(playlist['tracks']):
+            return False
+        
+        track_to_remove = playlist['tracks'][index]
+        result = await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$pull': {f'playlists.{key}.tracks': track_to_remove}}
+        )
+        return result.modified_count > 0
+    
+    async def get_playlist(self, guild_id: int, name: str) -> Optional[Dict[str, Any]]:
+        """Get a specific server playlist with all tracks"""
+        key = name.lower().replace(" ", "_")
+        guild_data = await self.get_guild(guild_id)
+        if guild_data and 'playlists' in guild_data:
+            return guild_data['playlists'].get(key)
+        return None
+    
+    async def get_all_playlists(self, guild_id: int) -> Dict[str, Dict[str, Any]]:
+        """Get all server playlists with their metadata"""
+        guild_data = await self.get_guild(guild_id)
+        if guild_data and 'playlists' in guild_data:
+            return guild_data['playlists']
+        return {}
+
+    async def import_playlist(self, guild_id: int, name: str, source_url: str, track_count: int) -> bool:
+        """Create a new imported server playlist"""
+        key = name.lower().replace(" ", "_")
+        result = await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {f'playlists.{key}': {
+                'name': name,
+                'type': 'imported',
+                'source_url': source_url,
+                'source_track_count': track_count,
+                'created_at': datetime.now(UTC),
+                'modifications': {
+                    'reorder': [],
+                    'additions': [],
+                    'removals': []
+                }
+            }}},
+            upsert=True
+        )
+        return result.modified_count > 0 or result.upserted_id is not None
+
+    async def add_playlist_modification(self, guild_id: int, playlist_name: str, mod_type: str, data: Any) -> bool:
+        """Add a modification to an imported server playlist"""
+        key = playlist_name.lower().replace(" ", "_")
+        
+        # Verify playlist is imported type
+        playlist = await self.get_playlist(guild_id, playlist_name)
+        if not playlist or playlist.get('type') != 'imported':
+            return False
+            
+        update_op = {}
+        if mod_type == 'additions':
+            data['added_at'] = datetime.now(UTC)
+            update_op = {'$push': {f'playlists.{key}.modifications.additions': data}}
+        elif mod_type == 'removals':
+            update_op = {'$push': {f'playlists.{key}.modifications.removals': data}}
+        else:
+            return False
+            
+        result = await self.collection.update_one(
+            {'guild_id': guild_id},
+            update_op
+        )
+        return result.modified_count > 0
+
+    async def update_playlist_reorder(self, guild_id: int, playlist_name: str, track_ids: list) -> bool:
+        """Update the reorder list for an imported server playlist"""
+        key = playlist_name.lower().replace(" ", "_")
+        
+        playlist = await self.get_playlist(guild_id, playlist_name)
+        if not playlist or playlist.get('type') != 'imported':
+            return False
+            
+        result = await self.collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {f'playlists.{key}.modifications.reorder': track_ids}}
+        )
+        return result.modified_count > 0
 
     async def set_music_channel(self, guild_id: int, channel_id: int):
         """Set the static music channel ID"""
