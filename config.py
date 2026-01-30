@@ -21,6 +21,10 @@ class Config:
     
     # Banner
     BANNER_URL = os.getenv('BANNER_URL')
+
+    # Owner ID
+    _owner_ids_raw = os.getenv('OWNER_IDS', '')
+    OWNER_IDS = set(int(id.strip()) for id in _owner_ids_raw.split(',') if id.strip())
     
     @classmethod
     def validate(cls):
