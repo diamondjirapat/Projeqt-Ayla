@@ -1,6 +1,6 @@
 # Projeqt-Ayla 🎵
 
-A powerful, feature-rich Discord bot built with discord.py 2.6.4, MongoDB, and Lavalink for music streaming.
+Just another  Discord bot built with discord.py, MongoDB, and Lavalink for music streaming.
 
 ## ✨ Features
 
@@ -11,15 +11,14 @@ A powerful, feature-rich Discord bot built with discord.py 2.6.4, MongoDB, and L
 - 🎛️ **Static Music Channel** - Dedicated channel with persistent embed
 - 🎚️ **Interactive Controls** - Button-based player controls
 - 📻 **Last.fm Scrobbling** - Automatic track scrobbling for linked accounts
-- 🛡️ **Moderation Commands** - kick, ban, purge, and more
 
 ---
 
 ## 📋 Requirements
 
-- Python 3.10+
-- MongoDB database
-- Lavalink server (for music features)
+- [Python 3.13+](https://www.python.org/)
+- [MongoDB database](https://www.mongodb.com/)
+- [Lavalink server](https://github.com/lavalink-devs/Lavalink/releases) (for music features)
 
 ---
 
@@ -50,13 +49,8 @@ LAVALINK_PASSWORD=youshallnotpass
 
 ### 3. Run the Bot
 
-Choose your preferred method below ⬇️
 
----
-
-## 🏃 Ways to Run the Bot
-
-### Option 1: Windows Batch File (Recommended for Windows)
+### 🏃Option 1: Windows Batch File (Recommended for Windows)
 
 Simply double-click `run.bat` or run:
 ```cmd
@@ -64,7 +58,7 @@ run.bat
 ```
 ---
 
-### Option 2: Linux/macOS Shell Script
+### 🏃Option 2: Linux/macOS Shell Script
 
 ```bash
 # Make the script executable (first time only)
@@ -74,7 +68,7 @@ chmod +x start.sh
 ./start.sh
 ```
 ---
-### Option 3: Manual Python Execution
+### 🏃Option 3: Manual Python Execution
 
 **Windows:**
 ```cmd
@@ -127,28 +121,7 @@ docker stop projeqt-ayla
 
 ---
 
-### Option 5: Docker Compose (Full Stack) 🐳
 
-This option runs the bot along with Lavalink and MongoDB:
-
-```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f bot
-
-# Stop all services
-docker-compose down
-```
-
-> **Note:** Make sure to configure `application.yml` for Lavalink and update your `.env` with:
-> ```env
-> MONGODB_URI=mongodb://mongodb:27017/projeqt-ayla
-> LAVALINK_URI=http://lavalink:2333
-> ```
-
----
 
 ## 🔧 Adding New Cogs
 
@@ -234,32 +207,14 @@ Add your translations to the locale files in `locales/`:
 - Check if `.env` file exists and is configured correctly
 - Verify your Discord token is valid
 - Ensure MongoDB is running and accessible
-- Check the `bot.log` file for errors
 
 ### Music not working
 - Verify Lavalink server is running
 - Check `LAVALINK_URI` and `LAVALINK_PASSWORD` in `.env`
 - Ensure `application.yml` is properly configured
 
-### Dependencies failing
-```bash
-# Try upgrading pip first
-pip install --upgrade pip
-
-# Install with verbose output
-pip install -r requirements.txt -v
-```
-
 ---
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-
