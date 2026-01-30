@@ -7,10 +7,10 @@ plugins:
       # The clients to use for track loading. See below for a list of valid clients.
       # Clients are queried in the order they are given (so the first client is queried first and so on...)
       clients:
+        - WEB
+        - WEBEMBEDDED
         - MUSIC
         - ANDROID_VR
-        - WEB
-        - WEBEMBEDDED 
   lavasrc:
     providers: # Custom providers for track loading. This is the default
 #      - "dzisrc:%ISRC%" # Deezer ISRC provider
@@ -49,7 +49,7 @@ plugins:
       localFiles: false # Enable local files support with Spotify playlists. Please note `uri` & `isrc` will be `null` & `identifier` will be `"local"`
       preferAnonymousToken: false # Whether to use the anonymous token for resolving tracks, artists and albums. Spotify generated playlists are always resolved with the anonymous tokens since they do not work otherwise. This requires the customTokenEndpoint to be set.
       customTokenEndpoint: "http://localhost:8080/api/token" # Optional custom endpoint for getting the anonymous token. If not set, spotify's default endpoint will be used which might not work. The response must match spotify's anonymous token response format.
-    
+
 server: # REST and WS server
   port: 2333
   address: 0.0.0.0
@@ -61,6 +61,12 @@ lavalink:
       snapshot: false
     - dependency: "dev.lavalink.youtube:youtube-plugin:1.16.0" # https://github.com/lavalink-devs/youtube-source
       snapshot: false
+#    - dependency: "com.github.example:example-plugin:1.0.0" # required, the coordinates of your plugin
+#      repository: "https://maven.example.com/releases" # optional, defaults to the Lavalink releases repository by default
+#      snapshot: false # optional, defaults to false, used to tell Lavalink to use the snapshot repository instead of the release repository
+#  pluginsDir: "./plugins" # optional, defaults to "./plugins"
+#  defaultPluginRepository: "https://maven.lavalink.dev/releases" # optional, defaults to the Lavalink release repository
+#  defaultPluginSnapshotRepository: "https://maven.lavalink.dev/snapshots" # optional, defaults to the Lavalink snapshot repository
   server:
     password: "youshallnotpass"
     sources:
@@ -85,10 +91,10 @@ lavalink:
       channelMix: true
       lowPass: true
     nonAllocatingFrameBuffer: false # Setting to true reduces the number of allocations made by each player at the expense of frame rebuilding (e.g. non-instantaneous volume changes)
-    bufferDurationMs: 400 # The duration of the NAS buffer. Higher values fare better against longer GC pauses. Duration <= 0 to disable JDA-NAS. Minimum of 40ms, lower values may introduce pauses.
-    frameBufferDurationMs: 5000 # How many milliseconds of audio to keep buffered
+    bufferDurationMs: 600 # The duration of the NAS buffer. Higher values fare better against longer GC pauses. Duration <= 0 to disable JDA-NAS. Minimum of 40ms, lower values may introduce pauses.
+    frameBufferDurationMs: 10000   # How many milliseconds of audio to keep buffered
     opusEncodingQuality: 10 # Opus encoder quality. Valid values range from 0 to 10, where 10 is best quality but is the most expensive on the CPU.
-    resamplingQuality: LOW # Quality of resampling operations. Valid values are LOW, MEDIUM and HIGH, where HIGH uses the most CPU.
+    resamplingQuality: HIGH # Quality of resampling operations. Valid values are LOW, MEDIUM and HIGH, where HIGH uses the most CPU.
     trackStuckThresholdMs: 10000 # The threshold for how long a track can be stuck. A track is stuck if does not return any audio data.
     useSeekGhosting: true # Seek ghosting is the effect where whilst a seek is in progress, the audio buffer is read from until empty, or until seek is ready.
     youtubePlaylistLoadLimit: 6 # Number of pages at 100 each
