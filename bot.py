@@ -31,6 +31,7 @@ class DiscordBot(commands.Bot):
         super().__init__(
             command_prefix=prefix_manager.get_prefix,
             intents=intents,
+            owner_ids=Config.OWNER_IDS,
             help_command=None
         )
     
@@ -43,7 +44,10 @@ class DiscordBot(commands.Bot):
 
         await self.load_cogs()
         
-        # Register app command error handler
+        from cogs.music import IdlePlaylistView
+        from database.models import UserModel, GuildModel
+        self.add_view(IdlePlaylistView(0, UserModel(), GuildModel(), self))
+
         self.tree.on_error = self.on_app_command_error
 
         try:
@@ -85,6 +89,14 @@ class DiscordBot(commands.Bot):
         logger.info(f"Bot is in {len(self.guilds)} guilds")
         await self.update_status()
         logger.info("I18n system initialized")
+        
+        music_cog = self.get_cog("Music")
+        if music_cog:
+            for guild in self.guilds:
+                try:
+                    await music_cog.update_static_embed(guild.id)
+                except Exception as e:
+                    logger.warning(f"Failed to refresh static embed for guild {guild.id}: {e}")
 
     async def on_guild_join(self, guild):
         logger.info(f"Joined new guild: {guild.name} ({guild.id})")
