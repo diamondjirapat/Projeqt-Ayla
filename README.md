@@ -1,65 +1,161 @@
-# Projeqt-Ayla
+# Projeqt-Ayla 🎵
 
-A modular Discord bot built with discord.py 2.6.4 and MongoDB.
+A powerful, feature-rich Discord bot built with discord.py 2.6.4, MongoDB, and Lavalink for music streaming.
 
-## Features
+## ✨ Features
 
-- Modular cog system for easy extension
-- MongoDB integration for data persistence
-- **i18n support (English & Thai)**
-- **Smart locale priority system**
-- General commands (ping, info, profile)
-- Moderation commands (kick, ban, purge)
-- Language management commands
-- Comprehensive error handling and logging
+- 🎵 **Music System** - High-quality music playback powered by Lavalink
+- 🌐 **i18n Support** - English & Thai translations with smart locale priority
+- 🗄️ **MongoDB Integration** - Persistent data storage
+- 🔧 **Modular Cog System** - Easy to extend and customize
+- 🎛️ **Static Music Channel** - Dedicated channel with persistent embed
+- 🎚️ **Interactive Controls** - Button-based player controls
+- 📻 **Last.fm Scrobbling** - Automatic track scrobbling for linked accounts
+- 🛡️ **Moderation Commands** - kick, ban, purge, and more
 
-## Setup
+---
 
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+## 📋 Requirements
 
-2. **Setup environment variables:**
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` and add your Discord bot token and MongoDB URI.
+- Python 3.10+
+- MongoDB database
+- Lavalink server (for music features)
 
-3. **Run the bot:**
-   ```bash
-   python bot.py
-   ```
+---
 
-## Project Structure
+## 🚀 Quick Start
 
-```
-├── bot.py              # Main bot file
-├── config.py           # Configuration management
-├── requirements.txt    # Python dependencies
-├── .env.example       # Environment variables template
-├── cogs/              # Bot command modules
-│   ├── general.py     # General commands
-│   ├── moderation.py  # Moderation commands
-│   └── language.py    # Language management
-├── database/          # Database related files
-│   ├── connection.py  # MongoDB connection manager
-│   └── models.py      # Database models
-├── utils/             # Utility functions
-│   ├── helpers.py     # Helper functions
-│   └── i18n.py        # Internationalization system
-└── locales/           # Translation files
-    ├── en.json        # English translations
-    └── th.json        # Thai translations
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/diamondjirapat/Projeqt-Ayla.git
+cd Projeqt-Ayla
 ```
 
-## Adding New Cogs
+### 2. Configure Environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your credentials:
+```env
+PREFIX=!
+DISCORD_TOKEN=your_discord_bot_token_here
+MONGODB_URI=mongodb+srv://....
+OWNER_IDS=your_owner_id_here
+LAVALINK_URI=http://localhost:2333
+LAVALINK_PASSWORD=youshallnotpass
+```
+
+### 3. Run the Bot
+
+Choose your preferred method below ⬇️
+
+---
+
+## 🏃 Ways to Run the Bot
+
+### Option 1: Windows Batch File (Recommended for Windows)
+
+Simply double-click `run.bat` or run:
+```cmd
+run.bat
+```
+---
+
+### Option 2: Linux/macOS Shell Script
+
+```bash
+# Make the script executable (first time only)
+chmod +x start.sh
+
+# Run the bot
+./start.sh
+```
+---
+### Option 3: Manual Python Execution
+
+**Windows:**
+```cmd
+# Create virtual environment (optional but recommended)
+python -m venv .venv
+.venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the bot
+python bot.py
+```
+
+**Linux/macOS:**
+```bash
+# Create virtual environment (optional but recommended)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the bot
+python3 bot.py
+```
+
+---
+
+### Option 4: Docker 🐳
+
+**Build and run with Docker:**
+```bash
+# Build the image
+docker build -t projeqt-ayla .
+
+# Run the container
+docker run -d --name projeqt-ayla --env-file .env projeqt-ayla
+```
+
+**View logs:**
+```bash
+docker logs -f projeqt-ayla
+```
+
+**Stop the bot:**
+```bash
+docker stop projeqt-ayla
+```
+
+---
+
+### Option 5: Docker Compose (Full Stack) 🐳
+
+This option runs the bot along with Lavalink and MongoDB:
+
+```bash
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f bot
+
+# Stop all services
+docker-compose down
+```
+
+> **Note:** Make sure to configure `application.yml` for Lavalink and update your `.env` with:
+> ```env
+> MONGODB_URI=mongodb://mongodb:27017/projeqt-ayla
+> LAVALINK_URI=http://lavalink:2333
+> ```
+
+---
+
+## 🔧 Adding New Cogs
 
 1. Create a new file in the `cogs/` directory
 2. Follow the existing cog structure
 3. The bot will automatically load it on startup
 
-Example cog structure:
 ```python
 import discord
 from discord.ext import commands
@@ -78,22 +174,18 @@ async def setup(bot):
     await bot.add_cog(ExampleCog(bot))
 ```
 
-## Internationalization (i18n)
+---
 
-The bot supports multiple languages with a smart locale priority system:
+## 🌐 Internationalization (i18n)
 
 ### Locale Priority
-1. **User locale** (personal preference)
-2. **Guild locale** (server-wide setting)
-3. **Default locale** (English)
+1. **User locale** - Personal preference
+2. **Guild locale** - Server-wide setting
+3. **Default locale** - English
 
 ### Adding Translations
 
-1. Add your translations to the appropriate locale files in `locales/`
-2. Use dot notation for nested keys: `"commands.ping.response_title"`
-3. Support for string formatting: `"Hello {user}!"`
-
-Example translation structure:
+Add your translations to the locale files in `locales/`:
 ```json
 {
   "commands": {
@@ -105,30 +197,69 @@ Example translation structure:
 }
 ```
 
-## Environment Variables
+---
 
-Required:
-- `DISCORD_TOKEN` - Your Discord bot token
-- `MONGODB_URI` - MongoDB connection string
+## ⚙️ Environment Variables
 
-Music System:
-- `LAVALINK_URI` - Lavalink server host+port
-- `LAVALINK_PASSWORD` - Lavalink server password
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_TOKEN` | ✅ | Your Discord bot token |
+| `MONGODB_URI` | ✅ | MongoDB connection string |
+| `OWNER_IDS` | ✅ | Bot owner Discord user IDs |
+| `LAVALINK_URI` | 🎵 | Lavalink server URI |
+| `LAVALINK_PASSWORD` | 🎵 | Lavalink server password |
+| `PREFIX` | ❌ | Command prefix (default: `!`) |
+| `LASTFM_API_KEY` | ❌ | Last.fm API key for scrobbling |
+| `LASTFM_API_SECRET` | ❌ | Last.fm API secret |
+| `BANNER` | ❌ | Custom banner image URL |
 
-Optional:
-- `PREFIX` - Default command prefix (default: `!`)
-- `LASTFM_API_KEY` - Last.fm API key for scrobbling
-- `LASTFM_API_SECRET` - Last.fm API secret for scrobbling
+---
 
-## Music System Features (TBD)
+## 🎵 Music System Features
 
-- **Static Music Channel**: Dedicated channel with persistent embed that updates in real-time
-- **Interactive Controls**: Button-based player controls (play/pause, skip, stop, loop, shuffle)
-- **Auto Message Cleanup**: User messages are automatically deleted in static channel to keep it clean
-- **Last.fm Scrobbling**: Automatic track scrobbling for linked accounts
-- **Multi-language Support**: Full English and Thai translations
-- **Rich Player Display**: Progress bar, duration, volume, queue information
+- **Static Music Channel** - Dedicated channel with persistent embed
+- **Interactive Controls** - Play/Pause, Skip, Stop, Loop, Shuffle buttons
+- **Auto Message Cleanup** - Keeps the music channel clean
+- **Last.fm Scrobbling** - Automatic track scrobbling
+- **Multi-language Support** - Full English and Thai translations
+- **Rich Player Display** - Progress bar, duration, volume, queue info
+- **Playlist Support** - Create, save, and share playlists
+- **AutoPlay** - Automatic song recommendations
 
-## License
+---
+
+## 🐛 Troubleshooting
+
+### Bot won't start
+- Check if `.env` file exists and is configured correctly
+- Verify your Discord token is valid
+- Ensure MongoDB is running and accessible
+- Check the `bot.log` file for errors
+
+### Music not working
+- Verify Lavalink server is running
+- Check `LAVALINK_URI` and `LAVALINK_PASSWORD` in `.env`
+- Ensure `application.yml` is properly configured
+
+### Dependencies failing
+```bash
+# Try upgrading pip first
+pip install --upgrade pip
+
+# Install with verbose output
+pip install -r requirements.txt -v
+```
+
+---
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+
