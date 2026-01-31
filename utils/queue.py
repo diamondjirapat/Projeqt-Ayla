@@ -5,27 +5,15 @@ from typing import Optional, List, Union
 class CustomQueue(wavelink.Queue):
     """
     Extended Wavelink queue with safe utilities:
-    shuffle, move, remove, swap, and helpers.
+    move, remove by index, and helpers.
+    Note: shuffle() and clear() are inherited from wavelink.Queue
     """
-
-    def shuffle(self, *, keep_next: bool = False):
-        """Shuffle the queue. Optionally keep the next track in place."""
-        if len(self._queue) < 2:
-            return
-
-        if keep_next:
-            first = self._queue.pop(0)
-            random.shuffle(self._queue)
-            self._queue.insert(0, first)
-        else:
-            random.shuffle(self._queue)
 
     def move(self, index_from: int, index_to: int):
         """
         Move a track from one index to another (0-based).
         """
-        queue = self._queue
-        size = len(queue)
+        size = len(self._items)
 
         if not 0 <= index_from < size:
             raise IndexError("Source index out of bounds")
@@ -36,37 +24,18 @@ class CustomQueue(wavelink.Queue):
         if index_from == index_to:
             return
 
-        track = queue.pop(index_from)
+        track = self._items.pop(index_from)
+        self._items.insert(index_to, track)
 
-        # Adjust when moving forward
-        # if index_from < index_to:
-        #     index_to -= 1
-
-        queue.insert(index_to, track)
-
-    def remove(self, index: int):
+    def remove_at(self, index: int):
         """Remove a track at a specific index (0-based)."""
-        if not 0 <= index < len(self._queue):
+        if not 0 <= index < len(self._items):
             raise IndexError("Index out of bounds")
-        return self._queue.pop(index)
-
-    # def swap(self, i: int, j: int):
-    #     """Swap two tracks in the queue."""
-    #     if not (0 <= i < len(self._queue) and 0 <= j < len(self._queue)):
-    #         raise IndexError("Index out of bounds")
-    #     self._queue[i], self._queue[j] = self._queue[j], self._queue[i]
-
-    # def move_to_next(self, index: int):
-    #     """Move a track to be played next."""
-    #     self.move(index, 0)
-
-    def clear(self):
-        """Clear the queue."""
-        self._queue.clear()
+        return self._items.pop(index)
 
     def to_list(self) -> List[wavelink.Playable]:
         """Return a copy of the queue."""
-        return list(self._queue)
+        return list(self._items)
 
 
 class CustomPlayer(wavelink.Player):
