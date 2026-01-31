@@ -61,10 +61,12 @@ class Music(commands.Cog):
             self.autoplay_played_uris[guild_id] = set(list(self.autoplay_played_uris[guild_id])[-50:])
 
         query = f"{last_track.author}"
+        logger.debug(f"[AUTOPLAY] Searching for tracks by: {query}")
 
         try:
             tracks = await wavelink.Playable.search(query)
             if not tracks:
+                logger.debug("[AUTOPLAY] No tracks found")
                 return None
 
             for track in tracks:
@@ -85,17 +87,24 @@ class Music(commands.Cog):
             del self.timeout_tasks[guild_id]
 
     async def cog_load(self):
+        logger.info(f"[LAVALINK] Connecting to Lavalink at {Config.LAVALINK_URI}")
         nodes = [wavelink.Node(uri=Config.LAVALINK_URI, password=Config.LAVALINK_PASSWORD)]
         await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
+        logger.info("[LAVALINK] Connection pool initialized")
 
-    async def check_voice_channel(self, ctx: commands.Context) -> bool:
-        """Check if the user is in the same voice channel as the bot"""
+    async def check_voice_channel(self, ctx: commands.Context, response_channel=None, redirected: bool = False):
+        """Check if the user is in the same voice channel as the bot.
+        Returns True if OK, or sends an error message and returns False.
+        """
         if not ctx.voice_client:
             return True
 
         if not ctx.author.voice or ctx.author.voice.channel != ctx.voice_client.channel:
             msg = await i18n.t(ctx, "music.errors.voice_channel_mismatch")
-            await ctx.send(msg, ephemeral=True, delete_after=5)
+            if response_channel:
+                await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+            else:
+                await ctx.send(msg, ephemeral=True, delete_after=5)
             return False
         return True
 
@@ -148,6 +157,7 @@ class Music(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
         player: wavelink.Player = payload.player
+        logger.info(f"[LASTFM DEBUG] Track START event fired: {payload.track.title}")
 
         if not player:
             return
@@ -170,7 +180,7 @@ class Music(commands.Cog):
             
             # Detect Spotify
             is_spotify = track.uri and "spotify" in track.uri.lower()
-            embed_color = discord.Color.green() if is_spotify else discord.Color.from_rgb(255, 255, 255)
+            embed_color = discord.Color.green() if is_spotify else discord.Color.light_embed()
             source_indicator = "🎵 Spotify" if is_spotify else "🎵 YouTube"
             
             description = f"**[{track.title}]({track.uri})**"
@@ -210,9 +220,12 @@ class Music(commands.Cog):
 
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
+        logger.info(f"[LASTFM DEBUG] Track end event fired - reason: {payload.reason}")
         player = payload.player
         if not player:
+            logger.warning("[LASTFM DEBUG] No player in payload")
             return
+        logger.info(f"[LASTFM DEBUG] Player channel: {player.channel}")
 
         if not hasattr(player, "history"):
             player.history = []
@@ -237,27 +250,38 @@ class Music(commands.Cog):
                 self.start_timeout(player.guild.id, player)
                 await self.update_static_embed(player.guild.id)
 
-        if payload.reason == "FINISHED" and player.channel:
+        if payload.reason.lower() == "finished" and player.channel:
             track = payload.track
             member_ids = [m.id for m in player.channel.members if not m.bot]
+            logger.info(f"Track finished: {track.title} - checking scrobble for {len(member_ids)} users")
 
             timestamp = getattr(player, "current_track_start_time", int(time.time() - (track.length / 1000)))
 
             for user_id in member_ids:
                 user_data = await self.user_model.get_user(user_id)
                 if not user_data:
+                    logger.debug(f"User {user_id} has no user data")
                     continue
 
                 lastfm = user_data.get("lastfm", {})
-                if not lastfm.get("scrobbling"):
+                session_key = lastfm.get("session_key")
+                if not session_key:
+                    logger.debug(f"User {user_id} has no Last.fm session_key")
+                    continue
+                
+                # Default to True if scrobbling key doesn't exist (backwards compatibility)
+                if not lastfm.get("scrobbling", True):
+                    logger.debug(f"User {user_id} has scrobbling disabled")
                     continue
 
-                await lastfm_handler.scrobble(lastfm["session_key"], track.author, track.title, timestamp)
+                logger.info(f"Scrobbling track for user {user_id}: {track.author} - {track.title}")
+                await lastfm_handler.scrobble(session_key, track.author, track.title, timestamp)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         # Check if bot disconnected
         if member.id == self.bot.user.id and before.channel and not after.channel:
+            logger.info(f"[VOICE] Bot disconnected from voice in guild {member.guild.id}")
             await self.update_static_embed(member.guild.id)
             return
 
@@ -268,6 +292,7 @@ class Music(commands.Cog):
         # Check if bot is alone
         if len(player.channel.members) == 1 and player.channel.members[0].id == self.bot.user.id:
             if not getattr(player, "twenty_four_seven", False):
+                logger.debug(f"[VOICE] Bot is alone in channel, starting timeout for guild {member.guild.id}")
                 self.start_timeout(member.guild.id, player)
         elif len(player.channel.members) > 1:
             self.cancel_timeout(member.guild.id)
@@ -377,6 +402,7 @@ class Music(commands.Cog):
 
     async def _play_logic(self, ctx: commands.Context, query: str, response_channel: discord.TextChannel, redirected: bool = False):
         """Shared logic for play command and static channel"""
+        logger.info(f"[PLAY] User {ctx.author.id} requested: {query[:100]}")
         user_data = await self.user_model.get_user(ctx.author.id)
         guild_data = await self.guild_model.get_guild(ctx.guild.id)
 
@@ -389,14 +415,17 @@ class Music(commands.Cog):
         player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
         if not player:
             try:
+                logger.debug(f"[VOICE] Connecting to voice channel: {ctx.author.voice.channel.name}")
                 player = await ctx.author.voice.channel.connect(cls=CustomPlayer)
                 player.home_channel = response_channel
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[VOICE] Failed to connect: {e}")
                 msg = await i18n.t(ctx, "music.commands.play.not_in_voice")
                 return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
         else:
             if not await self.check_voice_channel(ctx):
                 return
+
 
         url_pattern = re.compile(r'https?://(?:www\.)?.+')
         is_url = url_pattern.match(query)
@@ -757,6 +786,7 @@ class Music(commands.Cog):
     @app_commands.describe(url="YouTube/Spotify playlist URL", name="Custom name for the playlist (optional, uses source name if not provided)")
     async def playlist_import(self, ctx, url: str, name: Optional[str] = None):
         """Import a YouTube/Spotify playlist to your saved playlists"""
+        logger.info(f"[PLAYLIST] User {ctx.author.id} importing playlist from: {url[:80]}")
         status_msg = None
         
         try:
@@ -1150,7 +1180,7 @@ class Music(commands.Cog):
         response_channel = await self.get_response_channel(ctx)
         redirected = await self.acknowledge_static_redirect(ctx)
 
-        if not await self.check_voice_channel(ctx):
+        if not await self.check_voice_channel(ctx, response_channel, redirected):
             return
 
         player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
@@ -1164,6 +1194,63 @@ class Music(commands.Cog):
 
         await player.skip(force=True)
         msg = await i18n.t(ctx, "music.commands.skip.skipped")
+        await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+    @commands.hybrid_command(name="seek")
+    @app_commands.describe(position="Position to seek to (e.g. 1:30, 90, or 1:30:00)")
+    async def seek(self, ctx: commands.Context, position: str):
+        """Seek to a specific position in the current track"""
+        await self.handle_command_cleanup(ctx)
+        response_channel = await self.get_response_channel(ctx)
+        redirected = await self.acknowledge_static_redirect(ctx)
+
+        if not await self.check_voice_channel(ctx, response_channel, redirected):
+            return
+
+        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        if not player:
+            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+        if not player.current:
+            msg = await i18n.t(ctx, "music.commands.seek.nothing_playing")
+            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+        # Parse position - supports formats: "1:30", "90", "1:30:00"
+        try:
+            parts = position.split(":")
+            if len(parts) == 1:
+                # Just seconds
+                milliseconds = int(parts[0]) * 1000
+            elif len(parts) == 2:
+                # Minutes:Seconds
+                milliseconds = (int(parts[0]) * 60 + int(parts[1])) * 1000
+            elif len(parts) == 3:
+                # Hours:Minutes:Seconds
+                milliseconds = (int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])) * 1000
+            else:
+                msg = await i18n.t(ctx, "music.commands.seek.invalid_format")
+                return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+        except ValueError:
+            msg = await i18n.t(ctx, "music.commands.seek.invalid_format")
+            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+        # Check bounds
+        if milliseconds < 0 or milliseconds > player.current.length:
+            msg = await i18n.t(ctx, "music.commands.seek.out_of_bounds")
+            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+        await player.seek(milliseconds)
+        logger.info(f"[PLAY] User {ctx.author.id} seeked to {position} ({milliseconds}ms)")
+        
+        # Format the position for display
+        total_seconds = milliseconds // 1000
+        if total_seconds >= 3600:
+            formatted = f"{total_seconds // 3600}:{(total_seconds % 3600) // 60:02d}:{total_seconds % 60:02d}"
+        else:
+            formatted = f"{total_seconds // 60}:{total_seconds % 60:02d}"
+        
+        msg = await i18n.t(ctx, "music.commands.seek.success", position=formatted)
         await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
     @commands.hybrid_command(name="stop", aliases=["leave", "dc", "disconnect"])
@@ -1212,23 +1299,36 @@ class Music(commands.Cog):
     @commands.hybrid_command(name="shuffle")
     async def shuffle(self, ctx: commands.Context):
         """Shuffle the queue"""
-        await self.handle_command_cleanup(ctx)
-        response_channel = await self.get_response_channel(ctx)
-        redirected = await self.acknowledge_static_redirect(ctx)
+        try:
+            await self.handle_command_cleanup(ctx)
+            response_channel = await self.get_response_channel(ctx)
+            redirected = await self.acknowledge_static_redirect(ctx)
 
-        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
-        if not player:
-            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
-            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+            player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+            if not player:
+                msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+                return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-        if player.queue.is_empty:
-            msg = await i18n.t(ctx, "music.commands.queue.empty")
-            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+            if player.queue.is_empty:
+                msg = await i18n.t(ctx, "music.commands.queue.empty")
+                return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-        player.queue.shuffle()
-        msg = await i18n.t(ctx, "music.commands.shuffle.success")
-        await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
-        await self.update_static_embed(ctx.guild.id)
+            player.queue.shuffle()
+            msg = await i18n.t(ctx, "music.commands.shuffle.success")
+            await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+            await self.update_static_embed(ctx.guild.id)
+        except Exception as e:
+            logger.error(f"Error in shuffle command: {e}", exc_info=True)
+            try:
+                error_msg = await i18n.t(ctx, "music.errors.command_error", error=str(e))
+                if ctx.interaction and not ctx.interaction.response.is_done():
+                    await ctx.send(error_msg, ephemeral=True)
+                elif ctx.interaction:
+                    await ctx.send(error_msg, delete_after=10)
+                else:
+                    await ctx.send(error_msg, delete_after=10)
+            except:
+                pass
 
     @commands.hybrid_command(name="move")
     async def move(self, ctx: commands.Context, index_from: int, index_to: int):
@@ -1264,7 +1364,7 @@ class Music(commands.Cog):
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
         try:
-            removed_track = player.queue.remove(index - 1)
+            removed_track = player.queue.remove_at(index - 1)
             msg = await i18n.t(ctx, "music.commands.remove.success", title=removed_track.title)
             await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
             await self.update_static_embed(ctx.guild.id)
@@ -1315,7 +1415,7 @@ class Music(commands.Cog):
         response_channel = await self.get_response_channel(ctx)
         redirected = await self.acknowledge_static_redirect(ctx)
 
-        if not await self.check_voice_channel(ctx):
+        if not await self.check_voice_channel(ctx, response_channel, redirected):
             return
 
         player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
