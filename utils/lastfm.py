@@ -102,11 +102,14 @@ class LastFMHandler:
         data = await self._request('auth.getSession', params)
         
         if data and 'session' in data:
+            logger.info(f"[LASTFM] Session obtained for user")
             return data['session']['key']
+        logger.warning(f"[LASTFM] Failed to get session from token")
         return None
 
     async def update_now_playing(self, session_key, artist, title):
         if not self.enabled or not session_key: return
+        logger.debug(f"[LASTFM] Updating now playing: {artist} - {title}")
 
         params = {
             'artist': artist,

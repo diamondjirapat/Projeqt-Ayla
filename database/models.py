@@ -1,7 +1,10 @@
 from datetime import datetime, UTC
 from typing import Optional, Dict, Any
+import logging
 
 from database.connection import db_manager
+
+logger = logging.getLogger(__name__)
 
 
 class BaseModel:
@@ -46,6 +49,7 @@ class UserModel(BaseModel):
 
     async def update_lastfm(self, user_id: int, username: str, session_key: str):
         """Update Last.fm data"""
+        logger.info(f"[DB] Linking Last.fm account for user {user_id}: {username}")
         await self.collection.update_one(
             {'user_id': user_id},
             {'$set': {
@@ -60,6 +64,7 @@ class UserModel(BaseModel):
 
     async def remove_lastfm(self, user_id: int):
         """Remove Last.fm data"""
+        logger.info(f"[DB] Unlinking Last.fm account for user {user_id}")
         await self.collection.update_one(
             {'user_id': user_id},
             {'$unset': {'lastfm': ""}}
