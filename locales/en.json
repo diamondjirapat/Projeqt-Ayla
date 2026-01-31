@@ -336,6 +336,12 @@
         "skipped": "⏭️ Skipped",
         "nothing_playing": "❌ Nothing is playing"
       },
+      "seek": {
+        "success": "⏩ Seeked to **{position}**",
+        "invalid_format": "❌ Invalid format. Use: `1:30`, `90`, or `1:30:00`",
+        "out_of_bounds": "❌ Position is outside the track duration",
+        "nothing_playing": "❌ Nothing is playing"
+      },
       "stop": {
         "stopped": "⏹️ Stopped the player and cleared the queue",
         "nothing_playing": "❌ Nothing is playing"
@@ -442,7 +448,8 @@
       "no_permission": "❌ You don't have permission to use this command",
       "command_error": "❌ An error occurred: {error}",
       "no_nodes": "❌ No connected music nodes found.",
-      "no_history": "❌ No previous songs in history."
+      "no_history": "❌ No previous songs in history.",
+      "voice_channel_mismatch": "❌ You must be in the same voice channel as the bot to use this command."
     }
   },
   "reactionrole": {
