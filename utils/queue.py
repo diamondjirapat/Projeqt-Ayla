@@ -11,7 +11,7 @@ class CustomQueue(wavelink.Queue):
 
     def move(self, index_from: int, index_to: int):
         """
-        Move a track from one index to another (0-based).
+        Move a track from one index to another
         """
         size = len(self._items)
 
@@ -23,6 +23,9 @@ class CustomQueue(wavelink.Queue):
 
         if index_from == index_to:
             return
+        
+        index_from -= 1
+        index_to -= 1
 
         track = self._items.pop(index_from)
         self._items.insert(index_to, track)
@@ -32,6 +35,10 @@ class CustomQueue(wavelink.Queue):
         if not 0 <= index < len(self._items):
             raise IndexError("Index out of bounds")
         return self._items.pop(index)
+
+    def put_at_front(self, item: wavelink.Playable):
+        """Insert a track at the front of the queue (plays next)."""
+        self._items.insert(0, item)
 
     def to_list(self) -> List[wavelink.Playable]:
         """Return a copy of the queue."""
