@@ -16,14 +16,15 @@ class Config:
     LAVALINK_PASSWORD = os.getenv('LAVALINK_PASSWORD', 'youshallnotpass')
 
     # Last.fm
-    LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
-    LASTFM_API_SECRET = os.getenv('LASTFM_API_SECRET')
+    LASTFM_API_KEY = os.getenv('LASTFM_API_KEY', '')
+    LASTFM_API_SECRET = os.getenv('LASTFM_API_SECRET', '')
     
-    # Banner
-    BANNER_URL = os.getenv('BANNER_URL')
+    # Customisation
+    MUSIC_BANNER_URL = os.getenv('MUSIC_BANNER_URL', '')
+    BAR_URL = os.getenv('BAR_URL', '')
 
     # Owner ID
-    _owner_ids_raw = os.getenv('OWNER_IDS', '')
+    _owner_ids_raw = os.getenv('OWNER_IDS', '368581475660201984')
     OWNER_IDS = set(int(id.strip()) for id in _owner_ids_raw.split(',') if id.strip())
     
     @classmethod
