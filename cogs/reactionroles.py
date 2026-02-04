@@ -6,6 +6,7 @@ from typing import Optional, Dict, List
 import json
 
 from utils.i18n import i18n
+from config import Config
 from database.models import GuildModel
 
 logger = logging.getLogger(__name__)
@@ -415,9 +416,9 @@ class ReactionRolesCog(commands.Cog):
         embed = discord.Embed(
             title=title,
             description=description,
-            color=discord.Color(0x555555)
+            color=discord.Color.blurple()
         )
-        embed.set_footer(text=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_image(url=Config.BAR_URL)
 
         try:
             message = await channel.send(embed=embed)
