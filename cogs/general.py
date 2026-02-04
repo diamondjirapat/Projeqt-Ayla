@@ -51,7 +51,7 @@ class General(commands.Cog):
         embed.add_field(name="Bot Process Time 📊", value=f"{bot_latency}ms", inline=True)
         await temp_message.edit(content=None, embed=embed)
     
-    @commands.hybrid_command(name='info')
+    @commands.hybrid_command(name='botinfo')
     async def info_command(self, ctx: commands.Context):
         """Display bot information"""
         title = await i18n.t(ctx, 'commands.info.title')
@@ -69,7 +69,7 @@ class General(commands.Cog):
         
         await ctx.send(embed=embed)
     
-    @commands.hybrid_command(name='profile')
+    @commands.hybrid_command(name='userinfo')
     @app_commands.describe(member="The member to view profile for")
     async def user_profile(self, ctx: commands.Context, member: discord.Member = None):
         """Display a user profile from a database"""
@@ -98,13 +98,7 @@ class General(commands.Cog):
         
         await ctx.send(embed=embed)
     
-    @commands.hybrid_command(name='test')
-    async def test_command(self, ctx: commands.Context):
-        """Simple test command"""
-        await ctx.send(await i18n.t(ctx, "general.test_command"))
-        logger.info(f"Test command executed by {ctx.author}")
-    
-    @commands.command(name='reload')
+    @commands.command(name='reload', hidden=True)
     @commands.is_owner()
     async def reload_command(self, ctx: commands.Context, *, cog: str = None):
         """Reload a cog or all cogs (Owner only)"""
