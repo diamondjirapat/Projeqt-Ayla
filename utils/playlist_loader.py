@@ -1,14 +1,14 @@
 import logging
 import asyncio
 from typing import Dict, List, Any, Optional, Callable
-import wavelink
+import pomice
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 class PlaylistLoader:
     @staticmethod
-    async def load_playlist(playlist_data: Dict[str, Any], player: wavelink.Player) -> List[wavelink.Playable]:
+    async def load_playlist(playlist_data: Dict[str, Any], player: pomice.Player) -> List[pomice.Track]:
         """
         Load an imported playlist:
         1. Fetch tracks from source URL
@@ -21,7 +21,7 @@ class PlaylistLoader:
 
         # 1. Fetch from source
         try:
-            tracks: wavelink.Search = await wavelink.Playable.search(source_url)
+            tracks = await player.get_tracks(source_url)
             if not tracks:
                 return []
         except Exception as e:
@@ -29,7 +29,7 @@ class PlaylistLoader:
             raise e
 
         # Convert to list if it's a Playlist container
-        if isinstance(tracks, wavelink.Playlist):
+        if isinstance(tracks, pomice.Playlist):
             source_tracks = list(tracks.tracks)
         elif isinstance(tracks, list):
             source_tracks = tracks
@@ -67,7 +67,7 @@ class PlaylistLoader:
     @staticmethod
     async def load_additions_background(
         additions: List[Dict[str, Any]], 
-        player: wavelink.Player, 
+        player: pomice.Player, 
         progress_callback: Optional[Callable[[int, int], Any]] = None,
         check_cancel: Optional[Callable[[], bool]] = None
     ):
@@ -90,11 +90,16 @@ class PlaylistLoader:
                 if i > 0:
                     await asyncio.sleep(0.5) # Delay for Lavalink/Rate limits
 
-                tracks = await wavelink.Playable.search(url)
+                tracks = await player.get_tracks(url)
                 if not tracks:
                     continue
 
-                track = tracks[0] if isinstance(tracks, list) else tracks
+                if isinstance(tracks, pomice.Playlist):
+                    track = tracks.tracks[0]
+                elif isinstance(tracks, list):
+                    track = tracks[0]
+                else:
+                    track = tracks
                 
                 player.queue.put(track)
                 

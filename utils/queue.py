@@ -1,19 +1,19 @@
-import wavelink
+import pomice
 import random
 from typing import Optional, List, Union
 
-class CustomQueue(wavelink.Queue):
+class CustomQueue(pomice.Queue):
     """
-    Extended Wavelink queue with safe utilities:
+    Extended Pomice queue with safe utilities:
     move, remove by index, and helpers.
-    Note: shuffle() and clear() are inherited from wavelink.Queue
+    Note: shuffle() and clear() are inherited from pomice.Queue
     """
 
     def move(self, index_from: int, index_to: int):
         """
         Move a track from one index to another
         """
-        size = len(self._items)
+        size = len(self._queue)
 
         if not 0 <= index_from < size:
             raise IndexError("Source index out of bounds")
@@ -27,34 +27,31 @@ class CustomQueue(wavelink.Queue):
         index_from -= 1
         index_to -= 1
 
-        track = self._items.pop(index_from)
-        self._items.insert(index_to, track)
+        track = self._queue.pop(index_from)
+        self._queue.insert(index_to, track)
 
     def remove_at(self, index: int):
         """Remove a track at a specific index (0-based)."""
-        if not 0 <= index < len(self._items):
+        if not 0 <= index < len(self._queue):
             raise IndexError("Index out of bounds")
-        return self._items.pop(index)
+        return self._queue.pop(index)
 
-    def put_at_front(self, item: wavelink.Playable):
-        """Insert a track at the front of the queue (plays next)."""
-        self._items.insert(0, item)
-
-    def to_list(self) -> List[wavelink.Playable]:
+    def to_list(self) -> List[pomice.Track]:
         """Return a copy of the queue."""
-        return list(self._items)
+        return list(self._queue)
 
 
-class CustomPlayer(wavelink.Player):
+class CustomPlayer(pomice.Player):
     """
     Custom player using CustomQueue.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, client, channel, *, node=None):
+        super().__init__(client, channel, node=node)
 
-        if not isinstance(self.queue, CustomQueue):
-            self.queue = CustomQueue()
-
+        self.queue = CustomQueue()
         self.twenty_four_seven = False
-
+        self.autoplay_enabled = False
+        self.history = []
+        self.home_channel = None
+        self.current_track_start_time = None
