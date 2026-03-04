@@ -8,6 +8,7 @@ import json
 from utils.i18n import i18n
 from config import Config
 from database.models import GuildModel
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class ReactionRolesCog(commands.Cog):
                         inline=True
                     )
 
-            embed.set_footer(text=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+            embed.set_image(url=Config.BAR_URL)
 
             await message.edit(embed=embed)
             logger.debug(f"Updated embed for message {message_id}")
@@ -493,7 +494,7 @@ class ReactionRolesCog(commands.Cog):
                     inline=True
                 )
 
-        embed.set_footer(text=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_image(url=Config.BAR_URL)
 
         try:
             await message.edit(embed=embed)
@@ -502,6 +503,67 @@ class ReactionRolesCog(commands.Cog):
             await ctx.send("❌ I don't have permission to edit that message.")
         except Exception as e:
             await ctx.send(f"❌ Failed to update message: {str(e)}")
+
+    # @reactionrole.command(name='debug_rebuild_rr')
+    # @commands.has_permissions(administrator=True)
+    # async def rr_debug_rebuild(self, ctx: commands.Context):
+    #     """Rebuild the reaction roles cache from the database (Admin only)"""
+    #     old_guild_count = len(self.reaction_roles)
+    #     old_total = sum(
+    #         sum(len(emojis) for emojis in msgs.values())
+    #         for msgs in self.reaction_roles.values()
+    #     )
+
+    #     self.reaction_roles.clear()
+
+    #     try:
+    #         await self.load_reaction_roles()
+    #     except Exception as e:
+    #         logger.error(f"debug_rebuild_rr failed: {e}")
+    #         await ctx.send(f"❌ Failed to rebuild cache: {e}")
+    #         return
+
+    #     new_guild_count = len(self.reaction_roles)
+    #     new_total = sum(
+    #         sum(len(emojis) for emojis in msgs.values())
+    #         for msgs in self.reaction_roles.values()
+    #     )
+
+    #     embed = discord.Embed(
+    #         title="🔄 Reaction Roles Cache Rebuilt",
+    #         color=discord.Color.green()
+    #     )
+    #     embed.add_field(
+    #         name="Before",
+    #         value=f"Guilds: **{old_guild_count}**\nTotal mappings: **{old_total}**",
+    #         inline=True
+    #     )
+    #     embed.add_field(
+    #         name="After",
+    #         value=f"Guilds: **{new_guild_count}**\nTotal mappings: **{new_total}**",
+    #         inline=True
+    #     )
+
+    #     guild_cache = self.reaction_roles.get(ctx.guild.id, {})
+    #     if guild_cache:
+    #         lines = []
+    #         for msg_id, emoji_roles in guild_cache.items():
+    #             for emoji, role_id in emoji_roles.items():
+    #                 role = ctx.guild.get_role(role_id)
+    #                 lines.append(f"`{msg_id}` • {emoji} → {role.mention if role else f'(Deleted: {role_id})'}")
+    #         embed.add_field(
+    #             name=f"This Guild ({len(guild_cache)} messages)",
+    #             value="\n".join(lines[:15]) + ("\n…" if len(lines) > 15 else ""),
+    #             inline=False
+    #         )
+    #     else:
+    #         embed.add_field(name="This Guild", value="No reaction roles loaded.", inline=False)
+
+    #     logger.info(
+    #         f"debug_rebuild_rr by {ctx.author}: {old_total} → {new_total} mappings across "
+    #         f"{old_guild_count} → {new_guild_count} guilds"
+    #     )
+    #     await ctx.send(embed=embed)
 
     # @reactionrole.command(name='reload')
     # @commands.has_permissions(administrator=True)
