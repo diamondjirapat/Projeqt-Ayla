@@ -184,7 +184,8 @@ Add your translations to the locale files in `locales/`:
 | `PREFIX` | ❌ | Command prefix (default: `!`) |
 | `LASTFM_API_KEY` | ❌ | Last.fm API key for scrobbling |
 | `LASTFM_API_SECRET` | ❌ | Last.fm API secret |
-| `BANNER` | ❌ | Custom banner image URL |
+| `BAR_URL` | ❌ | Bar image URL |
+| `MUSIC_BANNER_URL` | ❌ | Banner image URL |
 
 ---
 
