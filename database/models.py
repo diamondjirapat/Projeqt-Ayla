@@ -101,38 +101,76 @@ class UserModel(BaseModel):
         return result.modified_count > 0
     
     async def add_track_to_playlist(self, user_id: int, playlist_name: str, track_info: Dict[str, Any]) -> bool:
-        """Add a track to a playlist"""
+        """Add a track to a playlist (handles both regular and imported playlists)"""
         key = playlist_name.lower().replace(" ", "_")
+
+        playlist = await self.get_playlist(user_id, playlist_name)
+        if not playlist:
+            return False
+        
         track_data = {
             'title': track_info.get('title', 'Unknown'),
             'url': track_info.get('url', ''),
             'author': track_info.get('author', 'Unknown'),
-            'added_at': datetime.now(UTC)
         }
+
+        if playlist.get('type') == 'imported':
+            return await self.add_playlist_modification(user_id, playlist_name, 'additions', track_data)
+
+        track_data['added_at'] = datetime.now(UTC)
         result = await self.collection.update_one(
             {'user_id': user_id, f'playlists.{key}': {'$exists': True}},
             {'$push': {f'playlists.{key}.tracks': track_data}}
         )
         return result.modified_count > 0
     
-    async def remove_track_from_playlist(self, user_id: int, playlist_name: str, index: int) -> bool:
-        """Remove a track from a playlist by index"""
+    async def remove_track_from_playlist(self, user_id: int, playlist_name: str, index: int) -> tuple[bool, Optional[Dict[str, Any]]]:
+        """
+        Remove a track from a playlist by index.
+        Returns (success, track_info) where track_info is the removed track on success, or error info on failure.
+        Handles both regular playlists (tracks array) and imported playlists (modifications.additions).
+        """
         key = playlist_name.lower().replace(" ", "_")
         user_data = await self.get_user(user_id)
         if not user_data or 'playlists' not in user_data:
-            return False
-        playlist = user_data['playlists'].get(key)
-        if not playlist or 'tracks' not in playlist:
-            return False
-        if index < 0 or index >= len(playlist['tracks']):
-            return False
+            return (False, {'error': 'user_not_found'})
         
-        track_to_remove = playlist['tracks'][index]
-        result = await self.collection.update_one(
-            {'user_id': user_id},
-            {'$pull': {f'playlists.{key}.tracks': track_to_remove}}
-        )
-        return result.modified_count > 0
+        playlist = user_data['playlists'].get(key)
+        if not playlist:
+            return (False, {'error': 'playlist_not_found'})
+        
+        is_imported = playlist.get('type') == 'imported'
+        
+        if is_imported:
+            additions = playlist.get('modifications', {}).get('additions', [])
+            if not additions:
+                return (False, {'error': 'no_additions'})
+            if index < 0 or index >= len(additions):
+                return (False, {'error': 'invalid_index', 'max_index': len(additions)})
+            
+            track_to_remove = additions[index]
+            result = await self.collection.update_one(
+                {'user_id': user_id},
+                {'$pull': {f'playlists.{key}.modifications.additions': track_to_remove}}
+            )
+            if result.modified_count > 0:
+                return (True, track_to_remove)
+            return (False, {'error': 'remove_failed'})
+        else:
+            tracks = playlist.get('tracks', [])
+            if not tracks:
+                return (False, {'error': 'empty_playlist'})
+            if index < 0 or index >= len(tracks):
+                return (False, {'error': 'invalid_index', 'max_index': len(tracks)})
+            
+            track_to_remove = tracks[index]
+            result = await self.collection.update_one(
+                {'user_id': user_id},
+                {'$pull': {f'playlists.{key}.tracks': track_to_remove}}
+            )
+            if result.modified_count > 0:
+                return (True, track_to_remove)
+            return (False, {'error': 'remove_failed'})
     
     async def get_playlist(self, user_id: int, name: str) -> Optional[Dict[str, Any]]:
         """Get a specific playlist with all tracks"""
@@ -262,38 +300,76 @@ class GuildModel(BaseModel):
         return result.modified_count > 0
     
     async def add_track_to_playlist(self, guild_id: int, playlist_name: str, track_info: Dict[str, Any]) -> bool:
-        """Add a track to a server playlist"""
+        """Add a track to a server playlist (handles both regular and imported playlists)"""
         key = playlist_name.lower().replace(" ", "_")
+        
+        playlist = await self.get_playlist(guild_id, playlist_name)
+        if not playlist:
+            return False
+        
         track_data = {
             'title': track_info.get('title', 'Unknown'),
             'url': track_info.get('url', ''),
             'author': track_info.get('author', 'Unknown'),
-            'added_at': datetime.now(UTC)
         }
+
+        if playlist.get('type') == 'imported':
+            return await self.add_playlist_modification(guild_id, playlist_name, 'additions', track_data)
+
+        track_data['added_at'] = datetime.now(UTC)
         result = await self.collection.update_one(
             {'guild_id': guild_id, f'playlists.{key}': {'$exists': True}},
             {'$push': {f'playlists.{key}.tracks': track_data}}
         )
         return result.modified_count > 0
     
-    async def remove_track_from_playlist(self, guild_id: int, playlist_name: str, index: int) -> bool:
-        """Remove a track from a server playlist by index"""
+    async def remove_track_from_playlist(self, guild_id: int, playlist_name: str, index: int) -> tuple[bool, Optional[Dict[str, Any]]]:
+        """
+        Remove a track from a server playlist by index.
+        Returns (success, track_info) where track_info is the removed track on success, or error info on failure.
+        Handles both regular playlists (tracks array) and imported playlists (modifications.additions).
+        """
         key = playlist_name.lower().replace(" ", "_")
         guild_data = await self.get_guild(guild_id)
         if not guild_data or 'playlists' not in guild_data:
-            return False
-        playlist = guild_data['playlists'].get(key)
-        if not playlist or 'tracks' not in playlist:
-            return False
-        if index < 0 or index >= len(playlist['tracks']):
-            return False
+            return (False, {'error': 'guild_not_found'})
         
-        track_to_remove = playlist['tracks'][index]
-        result = await self.collection.update_one(
-            {'guild_id': guild_id},
-            {'$pull': {f'playlists.{key}.tracks': track_to_remove}}
-        )
-        return result.modified_count > 0
+        playlist = guild_data['playlists'].get(key)
+        if not playlist:
+            return (False, {'error': 'playlist_not_found'})
+        
+        is_imported = playlist.get('type') == 'imported'
+        
+        if is_imported:
+            additions = playlist.get('modifications', {}).get('additions', [])
+            if not additions:
+                return (False, {'error': 'no_additions'})
+            if index < 0 or index >= len(additions):
+                return (False, {'error': 'invalid_index', 'max_index': len(additions)})
+            
+            track_to_remove = additions[index]
+            result = await self.collection.update_one(
+                {'guild_id': guild_id},
+                {'$pull': {f'playlists.{key}.modifications.additions': track_to_remove}}
+            )
+            if result.modified_count > 0:
+                return (True, track_to_remove)
+            return (False, {'error': 'remove_failed'})
+        else:
+            tracks = playlist.get('tracks', [])
+            if not tracks:
+                return (False, {'error': 'empty_playlist'})
+            if index < 0 or index >= len(tracks):
+                return (False, {'error': 'invalid_index', 'max_index': len(tracks)})
+            
+            track_to_remove = tracks[index]
+            result = await self.collection.update_one(
+                {'guild_id': guild_id},
+                {'$pull': {f'playlists.{key}.tracks': track_to_remove}}
+            )
+            if result.modified_count > 0:
+                return (True, track_to_remove)
+            return (False, {'error': 'remove_failed'})
     
     async def get_playlist(self, guild_id: int, name: str) -> Optional[Dict[str, Any]]:
         """Get a specific server playlist with all tracks"""
