@@ -696,8 +696,30 @@ class Music(commands.Cog):
         app_commands.Choice(name="Play Now (skip current)", value="now"),
         app_commands.Choice(name="Play Next (after current)", value="next"),
     ])
-    async def play(self, ctx: commands.Context, mode: str = "normal", *, query: str):
+    async def play(self, ctx: commands.Context, *, query: str, mode: str = "normal"): # temp fix (might be permanent)
         """Play a song or saved playlist."""
+        # if not ctx.interaction:
+        #     valid_modes = ("normal", "now", "next")
+        #     if mode.lower() not in valid_modes or mode.startswith(("http://", "https://")):
+        #         query = f"{mode} {query}" if query else mode
+        #         mode = "normal"
+        #     else:
+        #         mode = mode.lower()
+
+        await self._play_command_logic(ctx, query, "normal")
+
+    @commands.command(name="playnow", aliases=["pn"])
+    async def playnow(self, ctx: commands.Context, *, query: str):
+        """Play a song immediately (skips current)."""
+        await self._play_command_logic(ctx, query, "now")
+
+    @commands.command(name="playnext", aliases=["pnx"])
+    async def playnext(self, ctx: commands.Context, *, query: str):
+        """Play a song after the current one."""
+        await self._play_command_logic(ctx, query, "next")
+
+    async def _play_command_logic(self, ctx: commands.Context, query: str, mode: str = "normal"):
+        """Shared entry point for play commands."""
         await self.handle_command_cleanup(ctx)
 
         if not ctx.guild:
