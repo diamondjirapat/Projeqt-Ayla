@@ -5,6 +5,8 @@ from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 import logging
 import time
+import sys
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +151,22 @@ class General(commands.Cog):
             except Exception as e:
                 await ctx.send(f"❌ Failed to reload `{extension_name}`: {str(e)}")
                 logger.error(f"Failed to reload {extension_name}: {e}")
-    
+
+    @commands.command(name='restart', hidden=True)
+    @commands.is_owner()
+    async def restart_command(self, ctx: commands.Context):
+        """Restart the entire bot (Owner only)"""
+        embed = discord.Embed(
+            title="🔄 Restarting Bot...",
+            description="The bot is shutting down and will restart momentarily.",
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=embed)
+        logger.info(f"Bot restart requested by {ctx.author} ({ctx.author.id})")
+
+        await self.bot.close()
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
     @commands.command(name='help')
     async def help_command(self, ctx, *, command: str = None):
         """Show help information"""
