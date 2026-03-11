@@ -237,7 +237,10 @@
       "imported_linked_server": "✅ Imported **{name}** linked to **{source}** ({count} tracks) for the server!",
       "list_imported_type": "🌍 Imported ({count} tracks)",
       "list_imported_additions": " + {additions} added",
-      "list_unknown_type": "❌ Unknown playlist type"
+      "list_unknown_type": "❌ Unknown playlist type",
+      "list_regular_type": "📄 {count} track(s)",
+      "view_more_tracks": "... and {count} more tracks",
+      "tracks_failed_to_load": " ({count} track(s) failed to load)"
     },
     "ui": {
       "select_track": "🔍 **Select a track to play:**",

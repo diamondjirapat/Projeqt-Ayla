@@ -237,7 +237,10 @@
       "imported_linked_server": "✅ นำเข้า **{name}** เชื่อมต่อกับ **{source}** ({count} เพลง) สำหรับเซิร์ฟเวอร์!",
       "list_imported_type": "🌍 นำเข้า ({count} เพลง)",
       "list_imported_additions": " + {additions} เพิ่ม",
-      "list_unknown_type": "❌ ประเภทไม่ทราบ"
+      "list_unknown_type": "❌ ประเภทไม่ทราบ",
+      "list_regular_type": "📄 {count} เพลง",
+      "view_more_tracks": "... และอีก {count} เพลง",
+      "tracks_failed_to_load": " ({count} เพลงไม่สามารถโหลดได้)"
     },
     "ui": {
       "select_track": "🔍 **เลือกเพลงที่จะเล่น:**",
