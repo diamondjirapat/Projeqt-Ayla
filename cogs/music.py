@@ -524,11 +524,17 @@ class Music(commands.Cog):
         user_data = await self.user_model.get_user(ctx.author.id)
         guild_data = await self.guild_model.get_guild(ctx.guild.id)
 
-        # Check for saved playlists
+        # Check for saved playlists (use source_url for imported playlists)
+        saved_pl = None
         if user_data and 'playlists' in user_data and query in user_data['playlists']:
-            query = user_data['playlists'][query]
+            saved_pl = user_data['playlists'][query]
         elif guild_data and 'playlists' in guild_data and query in guild_data['playlists']:
-            query = guild_data['playlists'][query]
+            saved_pl = guild_data['playlists'][query]
+        if saved_pl:
+            if saved_pl.get('type') == 'imported' and saved_pl.get('source_url'):
+                query = saved_pl['source_url']
+            else:
+                saved_pl = None
 
         player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         if not player:
@@ -856,6 +862,20 @@ class Music(commands.Cog):
             if additions > 0:
                 modifications_footer = await i18n.t(ctx, "music.playlist.modifications_footer")
                 embed.set_footer(text=modifications_footer)
+        else:
+            tracks = playlist.get('tracks', [])
+            if tracks:
+                track_lines = []
+                for i, track in enumerate(tracks[:25], 1):
+                    title = track.get('title', 'Unknown')
+                    author = track.get('author', 'Unknown')
+                    track_lines.append(f"**{i}.** {title} — {author}")
+                embed.description = "\n".join(track_lines)
+                if len(tracks) > 25:
+                    footer_text = await i18n.t(ctx, "music.playlist.view_more_tracks", count=len(tracks) - 25)
+                    embed.set_footer(text=footer_text)
+            else:
+                embed.description = await i18n.t(ctx, "music.playlist.view_empty_desc")
 
         
         await ctx.send(embed=embed)
@@ -882,7 +902,8 @@ class Music(commands.Cog):
                     additions_text = await i18n.t(ctx, "music.playlist.list_imported_additions", additions=additions)
                     val_text += additions_text
             else:
-                val_text = await i18n.t(ctx, "music.playlist.list_unknown_type")
+                count = len(playlist.get('tracks', []))
+                val_text = await i18n.t(ctx, "music.playlist.list_regular_type", count=count)
             
             embed.add_field(
                 name=f"📂 {playlist.get('name', key)}", 
@@ -918,7 +939,9 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.playlist.playlist_not_found", name=name)
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
         
-        if playlist.get('type') != 'imported':
+        is_imported = playlist.get('type') == 'imported'
+        tracks_list = playlist.get('tracks', [])
+        if not is_imported and not tracks_list:
             msg = await i18n.t(ctx, "music.playlist.empty_playlist")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
         player: pomice.Player = cast(pomice.Player, ctx.voice_client)
@@ -931,61 +954,112 @@ class Music(commands.Cog):
         
         playlist_name = playlist.get('name', name)
         
-        from utils.playlist_loader import PlaylistLoader
-        loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
-        status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
-        
-        try:
-            # Load source
-            tracks = await PlaylistLoader.load_playlist(playlist, player)
-            if not tracks:
-                load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
-                return await status_msg.edit(content=load_failed_msg)
+        if is_imported:
+            from utils.playlist_loader import PlaylistLoader
+            loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
+            status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
             
-            # Add to queue
+            try:
+                # Load source
+                tracks = await PlaylistLoader.load_playlist(playlist, player)
+                if not tracks:
+                    load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
+                    return await status_msg.edit(content=load_failed_msg)
+                
+                # Add to queue
+                count = 0
+                for track in tracks:
+                    track.requester = ctx.author.mention
+                    player.queue.put(track)
+                    count += 1
+                
+                if not player.is_playing:
+                    vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
+                
+                msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
+                
+                # Handle additions in background
+                additions = playlist.get('modifications', {}).get('additions', [])
+                if additions:
+                    loading_additions_msg = await i18n.t(ctx, "music.playlist.loading_additions", count=len(additions))
+                    msg_content += "\n" + loading_additions_msg
+                    await status_msg.edit(content=msg_content)
+                    
+                    _done = {'value': False}
+                    async def progress_callback(loaded, total):
+                        try:
+                            if not _done['value']:
+                                if loaded % 5 == 0:
+                                    progress_msg = await i18n.t(ctx, "music.playlist.loading_additions_progress", count=count, loaded=loaded, total=total)
+                                    await status_msg.edit(content=progress_msg)
+
+                            if not _done['value'] and (loaded == total or loaded % 5 != 0 or loaded == 0):
+                                _done['value'] = True
+                                final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
+                                await status_msg.edit(content=final_msg)
+                        except:
+                            pass
+                    
+                    self.bot.loop.create_task(
+                        PlaylistLoader.load_additions_background(additions, player, progress_callback)
+                    )
+                else:
+                    await status_msg.edit(content=msg_content)
+                
+                await self.update_static_embed(ctx.guild.id)
+                
+            except Exception as e:
+                logger.error(f"Error loading imported playlist: {e}")
+                error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
+                await status_msg.edit(content=error_msg)
+        else:
             count = 0
-            for track in tracks:
-                track.requester = ctx.author.mention
-                player.queue.put(track)
-                count += 1
+            failed = 0
+            loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
+            status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
             
-            if not player.is_playing:
-                vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                await player.set_volume(vol)
-                await player.play(player.queue.get())
-            
-            msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
-            
-            # Handle additions in background
-            additions = playlist.get('modifications', {}).get('additions', [])
-            if additions:
-                loading_additions_msg = await i18n.t(ctx, "music.playlist.loading_additions", count=len(additions))
-                msg_content += "\n" + loading_additions_msg
-                await status_msg.edit(content=msg_content)
-                
-                async def progress_callback(loaded, total):
+            try:
+                for track_data in tracks_list:
+                    track_url = track_data.get('url', '')
+                    if not track_url:
+                        failed += 1
+                        continue
                     try:
-                         if loaded % 5 == 0 or loaded == total:
-                            progress_msg = await i18n.t(ctx, "music.playlist.loading_additions_progress", count=count, loaded=loaded, total=total)
-                            await status_msg.edit(content=progress_msg)
-                         if loaded == total:
-                            final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
-                            await status_msg.edit(content=final_msg)
-                    except:
-                        pass
+                        results = await player.get_tracks(track_url)
+                        if results:
+                            t = results[0] if isinstance(results, list) else results.tracks[0] if hasattr(results, 'tracks') else None
+                            if t:
+                                t.requester = ctx.author.mention
+                                player.queue.put(t)
+                                count += 1
+                            else:
+                                failed += 1
+                        else:
+                            failed += 1
+                    except Exception:
+                        failed += 1
                 
-                self.bot.loop.create_task(
-                    PlaylistLoader.load_additions_background(additions, player, progress_callback)
-                )
-            else:
+                if count == 0:
+                    load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
+                    return await status_msg.edit(content=load_failed_msg)
+                
+                if not player.is_playing:
+                    vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
+                
+                msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
+                if failed > 0:
+                    failed_text = await i18n.t(ctx, "music.playlist.tracks_failed_to_load", count=failed)
+                    msg_content += failed_text
                 await status_msg.edit(content=msg_content)
-            
-            await self.update_static_embed(ctx.guild.id)
-            
-        except Exception as e:
-            logger.error(f"Error loading imported playlist: {e}")
-            error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
-            await status_msg.edit(content=error_msg)
+                await self.update_static_embed(ctx.guild.id)
+            except Exception as e:
+                logger.error(f"Error loading regular playlist: {e}")
+                error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
+                await status_msg.edit(content=error_msg)
 
 
 
@@ -1109,11 +1183,24 @@ class Music(commands.Cog):
     @app_commands.describe(playlist_name="Playlist to remove from", index="Track number to remove")
     async def server_remove(self, ctx, playlist_name: str, index: int):
         """Remove a track from a server playlist"""
-        success = await self.guild_model.remove_track_from_playlist(ctx.guild.id, playlist_name, index - 1)
+        success, result = await self.guild_model.remove_track_from_playlist(ctx.guild.id, playlist_name, index - 1)
+        
         if success:
-            msg = await i18n.t(ctx, "music.playlist.track_removed", index=index, playlist=playlist_name)
+            track_title = result.get('title', 'Unknown')
+            msg = await i18n.t(ctx, "music.playlist.track_removed_title", title=track_title, playlist=playlist_name)
         else:
-            msg = await i18n.t(ctx, "music.playlist.remove_failed")
+            error = result.get('error', 'unknown') if result else 'unknown'
+            if error == 'playlist_not_found':
+                msg = await i18n.t(ctx, "music.playlist.playlist_not_found", name=playlist_name)
+            elif error == 'empty_playlist':
+                msg = await i18n.t(ctx, "music.playlist.empty_playlist")
+            elif error == 'no_additions':
+                msg = await i18n.t(ctx, "music.playlist.remove_no_additions")
+            elif error == 'invalid_index':
+                max_index = result.get('max_index', 0)
+                msg = await i18n.t(ctx, "music.playlist.remove_invalid_index", index=index, max=max_index)
+            else:
+                msg = await i18n.t(ctx, "music.playlist.remove_failed")
         await ctx.send(msg, delete_after=10)
 
     @serverplaylist.command(name="view")
@@ -1153,6 +1240,20 @@ class Music(commands.Cog):
             if additions > 0:
                 modifications_footer = await i18n.t(ctx, "music.playlist.modifications_footer")
                 embed.set_footer(text=modifications_footer)
+        else:
+            tracks = playlist.get('tracks', [])
+            if tracks:
+                track_lines = []
+                for i, track in enumerate(tracks[:25], 1):
+                    title = track.get('title', 'Unknown')
+                    author = track.get('author', 'Unknown')
+                    track_lines.append(f"**{i}.** {title} — {author}")
+                embed.description = "\n".join(track_lines)
+                if len(tracks) > 25:
+                    footer_text = await i18n.t(ctx, "music.playlist.view_more_tracks", count=len(tracks) - 25)
+                    embed.set_footer(text=footer_text)
+            else:
+                embed.description = await i18n.t(ctx, "music.playlist.view_empty_server")
 
         
         await ctx.send(embed=embed)
@@ -1179,7 +1280,8 @@ class Music(commands.Cog):
                     additions_text = await i18n.t(ctx, "music.playlist.list_imported_additions", additions=additions)
                     val_text += additions_text
             else:
-                val_text = await i18n.t(ctx, "music.playlist.list_unknown_type")
+                count = len(playlist.get('tracks', []))
+                val_text = await i18n.t(ctx, "music.playlist.list_regular_type", count=count)
 
             embed.add_field(
                 name=f"📁 {playlist.get('name', key)}", 
@@ -1213,7 +1315,9 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.playlist.playlist_not_found", name=name)
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
 
-        if playlist.get('type') != 'imported':
+        is_imported = playlist.get('type') == 'imported'
+        tracks_list = playlist.get('tracks', [])
+        if not is_imported and not tracks_list:
             msg = await i18n.t(ctx, "music.playlist.empty_playlist")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
         
@@ -1227,59 +1331,109 @@ class Music(commands.Cog):
         
         playlist_name = playlist.get('name', name)
         
-        from utils.playlist_loader import PlaylistLoader
+        if is_imported:
+            from utils.playlist_loader import PlaylistLoader
 
-        loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
-        status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
-        
-        try:
-            tracks = await PlaylistLoader.load_playlist(playlist, player)
-            if not tracks:
-                load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
-                await status_msg.edit(content=load_failed_msg)
-                return
+            loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
+            status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
             
+            try:
+                tracks = await PlaylistLoader.load_playlist(playlist, player)
+                if not tracks:
+                    load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
+                    await status_msg.edit(content=load_failed_msg)
+                    return
+                
+                count = 0
+                for track in tracks:
+                    track.requester = ctx.author.mention
+                    player.queue.put(track)
+                    count += 1
+                
+                if not player.is_playing:
+                    vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
+                
+                msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
+                
+                additions = playlist.get('modifications', {}).get('additions', [])
+                if additions:
+                    loading_additions_msg = await i18n.t(ctx, "music.playlist.loading_additions", count=len(additions))
+                    msg_content += "\n" + loading_additions_msg
+                    await status_msg.edit(content=msg_content)
+                    
+                    _done = {'value': False}
+                    async def progress_callback(loaded, total):
+                        try:
+                            if not _done['value']:
+                                if loaded % 5 == 0:
+                                    progress_msg = await i18n.t(ctx, "music.playlist.loading_additions_progress", count=count, loaded=loaded, total=total)
+                                    await status_msg.edit(content=progress_msg)
+                            if not _done['value'] and (loaded == total or loaded % 5 != 0 or loaded == 0):
+                                _done['value'] = True
+                                final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
+                                await status_msg.edit(content=final_msg)
+                        except:
+                            pass
+                    
+                    self.bot.loop.create_task(
+                        PlaylistLoader.load_additions_background(additions, player, progress_callback)
+                    )
+                else:
+                    await status_msg.edit(content=msg_content)
+                
+                await self.update_static_embed(ctx.guild.id)
+            except Exception as e:
+                logger.error(f"Error loading imported server playlist: {e}")
+                error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
+                await status_msg.edit(content=error_msg)
+        else:
             count = 0
-            for track in tracks:
-                track.requester = ctx.author.mention
-                player.queue.put(track)
-                count += 1
+            failed = 0
+            loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
+            status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
             
-            if not player.is_playing:
-                vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                await player.set_volume(vol)
-                await player.play(player.queue.get())
-            
-            msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
-            
-            additions = playlist.get('modifications', {}).get('additions', [])
-            if additions:
-                loading_additions_msg = await i18n.t(ctx, "music.playlist.loading_additions", count=len(additions))
-                msg_content += "\n" + loading_additions_msg
-                await status_msg.edit(content=msg_content)
-                
-                async def progress_callback(loaded, total):
+            try:
+                for track_data in tracks_list:
+                    track_url = track_data.get('url', '')
+                    if not track_url:
+                        failed += 1
+                        continue
                     try:
-                        if loaded % 5 == 0 or loaded == total:
-                            progress_msg = await i18n.t(ctx, "music.playlist.loading_additions_progress", count=count, loaded=loaded, total=total)
-                            await status_msg.edit(content=progress_msg)
-                        if loaded == total:
-                            final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
-                            await status_msg.edit(content=final_msg)
-                    except:
-                        pass
+                        results = await player.get_tracks(track_url)
+                        if results:
+                            t = results[0] if isinstance(results, list) else results.tracks[0] if hasattr(results, 'tracks') else None
+                            if t:
+                                t.requester = ctx.author.mention
+                                player.queue.put(t)
+                                count += 1
+                            else:
+                                failed += 1
+                        else:
+                            failed += 1
+                    except Exception:
+                        failed += 1
                 
-                self.bot.loop.create_task(
-                    PlaylistLoader.load_additions_background(additions, player, progress_callback)
-                )
-            else:
+                if count == 0:
+                    load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
+                    return await status_msg.edit(content=load_failed_msg)
+                
+                if not player.is_playing:
+                    vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
+                
+                msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
+                if failed > 0:
+                    failed_text = await i18n.t(ctx, "music.playlist.tracks_failed_to_load", count=failed)
+                    msg_content += failed_text
                 await status_msg.edit(content=msg_content)
-            
-            await self.update_static_embed(ctx.guild.id)
-        except Exception as e:
-            logger.error(f"Error loading imported server playlist: {e}")
-            error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
-            await status_msg.edit(content=error_msg)
+                await self.update_static_embed(ctx.guild.id)
+            except Exception as e:
+                logger.error(f"Error loading regular server playlist: {e}")
+                error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
+                await status_msg.edit(content=error_msg)
 
 
     @serverplaylist.command(name="import")
@@ -1981,12 +2135,15 @@ class PlaylistSelect(discord.ui.Select):
 
                     locale = self.locale
                     
+                    _done = {'value': False}
                     async def progress_callback(loaded, total):
                         try:
-                            if loaded % 5 == 0 or loaded == total:
-                                progress_msg = i18n.get_text("music.ui.loading_additions_progress", locale, count=count, loaded=loaded, total=total)
-                                await status_msg.edit(content=progress_msg)
-                            if loaded == total:
+                            if not _done['value']:
+                                if loaded % 5 == 0:
+                                    progress_msg = i18n.get_text("music.ui.loading_additions_progress", locale, count=count, loaded=loaded, total=total)
+                                    await status_msg.edit(content=progress_msg)
+                            if not _done['value'] and (loaded == total or loaded % 5 != 0 or loaded == 0):
+                                _done['value'] = True
                                 final_msg = i18n.get_text("music.ui.added_with_additions_custom", locale, count=count, additions=loaded, name=playlist_name)
                                 await status_msg.edit(content=final_msg)
                         except:

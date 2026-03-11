@@ -38,10 +38,15 @@ class PlaylistLoader:
 
         # Apply modifications
         modifications = playlist_data.get('modifications', {})
-        
-        # Apply Removals (by track ID/URI)
-        removals = set(modifications.get('removals', []))
-        if removals:
+
+        removal_list = modifications.get('removals', [])
+        if removal_list:
+            removals = set()
+            for r in removal_list:
+                if isinstance(r, dict):
+                    removals.add(r.get('url', ''))
+                else:
+                    removals.add(r)
             source_tracks = [t for t in source_tracks if t.uri not in removals]
 
         reorder_ids = modifications.get('reorder', [])
@@ -84,6 +89,7 @@ class PlaylistLoader:
 
             url = add_data.get('url')
             if not url:
+                logger.warning(f"Skipping addition with no URL: {add_data.get('title', 'Unknown')}")
                 continue
 
             try:
@@ -92,6 +98,7 @@ class PlaylistLoader:
 
                 tracks = await player.get_tracks(url)
                 if not tracks:
+                    logger.warning(f"No tracks found for addition URL: {url}")
                     continue
 
                 if isinstance(tracks, pomice.Playlist):
@@ -105,14 +112,19 @@ class PlaylistLoader:
                 
                 loaded += 1
                 
-                if progress_callback:
-                    if loaded % 10 == 0 or i == total - 1:
-                        if asyncio.iscoroutinefunction(progress_callback):
-                            await progress_callback(loaded, total)
-                        else:
-                            progress_callback(loaded, total)
+                if progress_callback and loaded % 5 == 0:
+                    if asyncio.iscoroutinefunction(progress_callback):
+                        await progress_callback(loaded, total)
+                    else:
+                        progress_callback(loaded, total)
 
             except Exception as e:
                 logger.error(f"Failed to load addition {url}: {e}")
+
+        if progress_callback:
+            if asyncio.iscoroutinefunction(progress_callback):
+                await progress_callback(loaded, total)
+            else:
+                progress_callback(loaded, total)
 
         return loaded
