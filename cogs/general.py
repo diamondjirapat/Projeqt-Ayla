@@ -7,6 +7,7 @@ import logging
 import time
 import sys
 import os
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,17 @@ class General(commands.Cog):
         servers_label = await i18n.t(ctx, 'commands.info.servers')
         users_label = await i18n.t(ctx, 'commands.info.users')
         version_label = await i18n.t(ctx, 'commands.info.version')
+        commit_label = await i18n.t(ctx, 'commands.info.commit')
+        unknown_text = await i18n.t(ctx, 'general.unknown')
+        
+        try:
+            result = subprocess.run(
+                ['git', 'log', '-1', '--format=%h (%s)'],
+                capture_output=True, text=True, timeout=5
+            )
+            commit_info = result.stdout.strip() if result.returncode == 0 else unknown_text
+        except Exception:
+            commit_info = unknown_text
         
         embed = discord.Embed(
             title=title,
@@ -68,6 +80,7 @@ class General(commands.Cog):
         embed.add_field(name=servers_label, value=len(self.bot.guilds), inline=True)
         embed.add_field(name=users_label, value=len(self.bot.users), inline=True)
         embed.add_field(name=version_label, value=discord.__version__, inline=True)
+        embed.add_field(name=commit_label, value=f"`{commit_info}`", inline=False)
         
         await ctx.send(embed=embed)
     
@@ -166,6 +179,78 @@ class General(commands.Cog):
 
         await self.bot.close()
         os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    @commands.command(name='update', hidden=True)
+    @commands.is_owner()
+    async def update_command(self, ctx: commands.Context):
+        """Pull latest changes from GitHub (Owner only)"""
+        from config import Config
+        
+        github_url = Config.GITHUB_URL
+        if not github_url:
+            title = await i18n.t(ctx, 'commands.update.no_url_title')
+            description = await i18n.t(ctx, 'commands.update.no_url_description')
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        title = await i18n.t(ctx, 'commands.update.title')
+        embed = discord.Embed(
+            title=title,
+            color=discord.Color.orange()
+        )
+        status_message = await ctx.send(embed=embed)
+        logger.info(f"Bot update requested by {ctx.author} ({ctx.author.id})")
+
+        try:
+            result = subprocess.run(
+                ['git', 'pull', github_url],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+
+            if result.returncode == 0:
+                output = result.stdout.strip() or "Already up to date."
+                title = await i18n.t(ctx, 'commands.update.success_title')
+                description = await i18n.t(ctx, 'commands.update.success_description', output=output)
+                embed = discord.Embed(
+                    title=title,
+                    description=description,
+                    color=discord.Color.green()
+                )
+            else:
+                error_output = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                title = await i18n.t(ctx, 'commands.update.fail_title')
+                description = await i18n.t(ctx, 'commands.update.fail_description', error=error_output)
+                embed = discord.Embed(
+                    title=title,
+                    description=description,
+                    color=discord.Color.red()
+                )
+
+        except subprocess.TimeoutExpired:
+            title = await i18n.t(ctx, 'commands.update.fail_title')
+            description = await i18n.t(ctx, 'commands.update.fail_description', error="Process timed out after 60 seconds")
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=discord.Color.red()
+            )
+        except Exception as e:
+            title = await i18n.t(ctx, 'commands.update.fail_title')
+            description = await i18n.t(ctx, 'commands.update.fail_description', error=str(e))
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=discord.Color.red()
+            )
+
+        await status_message.edit(embed=embed)
 
     @commands.command(name='help')
     async def help_command(self, ctx, *, command: str = None):
