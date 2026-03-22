@@ -6,7 +6,8 @@
       "title": "Bot Information",
       "servers": "Servers",
       "users": "Users",
-      "version": "Discord.py Version"
+      "version": "Discord.py Version",
+      "commit": "Git Commit"
     },
     "profile": {
       "name": "profile",
@@ -56,6 +57,15 @@
     },
     "ping": {
       "title": "🏓 Pong!"
+    },
+    "update": {
+      "title": "📥 Updating from GitHub...",
+      "success_title": "✅ Update Complete",
+      "success_description": "Successfully pulled latest changes from GitHub.\n\n```\n{output}\n```",
+      "fail_title": "❌ Update Failed",
+      "fail_description": "Failed to pull latest changes from GitHub.\n\n```\n{error}\n```",
+      "no_url_title": "❌ No GitHub URL",
+      "no_url_description": "No GitHub URL configured. Set `GITHUB_URL` in your `.env` file."
     }
   },
   "errors": {
@@ -71,7 +81,6 @@
   "general": {
     "no_reason": "No reason provided",
     "unknown": "Unknown",
-    "test_command": "✅ Bot is working! Commands are being processed.",
     "language_update_error": "❌ An error occurred while updating your language."
   },
   "languages": {
@@ -469,7 +478,8 @@
       "role_too_high": "❌ I cannot assign this role because it's higher than my highest role.",
       "message_not_found": "❌ Message not found. Make sure the message ID is correct and in this server.",
       "invalid_emoji": "❌ Invalid emoji. Please use a valid emoji.",
-      "success": "✅ Reaction role added! {emoji} → {role} on message {message_id}"
+      "success": "✅ Reaction role added! {emoji} → {role} on message {message_id}",
+      "success_update": "✅ Updated message `{msg_id}` with {len(emoji_roles)} reaction role(s)!"
     },
     "remove": {
       "invalid_message_id": "❌ Invalid message ID. Please provide a valid number.",
