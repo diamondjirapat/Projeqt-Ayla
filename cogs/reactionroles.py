@@ -3,12 +3,12 @@ from discord import app_commands
 from discord.ext import commands
 import logging
 from typing import Optional, Dict, List
+from datetime import datetime, timezone
 import json
 
 from utils.i18n import i18n
 from config import Config
 from database.models import GuildModel
-from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,10 @@ class ReactionRolesCog(commands.Cog):
                                     ctx: commands.Context = None):
         """Update a message's embed to show configured reaction roles"""
         try:
+            if not message.guild:
+                logger.warning(f"Cannot update embed for message {message_id}: message.guild is None")
+                return
+
             # Get the configured roles
             if guild_id not in self.reaction_roles or message_id not in self.reaction_roles[guild_id]:
                 return
@@ -123,9 +127,15 @@ class ReactionRolesCog(commands.Cog):
 
         reaction_roles_data[str(message_id)][emoji] = role_id
 
-        await self.guild_model.update_guild(guild_id, {
-            'reaction_roles': reaction_roles_data
-        })
+        # Use upsert via update_one directly in case guild doc doesn't exist yet
+        await self.guild_model.collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {
+                'reaction_roles': reaction_roles_data,
+                'updated_at': datetime.now(timezone.utc)
+            }},
+            upsert=True
+        )
 
     async def remove_reaction_role(self, guild_id: int, message_id: int, emoji: str = None):
         """Remove a reaction role mapping"""
@@ -443,7 +453,7 @@ class ReactionRolesCog(commands.Cog):
             return
 
         if ctx.guild.id not in self.reaction_roles or msg_id not in self.reaction_roles[ctx.guild.id]:
-            await ctx.send("❌ No reaction roles configured for this message.")
+            await ctx.send(await i18n.t(ctx, "reactionrole.remove.not_found"))
             return
 
         message = None
@@ -498,11 +508,12 @@ class ReactionRolesCog(commands.Cog):
 
         try:
             await message.edit(embed=embed)
-            await ctx.send(f"✅ Updated message {msg_id} with {len(emoji_roles)} reaction roles!")
+            await ctx.send(await i18n.t(ctx, "reactionrole.add.success_update",
+                                        message_id=msg_id, count=len(emoji_roles)))
         except discord.Forbidden:
-            await ctx.send("❌ I don't have permission to edit that message.")
+            await ctx.send(await i18n.t(ctx, "reactionrole.create.no_permission"))
         except Exception as e:
-            await ctx.send(f"❌ Failed to update message: {str(e)}")
+            await ctx.send(await i18n.t(ctx, "reactionrole.create.failed", error=str(e)))
 
     # @reactionrole.command(name='debug_rebuild_rr')
     # @commands.has_permissions(administrator=True)
