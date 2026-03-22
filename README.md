@@ -176,12 +176,12 @@ Add your translations to the locale files in `locales/`:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DISCORD_TOKEN` | ✅ | Your Discord bot token |
+| `PREFIX` | ✅ | Command prefix (default: `!`) |
+| `DISCORD_TOKEN` |  | Your Discord bot token |
 | `MONGODB_URI` | ✅ | MongoDB connection string |
 | `OWNER_IDS` | ✅ | Bot owner Discord user IDs |
 | `LAVALINK_URI` | 🎵 | Lavalink server URI |
 | `LAVALINK_PASSWORD` | 🎵 | Lavalink server password |
-| `PREFIX` | ❌ | Command prefix (default: `!`) |
 | `LASTFM_API_KEY` | ❌ | Last.fm API key for scrobbling |
 | `LASTFM_API_SECRET` | ❌ | Last.fm API secret |
 | `BAR_URL` | ❌ | Bar image URL |
@@ -196,8 +196,8 @@ Add your translations to the locale files in `locales/`:
 - **Auto Message Cleanup** - Keeps the music channel clean
 - **Last.fm Scrobbling** - Automatic track scrobbling
 - **Multi-language Support** - Full English and Thai translations
-- **Rich Player Display** - Progress bar, duration, volume, queue info
-- **Playlist Support** - Create, save, and share playlists
+- **Rich Player Display** - Progress bar, duration, volume, queue info (WIP)
+- **Playlist Support** - Create, save, and share playlists (WIP)
 - **AutoPlay** - Automatic song recommendations
 
 ---
