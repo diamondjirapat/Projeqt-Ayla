@@ -62,6 +62,7 @@ class General(commands.Cog):
         users_label = await i18n.t(ctx, 'commands.info.users')
         version_label = await i18n.t(ctx, 'commands.info.version')
         commit_label = await i18n.t(ctx, 'commands.info.commit')
+        commit_date_label = await i18n.t(ctx, 'commands.info.commit_date')
         unknown_text = await i18n.t(ctx, 'general.unknown')
         
         try:
@@ -70,8 +71,15 @@ class General(commands.Cog):
                 capture_output=True, text=True, timeout=5
             )
             commit_info = result.stdout.strip() if result.returncode == 0 else unknown_text
+            
+            date_result = subprocess.run(
+                ['git', 'log', '-1', '--format=%cd'],
+                capture_output=True, text=True, timeout=5
+            )
+            commit_date = date_result.stdout.strip() if date_result.returncode == 0 else unknown_text
         except Exception:
             commit_info = unknown_text
+            commit_date = unknown_text
         
         embed = discord.Embed(
             title=title,
@@ -80,7 +88,8 @@ class General(commands.Cog):
         embed.add_field(name=servers_label, value=len(self.bot.guilds), inline=True)
         embed.add_field(name=users_label, value=len(self.bot.users), inline=True)
         embed.add_field(name=version_label, value=discord.__version__, inline=True)
-        embed.add_field(name=commit_label, value=f"`{commit_info}`", inline=False)
+        embed.add_field(name=commit_label, value=f"`{commit_info}`", inline=True)
+        embed.add_field(name=commit_date_label, value=f"`{commit_date}`", inline=True)
         
         await ctx.send(embed=embed)
     
@@ -182,7 +191,7 @@ class General(commands.Cog):
 
     @commands.command(name='update', hidden=True)
     @commands.is_owner()
-    async def update_command(self, ctx: commands.Context):
+    async def update_command(self, ctx: commands.Context, branch: str = None):
         """Pull latest changes from GitHub (Owner only)"""
         from config import Config
         
@@ -204,11 +213,17 @@ class General(commands.Cog):
             color=discord.Color.orange()
         )
         status_message = await ctx.send(embed=embed)
-        logger.info(f"Bot update requested by {ctx.author} ({ctx.author.id})")
+        
+        branch_info = f" (branch: {branch})" if branch else ""
+        logger.info(f"Bot update requested by {ctx.author} ({ctx.author.id}){branch_info}")
 
         try:
+            git_cmd = ['git', 'pull', github_url]
+            if branch:
+                git_cmd.append(branch)
+            
             result = subprocess.run(
-                ['git', 'pull', github_url],
+                git_cmd,
                 capture_output=True,
                 text=True,
                 timeout=60
