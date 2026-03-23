@@ -182,7 +182,7 @@ class General(commands.Cog):
 
     @commands.command(name='update', hidden=True)
     @commands.is_owner()
-    async def update_command(self, ctx: commands.Context):
+    async def update_command(self, ctx: commands.Context, branch: str = None):
         """Pull latest changes from GitHub (Owner only)"""
         from config import Config
         
@@ -204,14 +204,23 @@ class General(commands.Cog):
             color=discord.Color.orange()
         )
         status_message = await ctx.send(embed=embed)
-        logger.info(f"Bot update requested by {ctx.author} ({ctx.author.id})")
+        logger.info(f"Bot update requested by {ctx.author} ({ctx.author.id}){f' (branch: {branch})' if branch else ''}")
 
         try:
+            fetch_cmd = ['git', 'fetch', github_url]
+            if branch:
+                fetch_cmd.append(branch)
+
+            subprocess.run(
+                fetch_cmd,
+                capture_output=True, text=True, timeout=60
+            )
+
             result = subprocess.run(
-                ['git', 'pull', github_url],
+                ['git', 'reset', '--hard', 'FETCH_HEAD'],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=30
             )
 
             if result.returncode == 0:
