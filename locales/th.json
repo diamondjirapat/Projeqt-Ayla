@@ -7,7 +7,8 @@
       "servers": "เซิร์ฟเวอร์",
       "users": "ผู้ใช้ทั้งหมด",
       "version": "เวอร์ชัน Discord.py",
-      "commit": "Git Commit"
+      "commit": "Git Commit",
+      "commit_date": "วันที่ Commit"
     },
     "profile": {
       "name": "profile",

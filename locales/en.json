@@ -7,7 +7,8 @@
       "servers": "Servers",
       "users": "Users",
       "version": "Discord.py Version",
-      "commit": "Git Commit"
+      "commit": "Git Commit",
+      "commit_date": "Commit Date"
     },
     "profile": {
       "name": "profile",
