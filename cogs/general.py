@@ -32,26 +32,27 @@ class General(commands.Cog):
     async def ping(self, ctx: commands.Context):
         """Checks bot latency (Websocket and API)"""
         websocket_latency = round(self.bot.latency * 1000)
-        start_time = time.time()
 
+        start_time = time.perf_counter()
         temp_message = await ctx.send("Pinging...")
-        end_time = time.time()
+        api_latency = round((time.perf_counter() - start_time) * 1000)
 
-        api_latency = round((end_time - start_time) * 1000)
-
+        process_start = time.perf_counter()
         title = await i18n.t(ctx, 'commands.ping.title')
-        process_time = time.time()
+        process_time = round((time.perf_counter() - process_start) * 1000)
 
-        bot_latency = round((process_time - start_time) * 1000)
+        total_time = round((time.perf_counter() - start_time) * 1000)
 
         embed = discord.Embed(
             title=title,
             color=discord.Color.blue()
         )
 
-        embed.add_field(name="Websocket Latency 📡", value=f"{websocket_latency}ms", inline=True)
-        embed.add_field(name="API Latency 📝", value=f"{api_latency}ms", inline=True)
-        embed.add_field(name="Bot Process Time 📊", value=f"{bot_latency}ms", inline=True)
+        embed.add_field(name="Websocket Latency 📡", value=f"{websocket_latency}ms")
+        embed.add_field(name="API Latency 📝", value=f"{api_latency}ms")
+        embed.add_field(name="Internal Processing Time ⚙️", value=f"{process_time}ms")
+        embed.add_field(name="Total Time 📊", value=f"{total_time}ms")
+
         await temp_message.edit(content=None, embed=embed)
     
     @commands.hybrid_command(name='botinfo')
@@ -261,6 +262,16 @@ class General(commands.Cog):
 
         await status_message.edit(embed=embed)
 
+    async def _get_cmd_desc(self, ctx_or_interaction, cmd):
+        """Get localised command description, falling back to docstring"""
+        key = cmd.qualified_name
+        desc = await i18n.t(ctx_or_interaction, f"help_descriptions.{key}")
+
+        if desc and desc != f"help_descriptions.{key}":
+            return desc
+
+        return cmd.help or await i18n.t(ctx_or_interaction, "help.no_description")
+
     @commands.command(name='help')
     async def help_command(self, ctx, *, command: str = None):
         """Show help information"""
@@ -268,10 +279,10 @@ class General(commands.Cog):
             cmd = self.bot.get_command(command)
             if cmd:
                 title = await i18n.t(ctx, "help.help_for", command=cmd.name)
-                no_desc = await i18n.t(ctx, "help.no_description")
+                cmd_description = await self._get_cmd_desc(ctx, cmd)
                 embed = discord.Embed(
                     title=title,
-                    description=cmd.help or no_desc,
+                    description=cmd_description,
                     color=discord.Color.blue()
                 )
                 if cmd.usage:
@@ -332,13 +343,13 @@ class General(commands.Cog):
             inline=False
         )
 
-        view = HelpView(ctx, cogs, timeout=300)
+        view = HelpView(ctx, cogs, timeout=30)
         message = await ctx.send(embed=embed, view=view)
         view.message = message
 
 
 class HelpView(discord.ui.View):
-    def __init__(self, ctx, cogs, timeout=300):
+    def __init__(self, ctx, cogs, timeout=30):
         super().__init__(timeout=timeout)
         self.ctx = ctx
         self.cogs = cogs
@@ -402,9 +413,14 @@ class CogButton(discord.ui.Button):
         )
 
         cmd_list = []
-        no_desc = await i18n.t(interaction, "help.no_description")
         for cmd in self.commands:
-            cmd_description = cmd.help or no_desc
+            # Look up localised description
+            key = cmd.qualified_name
+            cmd_description = await i18n.t(interaction, f"help_descriptions.{key}")
+            # Fall back to docstring if key not found
+            if not cmd_description or cmd_description == f"help_descriptions.{key}":
+                no_desc = await i18n.t(interaction, "help.no_description")
+                cmd_description = cmd.help or no_desc
             if len(cmd_description) > 50:
                 cmd_description = cmd_description[:47] + "..."
             cmd_list.append(f"`{interaction.message.content.split()[0] if interaction.message.content else '!'}{cmd.name}` - {cmd_description}")
