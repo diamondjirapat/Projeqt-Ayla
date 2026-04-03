@@ -15,9 +15,9 @@ class Prefix(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         logger.info(f'{self.__class__.__name__} cog loaded')
-    
-    @commands.group(name='prefix', invoke_without_command=True)
-    async def prefix_group(self, ctx):
+
+    @commands.hybrid_group(name='prefix', invoke_without_command=True)
+    async def prefix(self, ctx):
         """Show current prefix information"""
         prefix_info = await prefix_manager.get_prefix_info(
             ctx.author.id, 
@@ -25,110 +25,109 @@ class Prefix(commands.Cog):
         )
         
         title = await i18n.t(ctx, "prefix.info_title")
+        current_prefix_name = await i18n.t(ctx, "prefix.current_prefix")
+        personal_prefix_name = await i18n.t(ctx, "prefix.personal_prefix")
+        server_prefix_name = await i18n.t(ctx, "prefix.server_prefix")
+        default_prefix_name = await i18n.t(ctx, "prefix.default_prefix")
+        not_set = await i18n.t(ctx, "prefix.not_set")
+        how_it_works = await i18n.t(ctx, "prefix.how_it_works")
+        priority_text = await i18n.t(ctx, "prefix.priority_explanation", mention=self.bot.user.mention)
+        commands_label = await i18n.t(ctx, "prefix.commands")
+        commands_help = await i18n.t(ctx, "prefix.commands_help")
+
         embed = discord.Embed(
             title=title,
             color=discord.Color.blue()
         )
 
         embed.add_field(
-            name="Current Prefix",
+            name=current_prefix_name,
             value=f"`{prefix_info['effective_prefix']}` ({prefix_info['priority']} priority)",
             inline=False
         )
 
         if prefix_info['user_prefix']:
             embed.add_field(
-                name="Your Personal Prefix",
+                name=personal_prefix_name,
                 value=f"`{prefix_info['user_prefix']}` ✅",
                 inline=True
             )
         else:
             embed.add_field(
-                name="Your Personal Prefix",
-                value="Not set",
+                name=personal_prefix_name,
+                value=not_set,
                 inline=True
             )
 
         if ctx.guild:
             if prefix_info['guild_prefix']:
                 embed.add_field(
-                    name="Server Prefix",
+                    name=server_prefix_name,
                     value=f"`{prefix_info['guild_prefix']}` ✅",
                     inline=True
                 )
             else:
                 embed.add_field(
-                    name="Server Prefix",
-                    value="Using default",
+                    name=server_prefix_name,
+                    value=not_set,
                     inline=True
                 )
 
         embed.add_field(
-            name="Default Prefix",
+            name=default_prefix_name,
             value=f"`{prefix_info['default_prefix']}`",
             inline=True
         )
 
-        priority_text = (
-            "**Priority Order:**\n"
-            "1. Personal prefix (highest)\n"
-            "2. Server prefix\n"
-            "3. Default prefix\n"
-            f"4. Mention: {self.bot.user.mention}"
-        )
         embed.add_field(
-            name="How It Works",
+            name=how_it_works,
             value=priority_text,
             inline=False
         )
         
-        # Commands help
-        commands_help = (
-            "`prefix set <prefix>` - Set your personal prefix\n"
-            "`prefix remove` - Remove your personal prefix\n"
-            "`prefix server <prefix>` - Set server prefix (Admin)\n"
-            "`prefix server reset` - Reset server prefix (Admin)"
-        )
         embed.add_field(
-            name="Commands",
+            name=commands_label,
             value=commands_help,
             inline=False
         )
         
         await ctx.send(embed=embed)
     
-    @prefix_group.command(name='set')
+    @prefix.command(name='set')
     async def set_user_prefix(self, ctx, *, prefix: str):
         """Set your personal prefix"""
-        success, message = await prefix_manager.set_user_prefix(ctx.author.id, prefix)
+        success = await prefix_manager.set_user_prefix(ctx.author.id, prefix)
         
         if success:
             title = await i18n.t(ctx, "prefix.set_success_title")
+            description = await i18n.t(ctx, "prefix.set_success", prefix=prefix)
             example_usage = await i18n.t(ctx, "prefix.example_usage")
             embed = discord.Embed(
                 title=title,
-                description=message,
+                description=description,
                 color=discord.Color.green()
             )
             embed.add_field(
                 name=example_usage,
-                value=f"`{prefix}help` or `{prefix}play music`",
+                value=f"`{prefix}help` | `{prefix}play music`",
                 inline=False
             )
         else:
             title = await i18n.t(ctx, "prefix.set_failed_title")
+            description = await i18n.t(ctx, "prefix.set_failed")
             embed = discord.Embed(
                 title=title,
-                description=message,
+                description=description,
                 color=discord.Color.red()
             )
         
         await ctx.send(embed=embed)
+        
     
-    @prefix_group.command(name='remove', aliases=['reset', 'delete'])
+    @prefix.command(name='remove', aliases=['reset', 'delete'])
     async def remove_user_prefix(self, ctx):
         """Remove your personal prefix"""
-        success, message = await prefix_manager.remove_user_prefix(ctx.author.id)
+        success = await prefix_manager.remove_user_prefix(ctx.author.id)
         
         if success:
             prefix_info = await prefix_manager.get_prefix_info(
@@ -137,78 +136,93 @@ class Prefix(commands.Cog):
             )
             
             title = await i18n.t(ctx, "prefix.remove_success_title")
+            description = await i18n.t(ctx, "prefix.remove_success", prefix=prefix_info['effective_prefix'])
             embed = discord.Embed(
                 title=title,
-                description=f"{message}\nNow using: `{prefix_info['effective_prefix']}`",
+                description=description,
                 color=discord.Color.green()
             )
         else:
             title = await i18n.t(ctx, "prefix.remove_failed_title")
+            description = await i18n.t(ctx, "prefix.remove_failed")
             embed = discord.Embed(
                 title=title,
-                description=message,
+                description=description,
                 color=discord.Color.orange()
             )
         
         await ctx.send(embed=embed)
     
-    @prefix_group.group(name='server', invoke_without_command=True)
+
+    @commands.hybrid_group(name='serverprefix', invoke_without_command=True)
+    async def serverprefix(self, ctx):
+        """Server prefix commands"""
+        pass
+    
+    @serverprefix.command(name='set')
     @commands.has_permissions(manage_guild=True)
-    async def server_prefix_group(self, ctx, *, prefix: str):
+    async def set_serverprefix(self, ctx, *, prefix: str):
         """Set server default prefix"""
-        success, message = await prefix_manager.set_guild_prefix(ctx.guild.id, prefix)
+        success = await prefix_manager.set_guild_prefix(ctx.guild.id, prefix)
         
         if success:
             title = await i18n.t(ctx, "prefix.server_set_success_title")
+            description = await i18n.t(ctx, "prefix.server_set_success", prefix=prefix)
+            note_name = await i18n.t(ctx, "prefix.note")
+            note_value = await i18n.t(ctx, "prefix.personal_prefix_note")
+            example_usage = await i18n.t(ctx, "prefix.example_usage")
             embed = discord.Embed(
                 title=title,
-                description=message,
+                description=description,
                 color=discord.Color.green()
             )
             embed.add_field(
-                name="Note",
-                value="Users with personal prefixes will still use their own prefix.",
+                name=note_name,
+                value=note_value,
                 inline=False
             )
             embed.add_field(
-                name="Example Usage",
+                name=example_usage,
                 value=f"`{prefix}help` or `{prefix}play music`",
                 inline=False
             )
         else:
             title = await i18n.t(ctx, "prefix.server_set_failed_title")
+            description = await i18n.t(ctx, "prefix.server_set_failed")
             embed = discord.Embed(
                 title=title,
-                description=message,
+                description=description,
                 color=discord.Color.red()
             )
         
         await ctx.send(embed=embed)
     
-    @server_prefix_group.command(name='reset', aliases=['remove', 'delete'])
+    @serverprefix.command(name='remove', aliases=['reset', 'delete'])
     @commands.has_permissions(manage_guild=True)
-    async def reset_server_prefix(self, ctx):
+    async def reset_serverprefix(self, ctx):
         """Reset server prefix to default"""
-        success, message = await prefix_manager.remove_guild_prefix(ctx.guild.id)
+        success = await prefix_manager.remove_guild_prefix(ctx.guild.id)
         
         if success:
             title = await i18n.t(ctx, "prefix.server_reset_success_title")
+            description = await i18n.t(ctx, "prefix.server_reset_success")
             embed = discord.Embed(
                 title=title,
-                description=message,
+                description=description,
                 color=discord.Color.green()
             )
         else:
             title = await i18n.t(ctx, "prefix.server_reset_failed_title")
+            description = await i18n.t(ctx, "prefix.server_reset_failed")
             embed = discord.Embed(
                 title=title,
-                description=message,
+                description=description,
                 color=discord.Color.orange()
             )
         
         await ctx.send(embed=embed)
     
-    @commands.command(name='myprefix')
+    @commands.hybrid_command(name='myprefix')
     async def my_prefix(self, ctx):
         """Quick command to show your current prefix"""
         effective_prefix = await prefix_manager.get_effective_prefix(
@@ -216,15 +230,15 @@ class Prefix(commands.Cog):
             ctx.guild.id if ctx.guild else None
         )
         
-        title = await i18n.t(ctx, "prefix.your_current_prefix_title")
+        title = await i18n.t(ctx, "prefix.your_current_prefix_title", prefix=effective_prefix)
         embed = discord.Embed(
             title=title,
-            description=f"`{effective_prefix}`",
             color=discord.Color.blue()
         )
+        example_name = await i18n.t(ctx, "prefix.example_usage")
         embed.add_field(
-            name="Example",
-            value=f"`{effective_prefix}help`",
+            name=example_name,
+            value=f"`{effective_prefix}help` | `{effective_prefix}play music`",
             inline=False
         )
         
@@ -242,19 +256,26 @@ class Prefix(commands.Cog):
                 message.guild.id if message.guild else None
             )
             
+            hello_title = await i18n.t(message, "prefix.hello", username=message.author.display_name)
+            my_prefix_desc = await i18n.t(message, "prefix.my_prefix_here", prefix=effective_prefix)
+            quick_start_name = await i18n.t(message, "prefix.quick_start")
+            help_command_value = await i18n.t(message, "prefix.help_command", prefix=effective_prefix)
+            mention_alt_value = await i18n.t(message, "prefix.mention_alternative", mention=self.bot.user.mention)
+            mention_alt_name = await i18n.t(message, "prefix.mention_alternative_title")
+
             embed = discord.Embed(
-                title=f"👋 Hello {message.author.display_name}!",
-                description=f"My prefix here is `{effective_prefix}`",
+                title=hello_title,
+                description=my_prefix_desc,
                 color=discord.Color.blue()
             )
             embed.add_field(
-                name="Quick Start",
-                value=f"`{effective_prefix}help` - Show all commands\n`{effective_prefix}prefix` - Manage prefixes",
+                name=quick_start_name,
+                value=help_command_value,
                 inline=False
             )
             embed.add_field(
-                name="Mention Alternative",
-                value=f"You can also use {self.bot.user.mention} as a prefix!",
+                name=mention_alt_name,
+                value=mention_alt_value,
                 inline=False
             )
             

@@ -47,66 +47,79 @@ class PrefixManager:
 
             if user_prefix:
                 prefixes.append(user_prefix)
-                return prefixes
 
         # Guild Prefix (Cache -> DB)
+        guild_prefix = None
         if message.guild:
             cache_key = self._get_cache_key('guild', message.guild.id)
             if cache_key in self._cache:
                 guild_prefix = self._cache[cache_key]
-                if guild_prefix:
-                    prefixes.append(guild_prefix)
-                    return prefixes
             else:
                 guild_prefix = await self.guild_prefix_model.get_guild_prefix(message.guild.id)
                 if guild_prefix:
                     self._update_cache('guild', message.guild.id, guild_prefix)
-                    prefixes.append(guild_prefix)
-                    return prefixes
+            
+            if guild_prefix and guild_prefix not in prefixes:
+                prefixes.append(guild_prefix)
 
         # fallback
-        prefixes.append(self.default_prefix)
-        return prefixes
+        if self.default_prefix not in prefixes:
+            prefixes.append(self.default_prefix)
 
-    async def set_user_prefix(self, user_id: int, prefix: str) -> tuple[bool, str]:
-        validation_result = self.validate_prefix(prefix)
-        if not validation_result[0]:
-            return validation_result
+        # (Edge case) Sort non-mention prefixes longest first (Discord.py checks prefixes in list order)
+        mention_prefixes = [p for p in prefixes if p.startswith('<@')]
+        text_prefixes = [p for p in prefixes if not p.startswith('<@')]
+        text_prefixes.sort(key=len, reverse=True)
+
+        final = mention_prefixes + text_prefixes
+        logger.debug(f"[PREFIX] Resolved for user={message.author.id}, guild={getattr(message.guild, 'id', None)}: user={user_prefix!r}, guild={guild_prefix!r}, final={text_prefixes}")
+        return final
+
+    async def set_user_prefix(self, user_id: int, prefix: str) -> bool:
+        valid, reason = self.validate_prefix(prefix)
+        if not valid:
+            logger.warning(f"[PREFIX] Invalid prefix '{prefix}' for user {user_id}: {reason}")
+            return False
 
         success = await self.user_prefix_model.set_user_prefix(user_id, prefix)
         if success:
-            self._update_cache('user', user_id, prefix)  # Update cache
-            return True, f"Personal prefix set to `{prefix}`"
+            self._update_cache('user', user_id, prefix)
+            logger.info(f"[PREFIX] User {user_id} set personal prefix to '{prefix}'")
         else:
-            return False, "Failed to save prefix to database"
+            logger.error(f"[PREFIX] Failed to save personal prefix for user {user_id}")
+        return success
 
-    async def set_guild_prefix(self, guild_id: int, prefix: str) -> tuple[bool, str]:
-        validation_result = self.validate_prefix(prefix)
-        if not validation_result[0]:
-            return validation_result
+    async def set_guild_prefix(self, guild_id: int, prefix: str) -> bool:
+        valid, reason = self.validate_prefix(prefix)
+        if not valid:
+            logger.warning(f"[PREFIX] Invalid prefix '{prefix}' for guild {guild_id}: {reason}")
+            return False
 
         success = await self.guild_prefix_model.set_guild_prefix(guild_id, prefix)
         if success:
-            self._update_cache('guild', guild_id, prefix)  # Update cache
-            return True, f"Server prefix set to `{prefix}`"
+            self._update_cache('guild', guild_id, prefix)
+            logger.info(f"[PREFIX] Guild {guild_id} set server prefix to '{prefix}'")
         else:
-            return False, "Failed to save prefix to database"
+            logger.error(f"[PREFIX] Failed to save server prefix for guild {guild_id}")
+        return success
 
-    async def remove_user_prefix(self, user_id: int) -> tuple[bool, str]:
+    async def remove_user_prefix(self, user_id: int) -> bool:
         success = await self.user_prefix_model.remove_user_prefix(user_id)
         if success:
-            self._invalidate_cache('user', user_id)  # Clear cache
-            return True, "Personal prefix removed"
+            self._invalidate_cache('user', user_id)
+            logger.info(f"[PREFIX] User {user_id} removed personal prefix")
         else:
-            return False, "No personal prefix was set"
+            logger.debug(f"[PREFIX] No personal prefix to remove for user {user_id}")
+        return success
 
-    async def remove_guild_prefix(self, guild_id: int) -> tuple[bool, str]:
+    async def remove_guild_prefix(self, guild_id: int) -> bool:
         success = await self.guild_prefix_model.remove_guild_prefix(guild_id)
         if success:
-            self._invalidate_cache('guild', guild_id)  # Clear cache
-            return True, f"Server prefix reset to default (`{self.default_prefix}`)"
+            self._invalidate_cache('guild', guild_id)
+            logger.info(f"[PREFIX] Guild {guild_id} reset server prefix to default")
         else:
-            return False, "No custom server prefix was set"
+            logger.debug(f"[PREFIX] No custom server prefix to reset for guild {guild_id}")
+        return success
 
     def validate_prefix(self, prefix: str) -> tuple[bool, str]:
         if not prefix:
@@ -129,10 +142,13 @@ class PrefixManager:
 
     async def get_effective_prefix(self, user_id: int, guild_id: int = None) -> str:
         user_prefix = await self.get_user_prefix(user_id)
-        if user_prefix: return user_prefix
+        if user_prefix: 
+            return user_prefix
+        
         if guild_id:
             guild_prefix = await self.get_guild_prefix(guild_id)
-            if guild_prefix: return guild_prefix
+            if guild_prefix: 
+                return guild_prefix
         return self.default_prefix
 
     async def get_prefix_info(self, user_id: int, guild_id: int = None) -> dict:
