@@ -1,11 +1,11 @@
 # Projeqt-Ayla 🎵
 
-Just another  Discord bot built with discord.py, MongoDB, and Lavalink for music streaming.
+Just another Discord bot built with discord.py, MongoDB, and Lavalink for music streaming.
 
 ## ✨ Features
 
 - 🎵 **Music System** - High-quality music playback powered by Lavalink
-- 🌐 **i18n Support** - English & Thai translations with smart locale priority
+- 🌐 **i18n Support** - Multi language with smart locale priority
 - 🗄️ **MongoDB Integration** - Persistent data storage
 - 🔧 **Modular Cog System** - Easy to extend and customize
 - 🎛️ **Static Music Channel** - Dedicated channel with persistent embed
@@ -169,6 +169,7 @@ Add your translations to the locale files in `locales/`:
   }
 }
 ```
+Note: don't forget to edit i18n.py and language.py if you add new language.
 
 ---
 
@@ -177,15 +178,16 @@ Add your translations to the locale files in `locales/`:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `PREFIX` | ✅ | Command prefix (default: `!`) |
-| `DISCORD_TOKEN` |  | Your Discord bot token |
+| `DISCORD_TOKEN` | ✅ | Your Discord bot token |
 | `MONGODB_URI` | ✅ | MongoDB connection string |
 | `OWNER_IDS` | ✅ | Bot owner Discord user IDs |
-| `LAVALINK_URI` | 🎵 | Lavalink server URI |
-| `LAVALINK_PASSWORD` | 🎵 | Lavalink server password |
+| `LAVALINK_URI` | ✅ | Lavalink server URI |
+| `LAVALINK_PASSWORD` | ✅ | Lavalink server password |
 | `LASTFM_API_KEY` | ❌ | Last.fm API key for scrobbling |
 | `LASTFM_API_SECRET` | ❌ | Last.fm API secret |
 | `BAR_URL` | ❌ | Bar image URL |
 | `MUSIC_BANNER_URL` | ❌ | Banner image URL |
+| `GITHUB_URL` | ❌ | GitHub repository URL |
 
 ---
 
