@@ -164,6 +164,10 @@ class DiscordBot(commands.Bot):
             except discord.HTTPException:
                 pass
         
+        if isinstance(error, app_commands.CommandNotFound):
+            await send_error("⚠️ This command is outdated. Please try again — it should update shortly!")
+            return
+        
         if isinstance(error, app_commands.CommandOnCooldown):
             await send_error(f"⏳ Command on cooldown. Try again in {error.retry_after:.1f}s")
         
