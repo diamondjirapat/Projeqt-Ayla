@@ -471,7 +471,7 @@
     }
   },
   "reactionrole": {
-    "help": "**Reaction Roles Commands:**\n`!reactionrole add <message_id> <emoji> <role>` - Add a reaction role\n`!reactionrole remove <message_id> [emoji]` - Remove reaction role(s)\n`!reactionrole list` - List all reaction roles\n`!reactionrole create <channel> <title> [description]` - Create a new reaction role message\n`!reactionrole update <message_id>` - Update message to show roles\n`!reactionrole reload` - Reload from database\n`!reactionrole debug [message_id]` - Debug information",
+    "help": "**Reaction Roles Commands:**\n`!reactionrole add <message_id> <emoji> <role>` - Add a reaction role\n`!reactionrole remove <message_id> [emoji]` - Remove reaction role(s)\n`!reactionrole list` - List all reaction roles\n`!reactionrole create <channel> <title> [description]` - Create a new reaction role message\n`!reactionrole update <message_id>` - Update message to show roles\n`!reactionrole edit <message_id> [title] [description]` - Edit message title/description",
     "add": {
       "invalid_message_id": "❌ Invalid message ID. Please provide a valid number.",
       "role_too_high": "❌ I cannot assign this role because it's higher than my highest role.",
@@ -494,6 +494,12 @@
       "success": "✅ Reaction role message created in {channel}!\nMessage ID: `{message_id}`\nUse `!reactionrole add {message_id} <emoji> <role>` to add roles.",
       "no_permission": "❌ I don't have permission to send messages in that channel.",
       "failed": "❌ Failed to create message: {error}"
+    },
+    "edit": {
+      "success": "✅ Successfully updated the embed for message `{msg_id}`.",
+      "no_embed": "❌ This message doesn't have an embed to edit.",
+      "forbidden": "❌ I don't have permission to edit this message. Ensure it was sent by me.",
+      "failed": "❌ Failed to edit message: {error}"
     },
     "errors": {
       "no_permission": "❌ You need the 'Manage Roles' permission to use this command.",
@@ -594,6 +600,7 @@
     "reactionrole list": "List all reaction roles in this server",
     "reactionrole create": "Create a new reaction role message",
     "reactionrole update": "Update a reaction role message embed",
+    "reactionrole edit": "Edit the title or description of a reaction role message",
     "autorole": "View current auto-role settings",
     "autorole set": "Set the auto-role for new members",
     "autorole remove": "Remove the auto-role",

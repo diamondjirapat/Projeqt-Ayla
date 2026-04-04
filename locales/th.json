@@ -281,11 +281,11 @@
       "settings_volume_100": "🔊 ความดัง: 100%",
       "settings_save_user": "💾 เก็บเข้าเพลย์ลิสต์ส่วนตัว",
       "settings_save_server": "📁 เก็บเข้าเพลย์ลิสต์เซิร์ฟเวอร์",
-      "settings_autoplay_enabled": "✅ เปิดโหมดเล่นเพลงเรื่อยๆ (Autoplay) แล้วจ้า",
+      "settings_autoplay_enabled": "✅ เปิดโหมดเล่นเพลงเรื่อยๆ (Autoplay)",
       "settings_autoplay_disabled": "❌ ปิดโหมดเล่นเพลงเรื่อยๆ แล้วน้า",
       "settings_247_enabled": "✅ เปิดโหมดอยู่ยาว 24/7 แล้ว! เราจะไม่ไปไหน",
       "settings_247_disabled": "❌ ปิดโหมด 24/7 แล้ว ถ้าว่างเดี๋ยวเราขอตัวไปนอนน้า",
-      "settings_volume_set": "🔊 ปรับความดังเป็น {volume}% แล้วจ้า",
+      "settings_volume_set": "🔊 ปรับความดังเป็น {volume}%",
       "settings_saved_user": "💾 เก็บเพลง **{title}** ลงเพลย์ลิสต์ส่วนตัว `{name}` เรียบร้อย!",
       "settings_saved_server": "📁 เก็บเพลง **{title}** ลงเพลย์ลิสต์เซิร์ฟเวอร์ `{name}` เรียบร้อย!",
       "settings_no_track": "❌ ตอนนี้ไม่มีเพลงเล่นอยู่น้า จะให้เซฟอะไรล่ะเนี่ย",
@@ -471,13 +471,13 @@
     }
   },
   "reactionrole": {
-    "help": "**คู่มือคำสั่ง Reaction Roles แจกยศ:**\n`!reactionrole add <message_id> <emoji> <role>` - เพิ่มอิโมจิแจกยศ\n`!reactionrole remove <message_id> [emoji]` - ลบอิโมจิแจกยศ\n`!reactionrole list` - ดูรายชื่อที่มีคนตั้งไว้ทั้งหมด\n`!reactionrole create <channel> <title> [description]` - สร้างข้อความสำหรับกดรับยศใหม่เลย\n`!reactionrole update <message_id>` - อัปเดตข้อความให้สวยงามพร้อมแสดงยศ\n`!reactionrole reload` - โหลดข้อมูลจากฐานข้อมูลใหม่\n`!reactionrole debug [message_id]` - เช็คข้อมูลหลังบ้านสำหรับนักพัฒนา",
+    "help": "**คู่มือคำสั่ง Reaction Roles แจกยศ:**\n`!reactionrole add <message_id> <emoji> <role>` - เพิ่มอิโมจิแจกยศ\n`!reactionrole remove <message_id> [emoji]` - ลบอิโมจิแจกยศ\n`!reactionrole list` - ดูรายชื่อที่มีคนตั้งไว้ทั้งหมด\n`!reactionrole create <channel> <title> [description]` - สร้างข้อความสำหรับกดรับยศใหม่เลย\n`!reactionrole update <message_id>` - อัปเดตข้อความให้สวยงามพร้อมแสดงยศ\n`!reactionrole edit <message_id> [title] [description]` - แก้ไขหัวข้อหรือรายละเอียดของข้อความ",
     "add": {
       "invalid_message_id": "❌ ID ข้อความไม่ถูกต้องน้า ต้องใส่เป็นตัวเลขล้วนๆ จ้า",
       "role_too_high": "❌ แง เราแจกยศนี้ให้ไม่ได้ เพราะยศนี้สูงกว่ายศสูงสุดของเราอ่า",
       "message_not_found": "❌ หาข้อความนี้ไม่เจอเลย ตรวจสอบ ID ให้ชัวร์ๆ ว่าอยู่ในเซิร์ฟเวอร์นี้นะ",
       "invalid_emoji": "❌ อิโมจินี้ใช้ไม่ได้น้า ลองใช้อิโมจิอื่นดูนะ",
-      "success": "✅ ผูกอิโมจิให้แล้ว! กด {emoji} จะได้ยศ {role} (ที่ข้อความ {message_id})",
+      "success": "✅ เรียบร้อย! {emoji} จะได้ยศ {role} (ที่ข้อความID {message_id})",
       "success_update": "✅ อัปเดตข้อความ {message_id} ให้โชว์ปุ่มแจกยศ {count} อันเรียบร้อย!"
     },
     "remove": {
@@ -494,6 +494,12 @@
       "success": "✅ สร้างข้อความสำหรับกดรับยศในห้อง {channel} เรียบร้อย!\nID ข้อความคือ: `{message_id}`\nอย่าลืมเอาไปใช้พิมพ์ `!reactionrole add {message_id} <emoji> <role>` เพื่อเพิ่มยศด้วยน้า",
       "no_permission": "❌ เราไม่มีสิทธิ์ส่งข้อความในห้องนั้นอ่า",
       "failed": "❌ สร้างข้อความไม่ได้เลย: {error}"
+    },
+    "edit": {
+      "success": "✅ อัปเดตข้อความ `{msg_id}` เรียบร้อย!",
+      "no_embed": "❌ ข้อความนี้ไม่มี Embed ให้แก้",
+      "forbidden": "❌ บอทไม่มีสิทธิ์แก้ข้อความนี้ ต้องเป็นข้อความที่บอทส่งเองเท่านั้น",
+      "failed": "❌ แก้ข้อความล้มเหลว: {error}"
     },
     "errors": {
       "no_permission": "❌ คุณต้องมีสิทธิ์ 'จัดการยศ' ก่อนน้าถึงจะทำแบบนี้ได้",
@@ -594,6 +600,7 @@
     "reactionrole list": "ดูรายการอิโมจิแจกยศทั้งหมด",
     "reactionrole create": "สร้างข้อความสำหรับกดรับยศใหม่",
     "reactionrole update": "อัปเดตข้อความกดรับยศให้แสดงยศ",
+    "reactionrole edit": "แก้ไขหัวข้อหรือรายละเอียดของข้อความ",
     "autorole": "ดูการตั้งค่าแจกยศอัตโนมัติ",
     "autorole set": "ตั้งค่ายศอัตโนมัติให้คนเข้าใหม่",
     "autorole remove": "ยกเลิกการแจกยศอัตโนมัติ",
