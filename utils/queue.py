@@ -40,6 +40,10 @@ class CustomQueue(pomice.Queue):
         """Return a copy of the queue."""
         return list(self._queue)
 
+    def put_at(self, index: int, item: pomice.Track):
+        """Insert a track at a specific index (0-based)."""
+        self._queue.insert(index, item)
+
 
 class CustomPlayer(pomice.Player):
     """
