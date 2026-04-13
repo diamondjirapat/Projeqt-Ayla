@@ -354,6 +354,10 @@
         "skipped": "⏭️ Skipped",
         "nothing_playing": "❌ Nothing is playing"
       },
+      "skipto": {
+        "success": "⏭️ Skipped to position **{position}**: **{title}**",
+        "invalid_position": "❌ Invalid position. Please use a number between 1 and {max}."
+      },
       "seek": {
         "success": "⏩ Seeked to **{position}**",
         "invalid_format": "❌ Invalid format. Use: `1:30`, `90`, or `1:30:00`",
@@ -467,7 +471,9 @@
       "command_error": "❌ An error occurred: {error}",
       "no_nodes": "❌ No connected music nodes found.",
       "no_history": "❌ No previous songs in history.",
-      "voice_channel_mismatch": "❌ You must be in the same voice channel as the bot to use this command."
+      "voice_channel_mismatch": "❌ You must be in the same voice channel as the bot to use this command.",
+      "session_died": "The music session expired due to a server restart. I have disconnected, please try your command again!",
+      "node_offline": "Music server is currently offline."
     }
   },
   "reactionrole": {
@@ -574,6 +580,7 @@
     "serverplaylist import": "Import a playlist for the server",
     "previous": "Play the previous song",
     "skip": "Skip the current song",
+    "skipto": "Skip to a specific song in the queue",
     "seek": "Seek to a specific position in the current track",
     "stop": "Stop playback and disconnect",
     "queue": "Show the current queue",
