@@ -102,13 +102,19 @@ class Music(commands.Cog):
         if len(self.autoplay_played_uris[guild_id]) > 50:
             self.autoplay_played_uris[guild_id] = set(list(self.autoplay_played_uris[guild_id])[-50:])
 
-        query = f"{last_track.author}"
-        logger.info(f"[AUTOPLAY] Searching for tracks by: {query}")
+        logger.info(f"[AUTOPLAY RECOMMENDATION] Fetching recommendations: '{last_track.title}' by {last_track.author}")
 
         try:
-            tracks = await player.get_tracks(query)
+            tracks = await player.get_recommendations(track=last_track)
+            
+            # Fallback
             if not tracks:
-                logger.info("[AUTOPLAY] No tracks found")
+                logger.info("[AUTOPLAY RECOMMENDATION] No recommendations found, falling back to author search.")
+                query = f"{last_track.author}"
+                tracks = await player.get_tracks(query)
+
+            if not tracks:
+                logger.info("[AUTOPLAY FALLBACK] No tracks found")
                 return None
 
             if isinstance(tracks, pomice.Playlist):
@@ -120,7 +126,7 @@ class Music(commands.Cog):
                 if track.title.lower() == last_track.title.lower():
                     continue
                 track.requester = "AutoPlay 🎵"
-                logger.info(f"[AUTOPLAY] Selected: '{track.title}' by {track.author}")
+                logger.info(f"[AUTOPLAY FALLBACK] Selected: '{track.title}' by {track.author}")
                 return track
             
             return None
