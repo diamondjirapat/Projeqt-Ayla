@@ -347,34 +347,57 @@ class Music(commands.Cog):
             player.history = []
 
         if reason.upper() not in ("LOAD_FAILED", "CLEANUP", "REPLACED"):
-            player.history.append(track)
-            autoplay_on = getattr(player, 'autoplay_enabled', False)
-            queue_empty = player.queue.is_empty
-            logger.info(f"[TRACK_END] autoplay={autoplay_on}, queue_empty={queue_empty}, is_playing={player.is_playing}")
-            if autoplay_on:
-                if queue_empty:
-                    await asyncio.sleep(0.5) # wait to avoid infinite skip loop
-                    if player.queue.is_empty and not player.is_playing:
-                        logger.info(f"[AUTOPLAY] Fetching recommendation based on: '{track.title}' by {track.author}")
-                        recommended = await self._fetch_autoplay_track(player, track)
-                        if recommended:
-                            logger.info(f"[AUTOPLAY] Playing '{recommended.title}' by {recommended.author}")
-                            vol = await self.guild_model.get_default_volume(player.guild.id)
-                            await player.set_volume(vol)
-                            await player.play(recommended)
-                        else:
-                            logger.info("[AUTOPLAY] No recommendation found, starting timeout")
-                            self.start_timeout(player.guild.id, player)
-                            await self.update_static_embed(player.guild.id)
-                else:
-                    next_track = player.queue.get()
-                    logger.info(f"[AUTOPLAY] Queue not empty, playing next: '{next_track.title}'")
-                    await player.play(next_track)
-            elif not queue_empty:
-                await player.play(player.queue.get())
+            # Avoid duplicate history entries when looping the same track
+            if not player.history or player.history[-1] is not track:
+                player.history.append(track) 
+
+            if player.queue.loop_mode == pomice.LoopMode.TRACK and reason.upper() == "FINISHED":
+                logger.info(f"[TRACK_END] Track loop active, replaying: '{track.title}'")
+                next_track = player.queue.get()
+                vol = await self.guild_model.get_default_volume(player.guild.id)
+                await player.set_volume(vol)
+                await player.play(next_track)
             else:
-                self.start_timeout(player.guild.id, player)
-                await self.update_static_embed(player.guild.id)
+                autoplay_on = getattr(player, 'autoplay_enabled', False)
+                # User skip when loop is on 
+                if player.queue.loop_mode == pomice.LoopMode.TRACK:
+                    queue_empty = not bool(player.queue._queue)
+                else:
+                    queue_empty = player.queue.is_empty
+                logger.info(f"[TRACK_END] autoplay={autoplay_on}, queue_empty={queue_empty}, is_playing={player.is_playing}")
+                if autoplay_on:
+                    if queue_empty:
+                        await asyncio.sleep(0.5) # wait to avoid infinite skip loop
+                        if player.queue.is_empty and not player.is_playing:
+                            logger.info(f"[AUTOPLAY] Fetching recommendation based on: '{track.title}' by {track.author}")
+                            recommended = await self._fetch_autoplay_track(player, track)
+                            if recommended:
+                                logger.info(f"[AUTOPLAY] Playing '{recommended.title}' by {recommended.author}")
+                                vol = await self.guild_model.get_default_volume(player.guild.id)
+                                await player.set_volume(vol)
+                                await player.play(recommended)
+                            else:
+                                logger.info("[AUTOPLAY] No recommendation found, starting timeout")
+                                self.start_timeout(player.guild.id, player)
+                                await self.update_static_embed(player.guild.id)
+                    else:
+                        if player.queue.loop_mode == pomice.LoopMode.TRACK:
+                            next_track = player.queue._get()
+                            player.queue._current_item = next_track
+                        else:
+                            next_track = player.queue.get()
+                        logger.info(f"[AUTOPLAY] Queue not empty, playing next: '{next_track.title}'")
+                        await player.play(next_track)
+                elif not queue_empty:
+                    if player.queue.loop_mode == pomice.LoopMode.TRACK:
+                        next_track = player.queue._get()
+                        player.queue._current_item = next_track
+                    else:
+                        next_track = player.queue.get()
+                    await player.play(next_track)
+                else:
+                    self.start_timeout(player.guild.id, player)
+                    await self.update_static_embed(player.guild.id)
 
         if reason.lower() == "finished" and player.channel:
             member_ids = [m.id for m in player.channel.members if not m.bot]
@@ -2705,6 +2728,11 @@ class QueuePaginationView(discord.ui.View):
         history = list(player.history) if hasattr(player, 'history') else []
         current = [player.current] if player.current else []
         queue = list(player.queue)
+
+        # Remove duplicate for display
+        if player.queue.loop_mode == pomice.LoopMode.QUEUE:
+            if current and current[0] in queue:
+                queue.remove(current[0])
 
         self.full_playlist = history + current + queue
         self.current_index = len(history) if current else -1
