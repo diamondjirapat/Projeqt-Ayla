@@ -44,6 +44,18 @@ class CustomQueue(pomice.Queue):
         """Insert a track at a specific index (0-based)."""
         self._queue.insert(index, item)
 
+    def set_loop_mode(self, mode: pomice.LoopMode) -> None:
+        """Override set_loop_mode to fix queue retention when cycling modes."""
+        if self._loop_mode == pomice.LoopMode.QUEUE and mode != pomice.LoopMode.QUEUE:
+            try:
+                index = self.find_position(self._current_item) + 1
+                self._queue = self._queue[index:]
+            except ValueError:
+                pass
+            except AttributeError:
+                pass
+        super().set_loop_mode(mode)
+
 
 class CustomPlayer(pomice.Player):
     """
