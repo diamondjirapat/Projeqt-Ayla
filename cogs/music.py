@@ -19,6 +19,31 @@ from utils.queue import CustomPlayer
 
 logger = logging.getLogger(__name__)
 
+
+def build_queue_timeline(player):
+    history = list(player.history) if hasattr(player, "history") else []
+    current = [player.current] if player.current else []
+
+    if hasattr(player.queue, "to_list"):
+        queue = player.queue.to_list()
+    else:
+        queue = list(player.queue)
+
+    history_ids = {id(track) for track in history}
+    timeline = [(track, "Played") for track in history]
+
+    if current:
+        timeline.append((current[0], "Now"))
+
+    for track in queue:
+        status = "Loop" if player.queue.loop_mode == pomice.LoopMode.QUEUE and id(track) in history_ids else "Next"
+        timeline.append((track, status))
+
+    current_index = len(history) if current else -1
+    queue_start_index = len(history) + len(current)
+    return timeline, current_index, queue_start_index
+
+
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -1676,13 +1701,17 @@ class Music(commands.Cog):
 
         previous_track = player.history[-1]
 
-        if player.current:
-            player.queue.put_at(0, player.current)
+        if player.queue.loop_mode == pomice.LoopMode.QUEUE:
+            player.history.pop()
+            await player.play(previous_track)
+        else:
+            if player.current:
+                player.queue.put_at(0, player.current)
 
-        player.history.pop()
-        player.queue.put_at(0, previous_track)
+            player.history.pop()
+            player.queue.put_at(0, previous_track)
 
-        await player.stop()
+            await player.stop()
 
         msg = await i18n.t(ctx, "music.commands.previous.playing", title=previous_track.title)
         await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -1730,18 +1759,37 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.commands.skip.nothing_playing")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-        queue_length = len(player.queue.to_list())
-        if position < 1 or position > queue_length:
-            msg = await i18n.t(ctx, "music.commands.skipto.invalid_position", position=position, max=queue_length)
+        timeline, current_index, queue_start_index = build_queue_timeline(player)
+        if position < 1 or position > len(timeline):
+            msg = await i18n.t(ctx, "music.commands.skipto.invalid_position", position=position, max=len(timeline))
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-        for _ in range(position - 1):
-            player.queue.remove_at(0)
+        target_index = position - 1
+        target_track, _ = timeline[target_index]
 
-        target_track = player.queue.to_list()[0] if not player.queue.is_empty else None
-        target_title = target_track.title if target_track else "Unknown"
+        if target_index == current_index:
+            target_title = target_track.title
+        else:
+            if player.current and player.current is not target_track:
+                if not hasattr(player, "history"):
+                    player.history = []
+                if not player.history or player.history[-1] is not player.current:
+                    player.history.append(player.current)
 
-        await player.stop()
+            if player.queue.loop_mode == pomice.LoopMode.QUEUE:
+                await player.play(target_track)
+                target_title = target_track.title
+            elif target_index >= queue_start_index:
+                queue_index = target_index - queue_start_index
+                for _ in range(queue_index):
+                    player.queue.remove_at(0)
+
+                target_track = player.queue.remove_at(0)
+                target_title = target_track.title
+                await player.play(target_track)
+            else:
+                target_title = target_track.title
+                await player.play(target_track)
 
         msg = await i18n.t(ctx, "music.commands.skipto.success", position=position, title=target_title)
         await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -1899,7 +1947,12 @@ class Music(commands.Cog):
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
         try:
-            player.queue.move(index_from - 1, index_to - 1)
+            _, _, queue_start_index = build_queue_timeline(player)
+            queue_start_position = queue_start_index + 1
+            if index_from < queue_start_position or index_to < queue_start_position:
+                raise IndexError
+
+            player.queue.move(index_from - queue_start_position, index_to - queue_start_position)
             msg = await i18n.t(ctx, "music.commands.move.success", from_index=index_from, to_index=index_to)
             await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
             await self.update_static_embed(ctx.guild.id)
@@ -1920,7 +1973,12 @@ class Music(commands.Cog):
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
         try:
-            removed_track = player.queue.remove_at(index - 1)
+            _, _, queue_start_index = build_queue_timeline(player)
+            queue_start_position = queue_start_index + 1
+            if index < queue_start_position:
+                raise IndexError
+
+            removed_track = player.queue.remove_at(index - queue_start_position)
             msg = await i18n.t(ctx, "music.commands.remove.success", title=removed_track.title)
             await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
             await self.update_static_embed(ctx.guild.id)
@@ -2674,6 +2732,10 @@ class NowPlayingView(discord.ui.View):
             return await interaction.followup.send(msg, ephemeral=True)
 
         previous_track = self.player.history.pop()
+        if self.player.queue.loop_mode == pomice.LoopMode.QUEUE:
+            await self.player.play(previous_track)
+            return
+
         if self.player.is_playing:
             current_track = self.player.current
             self.player.queue.put_at(0, current_track)
@@ -2725,17 +2787,7 @@ class QueuePaginationView(discord.ui.View):
         self.per_page = per_page
         self.locale = locale
 
-        history = list(player.history) if hasattr(player, 'history') else []
-        current = [player.current] if player.current else []
-        queue = list(player.queue)
-
-        # Remove duplicate for display
-        if player.queue.loop_mode == pomice.LoopMode.QUEUE:
-            if current and current[0] in queue:
-                queue.remove(current[0])
-
-        self.full_playlist = history + current + queue
-        self.current_index = len(history) if current else -1
+        self.full_playlist, self.current_index, _ = build_queue_timeline(player)
 
         self.total_pages = max(1, (len(self.full_playlist) + per_page - 1) // per_page)
 
@@ -2766,14 +2818,14 @@ class QueuePaginationView(discord.ui.View):
         title_with_count = i18n.get_text("music.commands.queue_view.title_with_count", self.locale, title=self.title, count=len(self.full_playlist))
         embed = discord.Embed(title=title_with_count, color=discord.Color.blue())
         queue_list = ""
-        for i, track in enumerate(current_items):
+        for i, (track, status) in enumerate(current_items):
             global_index = start + i
             num = global_index + 1
 
             if global_index == self.current_index:
-                line = f"▶️ **{num}. [{track.title}]({track.uri}) - {track.author}**"
+                line = f"[{status}] **{num}. [{track.title}]({track.uri}) - {track.author}**"
             else:
-                line = f"{num}. [{track.title}]({track.uri}) - {track.author}"
+                line = f"[{status}] {num}. [{track.title}]({track.uri}) - {track.author}"
 
             queue_list += line + "\n"
         
