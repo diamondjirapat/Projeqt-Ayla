@@ -15,7 +15,7 @@ from config import Config
 from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 from utils.lastfm import lastfm_handler
-from utils.queue import CustomPlayer
+from utils.queue import CustomPlayer, CustomQueue, LoopMode, QueueEmpty, QueueException, QueueFull
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +23,7 @@ logger = logging.getLogger(__name__)
 def build_queue_timeline(player):
     history = list(player.history) if hasattr(player, "history") else []
     current = [player.current] if player.current else []
-
-    if hasattr(player.queue, "to_list"):
-        queue = player.queue.to_list()
-    else:
-        queue = list(player.queue)
+    queue = player.queue.to_list()
 
     history_ids = {id(track) for track in history}
     timeline = [(track, "Played") for track in history]
@@ -36,7 +32,7 @@ def build_queue_timeline(player):
         timeline.append((current[0], "Now"))
 
     for track in queue:
-        status = "Loop" if player.queue.loop_mode == pomice.LoopMode.QUEUE and id(track) in history_ids else "Next"
+        status = "Loop" if player.queue.loop_mode == LoopMode.QUEUE and id(track) in history_ids else "Next"
         timeline.append((track, status))
 
     current_index = len(history) if current else -1
@@ -376,7 +372,7 @@ class Music(commands.Cog):
             if not player.history or player.history[-1] is not track:
                 player.history.append(track) 
 
-            if player.queue.loop_mode == pomice.LoopMode.TRACK and reason.upper() == "FINISHED":
+            if player.queue.loop_mode == LoopMode.TRACK and reason.upper() == "FINISHED":
                 logger.info(f"[TRACK_END] Track loop active, replaying: '{track.title}'")
                 next_track = player.queue.get()
                 vol = await self.guild_model.get_default_volume(player.guild.id)
@@ -384,11 +380,7 @@ class Music(commands.Cog):
                 await player.play(next_track)
             else:
                 autoplay_on = getattr(player, 'autoplay_enabled', False)
-                # User skip when loop is on 
-                if player.queue.loop_mode == pomice.LoopMode.TRACK:
-                    queue_empty = not bool(player.queue._queue)
-                else:
-                    queue_empty = player.queue.is_empty
+                queue_empty = player.queue.is_empty
                 logger.info(f"[TRACK_END] autoplay={autoplay_on}, queue_empty={queue_empty}, is_playing={player.is_playing}")
                 if autoplay_on:
                     if queue_empty:
@@ -406,19 +398,11 @@ class Music(commands.Cog):
                                 self.start_timeout(player.guild.id, player)
                                 await self.update_static_embed(player.guild.id)
                     else:
-                        if player.queue.loop_mode == pomice.LoopMode.TRACK:
-                            next_track = player.queue._get()
-                            player.queue._current_item = next_track
-                        else:
-                            next_track = player.queue.get()
+                        next_track = player.queue.get(force_next=True)
                         logger.info(f"[AUTOPLAY] Queue not empty, playing next: '{next_track.title}'")
                         await player.play(next_track)
                 elif not queue_empty:
-                    if player.queue.loop_mode == pomice.LoopMode.TRACK:
-                        next_track = player.queue._get()
-                        player.queue._current_item = next_track
-                    else:
-                        next_track = player.queue.get()
+                    next_track = player.queue.get(force_next=True)
                     await player.play(next_track)
                 else:
                     self.start_timeout(player.guild.id, player)
@@ -1701,7 +1685,7 @@ class Music(commands.Cog):
 
         previous_track = player.history[-1]
 
-        if player.queue.loop_mode == pomice.LoopMode.QUEUE:
+        if player.queue.loop_mode == LoopMode.QUEUE:
             player.history.pop()
             await player.play(previous_track)
         else:
@@ -1776,7 +1760,7 @@ class Music(commands.Cog):
                 if not player.history or player.history[-1] is not player.current:
                     player.history.append(player.current)
 
-            if player.queue.loop_mode == pomice.LoopMode.QUEUE:
+            if player.queue.loop_mode == LoopMode.QUEUE:
                 await player.play(target_track)
                 target_title = target_track.title
             elif target_index >= queue_start_index:
@@ -2702,11 +2686,11 @@ class NowPlayingView(discord.ui.View):
             self.play_pause_button.style = discord.ButtonStyle.secondary
             self.play_pause_button.emoji = "⏸️"
 
-        if self.player.queue.loop_mode == pomice.LoopMode.TRACK:
+        if self.player.queue.loop_mode == LoopMode.TRACK:
             self.loop_button.style = discord.ButtonStyle.primary
             self.loop_button.emoji = "🔂"
             self.loop_button.label = i18n.get_text("music.ui.loop_track", locale)
-        elif self.player.queue.loop_mode == pomice.LoopMode.QUEUE:
+        elif self.player.queue.loop_mode == LoopMode.QUEUE:
             self.loop_button.style = discord.ButtonStyle.success
             self.loop_button.emoji = "🔁"
             self.loop_button.label = i18n.get_text("music.ui.loop_queue", locale)
@@ -2732,7 +2716,7 @@ class NowPlayingView(discord.ui.View):
             return await interaction.followup.send(msg, ephemeral=True)
 
         previous_track = self.player.history.pop()
-        if self.player.queue.loop_mode == pomice.LoopMode.QUEUE:
+        if self.player.queue.loop_mode == LoopMode.QUEUE:
             await self.player.play(previous_track)
             return
 
@@ -2769,9 +2753,9 @@ class NowPlayingView(discord.ui.View):
     @discord.ui.button(label="Loop", style=discord.ButtonStyle.secondary, emoji="🔁")
     async def loop_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.player.queue.is_looping:
-            self.player.queue.set_loop_mode(pomice.LoopMode.QUEUE)
-        elif self.player.queue.loop_mode == pomice.LoopMode.QUEUE:
-            self.player.queue.set_loop_mode(pomice.LoopMode.TRACK)
+            self.player.queue.set_loop_mode(LoopMode.QUEUE)
+        elif self.player.queue.loop_mode == LoopMode.QUEUE:
+            self.player.queue.set_loop_mode(LoopMode.TRACK)
         else:
             self.player.queue.disable_loop()
 

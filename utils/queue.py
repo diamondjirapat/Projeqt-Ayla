@@ -1,218 +1,153 @@
-import pomice
+from __future__ import annotations
+
 import random
-from typing import List, Optional
+from enum import Enum
+from typing import Any, Iterable, List, Optional
+import pomice
 
-class CustomQueue(pomice.Queue):
+
+class LoopMode(Enum):
+    OFF = 0
+    NONE = 0
+    TRACK = 1
+    QUEUE = 2
+
+
+class QueueException(Exception):
+    """Base exception for queue operations."""
+    pass
+
+
+class QueueEmpty(QueueException):
+    """Exception raised when getting an item from an empty queue."""
+    pass
+
+
+class QueueFull(QueueException):
+    """Exception raised when putting an item into a full queue."""
+    pass
+
+
+class CustomQueue:
     """
-    Extended Pomice queue with safe utilities.
-
-    Pomice stores the current track inside _queue for QUEUE loop mode. That
-    makes the currently playing track appear as a duplicate queued item. This
-    queue keeps _queue as the visible upcoming queue and stores the loop cycle
-    separately.
+    Standalone custom Queue system.
+    Replaces pomice.Queue completely while maintaining intuitive behavior for
+    LoopMode.OFF, LoopMode.TRACK, and LoopMode.QUEUE.
     """
-
-    __slots__ = ("_loop_items",)
 
     def __init__(self, max_size: Optional[int] = None, *, overflow: bool = True):
-        super().__init__(max_size=max_size, overflow=overflow)
-        self._loop_items: List[pomice.Track] = []
+        self.max_size: Optional[int] = max_size
+        self._overflow: bool = overflow
+        self._queue: List[Any] = []
+        self._current: Optional[Any] = None
+        self._loop_mode: LoopMode = LoopMode.OFF
 
-    def _current(self) -> Optional[pomice.Track]:
-        return getattr(self, "_current_item", None)
+    @property
+    def current(self) -> Optional[Any]:
+        """Return the currently playing track."""
+        return self._current
 
-    @staticmethod
-    def _find_item_index(items: List[pomice.Track], item: pomice.Track) -> int:
-        for index, candidate in enumerate(items):
-            if candidate is item:
-                return index
-        return items.index(item)
+    @property
+    def _current_item(self) -> Optional[Any]:
+        """Backward compatibility property for internal access to current item."""
+        return self._current
 
-    def _build_loop_items(self) -> None:
-        current = self._current()
-        items: List[pomice.Track] = []
+    @_current_item.setter
+    def _current_item(self, item: Optional[Any]) -> None:
+        self._current = item
 
-        if current:
-            items.append(current)
+    @property
+    def loop_mode(self) -> LoopMode:
+        """Return the current loop mode."""
+        return self._loop_mode
 
-        for track in self._queue:
-            if track is not current:
-                items.append(track)
+    @property
+    def is_looping(self) -> bool:
+        """Check if any loop mode is enabled."""
+        return self._loop_mode != LoopMode.OFF and self._loop_mode != LoopMode.NONE
 
-        self._loop_items = items
+    @property
+    def count(self) -> int:
+        """Return the number of upcoming items in the queue."""
+        return len(self._queue)
 
-    def _sync_queue_from_loop(self, *, wrap: bool) -> None:
-        if self._loop_mode != pomice.LoopMode.QUEUE:
-            return
+    @property
+    def is_empty(self) -> bool:
+        """Check if the queue has no upcoming items."""
+        return len(self._queue) == 0
 
-        if not self._loop_items:
-            self._queue = []
-            return
-
-        current = self._current()
-        if current is None:
-            self._queue = list(self._loop_items)
-            return
-
-        try:
-            index = self._find_item_index(self._loop_items, current)
-        except ValueError:
-            self._loop_items.insert(0, current)
-            index = 0
-
-        if wrap:
-            self._queue = self._loop_items[index + 1:] + self._loop_items[:index]
-        else:
-            self._queue = self._loop_items[index + 1:]
-
-    def _loop_index_from_visible_index(self, index: int) -> int:
-        current = self._current()
-        if current is None:
-            return index
-
-        current_index = self._find_item_index(self._loop_items, current)
-        before_wrap_count = len(self._loop_items) - current_index - 1
-
-        if index < before_wrap_count:
-            return current_index + 1 + index
-        return index - before_wrap_count
-
-    def _loop_insert_index_from_visible_index(self, index: int) -> int:
-        current = self._current()
-        if current is None:
-            return index
-
-        current_index = self._find_item_index(self._loop_items, current)
-        before_wrap_count = len(self._loop_items) - current_index - 1
-
-        if index <= before_wrap_count:
-            return current_index + 1 + index
-        return index - before_wrap_count
+    @property
+    def is_full(self) -> bool:
+        """Check if the queue is full."""
+        if self.max_size is None:
+            return False
+        return len(self._queue) >= self.max_size
 
     def _ensure_room(self) -> None:
         if not self.is_full:
             return
 
         if not self._overflow:
-            raise pomice.QueueFull(
-                f"Queue max_size of {self.max_size} has been reached.",
-            )
+            raise QueueFull(f"Queue max_size of {self.max_size} has been reached.")
 
-        if self._loop_mode == pomice.LoopMode.QUEUE and self._queue:
-            self.remove_at(len(self._queue) - 1)
-        else:
-            self._drop()
+        if self._queue:
+            self._queue.pop()
 
-    @property
-    def count(self) -> int:
-        """Return the visible queued item count, excluding the current track."""
-        return len(self._queue)
+    def set_current(self, item: Any) -> None:
+        """Set the currently playing track."""
+        self._current = item
 
-    @property
-    def is_empty(self) -> bool:
-        if self._loop_mode == pomice.LoopMode.QUEUE and self._loop_items:
-            return False
-        return not bool(self.count)
+    def get(self, force_next: bool = False) -> Any:
+        """
+        Retrieve and return the next track in queue according to current LoopMode.
+        If force_next is True (e.g. manual skip), advances to the next song even if LoopMode.TRACK is active.
+        """
+        if self._loop_mode == LoopMode.TRACK and not force_next:
+            if self._current is not None:
+                return self._current
 
-    def set_current(self, item: pomice.Track) -> None:
-        """Update the queue's current item when playback bypasses queue.get()."""
-        item = self._check_track(item)
-        previous = self._current()
-        self._current_item = item
+        if self._loop_mode == LoopMode.QUEUE:
+            if self._current is not None:
+                self._queue.append(self._current)
 
-        if self._loop_mode != pomice.LoopMode.QUEUE:
-            return
+        if not self._queue:
+            if self._loop_mode == LoopMode.QUEUE and self._current is not None:
+                return self._current
+            self._current = None
+            raise QueueEmpty("The queue is empty.")
 
-        if not self._loop_items:
-            self._build_loop_items()
-        else:
-            try:
-                index = self._find_item_index(self._loop_items, item)
-                self._loop_items[index] = item
-            except ValueError:
-                try:
-                    previous_index = self._find_item_index(self._loop_items, previous)
-                    self._loop_items[previous_index] = item
-                except (TypeError, ValueError):
-                    self._loop_items.insert(0, item)
+        next_track = self._queue.pop(0)
+        self._current = next_track
+        return next_track
 
-        self._sync_queue_from_loop(wrap=True)
-
-    def get(self) -> pomice.Track:
-        """Return the next item while keeping queue-loop shadows out of _queue."""
-        if self._loop_mode == pomice.LoopMode.TRACK:
-            current = self._current()
-            if current is None:
-                raise pomice.QueueEmpty("No current item to loop.")
-            return current
-
-        if self._loop_mode == pomice.LoopMode.QUEUE:
-            if not self._loop_items:
-                self._build_loop_items()
-
-            if not self._loop_items:
-                raise pomice.QueueEmpty("No items in the queue.")
-
-            current = self._current()
-            if current is None:
-                item = self._loop_items[0]
-            elif len(self._loop_items) == 1:
-                item = self._loop_items[0]
-            else:
-                try:
-                    index = self._find_item_index(self._loop_items, current)
-                except ValueError:
-                    self._loop_items.insert(0, current)
-                    index = 0
-                item = self._loop_items[(index + 1) % len(self._loop_items)]
-
-            self._current_item = item
-            self._sync_queue_from_loop(wrap=True)
-            return item
-
-        return super().get()
-
-    def put(self, item: pomice.Track) -> None:
-        """Put the given item into the back of the queue."""
-        item = self._check_track(item)
-
-        if self._loop_mode != pomice.LoopMode.QUEUE:
-            self._ensure_room()
-            return self._put(item)
-
+    def put(self, item: Any) -> None:
+        """Add an item to the end of the queue."""
         self._ensure_room()
-        if not self._loop_items:
-            self._build_loop_items()
-        self._loop_items.append(item)
-        self._sync_queue_from_loop(wrap=True)
+        self._queue.append(item)
 
-    def put_at_index(self, index: int, item: pomice.Track) -> None:
-        """Put the given item into the visible queue at the specified index."""
-        item = self._check_track(item)
-
-        if self._loop_mode != pomice.LoopMode.QUEUE:
-            self._ensure_room()
-            return self._insert(index, item)
-
+    def put_at_index(self, index: int, item: Any) -> None:
+        """Insert an item at a specific index in the upcoming queue."""
         if not 0 <= index <= len(self._queue):
             raise IndexError("Index out of bounds")
 
         self._ensure_room()
-        if not self._loop_items:
-            self._build_loop_items()
+        self._queue.insert(index, item)
 
-        loop_index = self._loop_insert_index_from_visible_index(index)
-        self._loop_items.insert(loop_index, item)
-        self._sync_queue_from_loop(wrap=True)
+    def put_at(self, index: int, item: Any) -> None:
+        """Insert an item at a specific index in the upcoming queue."""
+        self.put_at_index(index, item)
 
-    def put_at_front(self, item: pomice.Track) -> None:
-        """Put the given item into the front of the visible queue."""
-        return self.put_at_index(0, item)
+    def put_at_front(self, item: Any) -> None:
+        """Insert an item at the front of the upcoming queue (index 0)."""
+        self.put_at_index(0, item)
 
-    def move(self, index_from: int, index_to: int):
-        """
-        Move a track from one visible queue index to another.
-        """
+    def extend(self, items: Iterable[Any]) -> None:
+        """Add multiple items to the end of the queue."""
+        for item in items:
+            self.put(item)
+
+    def move(self, index_from: int, index_to: int) -> None:
+        """Move an item from index_from to index_to in the queue."""
         size = len(self._queue)
 
         if not 0 <= index_from < size:
@@ -224,108 +159,73 @@ class CustomQueue(pomice.Queue):
         if index_from == index_to:
             return
 
-        track = self.remove_at(index_from)
-        self.put_at_index(index_to, track)
+        item = self._queue.pop(index_from)
+        self._queue.insert(index_to, item)
 
-    def remove_at(self, index: int):
-        """Remove a track at a specific index (0-based)."""
+    def remove_at(self, index: int) -> Any:
+        """Remove and return the item at index in the queue."""
         if not 0 <= index < len(self._queue):
             raise IndexError("Index out of bounds")
 
-        if self._loop_mode != pomice.LoopMode.QUEUE:
-            return self._queue.pop(index)
+        return self._queue.pop(index)
 
-        loop_index = self._loop_index_from_visible_index(index)
-        track = self._loop_items.pop(loop_index)
-        self._sync_queue_from_loop(wrap=True)
-        return track
-
-    def remove(self, item: pomice.Track) -> None:
-        item = self._check_track(item)
-
-        if self._loop_mode != pomice.LoopMode.QUEUE:
-            return super().remove(item)
-
-        index = self._find_item_index(self._loop_items, item)
-        if self._loop_items[index] is self._current():
-            raise ValueError("Cannot remove the currently playing track from the queue.")
-
-        self._loop_items.pop(index)
-        self._sync_queue_from_loop(wrap=True)
-
-    def to_list(self) -> List[pomice.Track]:
-        """Return a copy of the queue."""
-        return list(self._queue)
-
-    def put_at(self, index: int, item: pomice.Track):
-        """Insert a track at a specific index (0-based)."""
-        return self.put_at_index(index, item)
-
-    def set_loop_mode(self, mode: pomice.LoopMode) -> None:
-        """Set loop mode without injecting the current track into _queue."""
-        if self._loop_mode == pomice.LoopMode.QUEUE and mode != pomice.LoopMode.QUEUE:
-            self._sync_queue_from_loop(wrap=False)
-            self._loop_items = []
-
-        self._loop_mode = mode
-
-        if mode == pomice.LoopMode.QUEUE:
-            self._build_loop_items()
-            self._sync_queue_from_loop(wrap=True)
-
-    def disable_loop(self) -> None:
-        if not self._loop_mode:
-            raise pomice.QueueException("Queue loop is already disabled.")
-
-        if self._loop_mode == pomice.LoopMode.QUEUE:
-            self._sync_queue_from_loop(wrap=False)
-            self._loop_items = []
-
-        self._loop_mode = None
+    def remove(self, item: Any) -> None:
+        """Remove the first occurrence of item from the queue."""
+        self._queue.remove(item)
 
     def shuffle(self) -> None:
-        if self._loop_mode != pomice.LoopMode.QUEUE:
-            return random.shuffle(self._queue)
-
-        visible_queue = list(self._queue)
-        random.shuffle(visible_queue)
-
-        current = self._current()
-        self._loop_items = ([current] if current else []) + visible_queue
-        self._queue = visible_queue
+        """Shuffle the upcoming queue in place."""
+        random.shuffle(self._queue)
 
     def clear(self) -> None:
+        """Clear all upcoming tracks from the queue."""
         self._queue.clear()
 
-        if self._loop_mode == pomice.LoopMode.QUEUE:
-            self._loop_items = []
-            self._loop_mode = None
+    def to_list(self) -> List[Any]:
+        """Return a copy list of upcoming tracks in queue."""
+        return list(self._queue)
 
-    def copy(self) -> pomice.Queue:
-        new_queue = self.__class__(max_size=self.max_size, overflow=self._overflow)
-        new_queue._queue = list(self._queue)
-        new_queue._loop_items = list(self._loop_items)
-        new_queue._loop_mode = self._loop_mode
+    def set_loop_mode(self, mode: LoopMode) -> None:
+        """Set the queue loop mode."""
+        self._loop_mode = mode
 
-        current = self._current()
-        if current is not None:
-            new_queue._current_item = current
+    def disable_loop(self) -> None:
+        """Disable loop mode."""
+        self._loop_mode = LoopMode.OFF
 
-        return new_queue
+    def copy(self) -> CustomQueue:
+        """Return a copy of the CustomQueue."""
+        new_q = CustomQueue(max_size=self.max_size, overflow=self._overflow)
+        new_q._queue = list(self._queue)
+        new_q._current = self._current
+        new_q._loop_mode = self._loop_mode
+        return new_q
+
+    def __len__(self) -> int:
+        return len(self._queue)
+
+    def __iter__(self):
+        return iter(self._queue)
+
+    def __getitem__(self, index: int) -> Any:
+        return self._queue[index]
+
+    def __bool__(self) -> bool:
+        return bool(self._queue)
 
 
 class CustomPlayer(pomice.Player):
     """
-    Custom player using CustomQueue.
+    Custom player using our standalone CustomQueue.
     """
 
     def __init__(self, client, channel, *, node=None):
         super().__init__(client, channel, node=node)
 
-        self.queue = CustomQueue()
-        self.twenty_four_seven = False
-        self.autoplay_enabled = False
-        self.history = []
+        self.queue: CustomQueue = CustomQueue()
+        self.twenty_four_seven: bool = False
+        self.autoplay_enabled: bool = False
+        self.history: List[pomice.Track] = []
         self.home_channel = None
         self.current_track_start_time = None
 
