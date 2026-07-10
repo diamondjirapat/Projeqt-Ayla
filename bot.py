@@ -4,6 +4,7 @@ from discord.ext import commands
 import asyncio
 import logging
 import os
+import traceback
 from pathlib import Path
 
 from config import Config
@@ -148,7 +149,8 @@ class DiscordBot(commands.Bot):
              else:
                   logger.error(f"Unhandled error in {ctx.command}: {error}")
                   error_msg = await i18n.t(ctx, 'errors.unexpected_error')
-                  await ctx.send(error_msg)
+                  tb = ''.join(traceback.format_exception(type(error.original), error.original, error.original.__traceback__))
+                  await ctx.send(f"{error_msg}\n```\n{tb[:1900]}\n```")
     
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Global error handler for slash commands"""
@@ -163,6 +165,10 @@ class DiscordBot(commands.Bot):
                     await interaction.response.send_message(message, ephemeral=True)
             except discord.HTTPException:
                 pass
+        
+        if isinstance(error, app_commands.CommandNotFound):
+            await send_error("⚠️ This command is outdated. Please try again — it should update shortly!")
+            return
         
         if isinstance(error, app_commands.CommandOnCooldown):
             await send_error(f"⏳ Command on cooldown. Try again in {error.retry_after:.1f}s")
@@ -187,12 +193,14 @@ class DiscordBot(commands.Bot):
             else:
                 logger.error(f"Unhandled app command error: {error.original}", exc_info=error.original)
                 error_msg = await i18n.t(interaction, 'errors.unexpected_error')
-                await send_error(error_msg)
+                tb = ''.join(traceback.format_exception(type(error.original), error.original, error.original.__traceback__))
+                await send_error(f"{error_msg}\n```\n{tb[:1900]}\n```")
         
         else:
             logger.error(f"Unknown app command error type: {type(error)}", exc_info=error)
             error_msg = await i18n.t(interaction, 'errors.unexpected_error')
-            await send_error(error_msg)
+            tb = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+            await send_error(f"{error_msg}\n```\n{tb[:1900]}\n```")
     
     async def close(self):
         logger.info("Shutting down bot...")

@@ -5,6 +5,9 @@ from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 import logging
 import time
+import sys
+import os
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -29,26 +32,27 @@ class General(commands.Cog):
     async def ping(self, ctx: commands.Context):
         """Checks bot latency (Websocket and API)"""
         websocket_latency = round(self.bot.latency * 1000)
-        start_time = time.time()
 
+        start_time = time.perf_counter()
         temp_message = await ctx.send("Pinging...")
-        end_time = time.time()
+        api_latency = round((time.perf_counter() - start_time) * 1000)
 
-        api_latency = round((end_time - start_time) * 1000)
-
+        process_start = time.perf_counter()
         title = await i18n.t(ctx, 'commands.ping.title')
-        process_time = time.time()
+        process_time = round((time.perf_counter() - process_start) * 1000)
 
-        bot_latency = round((process_time - start_time) * 1000)
+        total_time = round((time.perf_counter() - start_time) * 1000)
 
         embed = discord.Embed(
             title=title,
             color=discord.Color.blue()
         )
 
-        embed.add_field(name="Websocket Latency 📡", value=f"{websocket_latency}ms", inline=True)
-        embed.add_field(name="API Latency 📝", value=f"{api_latency}ms", inline=True)
-        embed.add_field(name="Bot Process Time 📊", value=f"{bot_latency}ms", inline=True)
+        embed.add_field(name="Websocket Latency 📡", value=f"{websocket_latency}ms")
+        embed.add_field(name="API Latency 📝", value=f"{api_latency}ms")
+        embed.add_field(name="Internal Processing Time ⚙️", value=f"{process_time}ms")
+        embed.add_field(name="Total Time 📊", value=f"{total_time}ms")
+
         await temp_message.edit(content=None, embed=embed)
     
     @commands.hybrid_command(name='botinfo')
@@ -58,6 +62,17 @@ class General(commands.Cog):
         servers_label = await i18n.t(ctx, 'commands.info.servers')
         users_label = await i18n.t(ctx, 'commands.info.users')
         version_label = await i18n.t(ctx, 'commands.info.version')
+        commit_label = await i18n.t(ctx, 'commands.info.commit')
+        unknown_text = await i18n.t(ctx, 'general.unknown')
+        
+        try:
+            result = subprocess.run(
+                ['git', 'log', '-1', '--format=%h (%s)'],
+                capture_output=True, text=True, timeout=5
+            )
+            commit_info = result.stdout.strip() if result.returncode == 0 else unknown_text
+        except Exception:
+            commit_info = unknown_text
         
         embed = discord.Embed(
             title=title,
@@ -66,6 +81,7 @@ class General(commands.Cog):
         embed.add_field(name=servers_label, value=len(self.bot.guilds), inline=True)
         embed.add_field(name=users_label, value=len(self.bot.users), inline=True)
         embed.add_field(name=version_label, value=discord.__version__, inline=True)
+        embed.add_field(name=commit_label, value=f"`{commit_info}`", inline=False)
         
         await ctx.send(embed=embed)
     
@@ -149,219 +165,102 @@ class General(commands.Cog):
             except Exception as e:
                 await ctx.send(f"❌ Failed to reload `{extension_name}`: {str(e)}")
                 logger.error(f"Failed to reload {extension_name}: {e}")
-    
-    @commands.command(name='help')
-    async def help_command(self, ctx, *, command: str = None):
-        """Show help information"""
-        if command:
-            cmd = self.bot.get_command(command)
-            if cmd:
-                title = await i18n.t(ctx, "help.help_for", command=cmd.name)
-                no_desc = await i18n.t(ctx, "help.no_description")
+
+    @commands.command(name='restart', hidden=True)
+    @commands.is_owner()
+    async def restart_command(self, ctx: commands.Context):
+        """Restart the entire bot (Owner only)"""
+        embed = discord.Embed(
+            title="🔄 Restarting Bot...",
+            description="The bot is shutting down and will restart momentarily.",
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=embed)
+        logger.info(f"Bot restart requested by {ctx.author} ({ctx.author.id})")
+
+        await self.bot.close()
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    @commands.command(name='update', hidden=True)
+    @commands.is_owner()
+    async def update_command(self, ctx: commands.Context, branch: str = None):
+        """Pull latest changes from GitHub (Owner only)"""
+        from config import Config
+        
+        github_url = Config.GITHUB_URL
+        if not github_url:
+            title = await i18n.t(ctx, 'commands.update.no_url_title')
+            description = await i18n.t(ctx, 'commands.update.no_url_description')
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        title = await i18n.t(ctx, 'commands.update.title')
+        embed = discord.Embed(
+            title=title,
+            color=discord.Color.orange()
+        )
+        status_message = await ctx.send(embed=embed)
+        logger.info(f"Bot update requested by {ctx.author} ({ctx.author.id}){f' (branch: {branch})' if branch else ''}")
+
+        try:
+            fetch_cmd = ['git', 'fetch', github_url]
+            if branch:
+                fetch_cmd.append(branch)
+
+            subprocess.run(
+                fetch_cmd,
+                capture_output=True, text=True, timeout=60
+            )
+
+            result = subprocess.run(
+                ['git', 'reset', '--hard', 'FETCH_HEAD'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                output = result.stdout.strip() or "Already up to date."
+                title = await i18n.t(ctx, 'commands.update.success_title')
+                description = await i18n.t(ctx, 'commands.update.success_description', output=output)
                 embed = discord.Embed(
                     title=title,
-                    description=cmd.help or no_desc,
-                    color=discord.Color.blue()
+                    description=description,
+                    color=discord.Color.green()
                 )
-                if cmd.usage:
-                    usage_label = await i18n.t(ctx, "help.usage")
-                    embed.add_field(name=usage_label, value=f"`{ctx.prefix}{cmd.name} {cmd.usage}`", inline=False)
-                if cmd.aliases:
-                    aliases_label = await i18n.t(ctx, "help.aliases")
-                    embed.add_field(name=aliases_label, value=", ".join(cmd.aliases), inline=False)
-                await ctx.send(embed=embed)
             else:
-                title = await i18n.t(ctx, "help.command_not_found_title")
-                description = await i18n.t(ctx, "help.command_not_found", command=command)
+                error_output = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                title = await i18n.t(ctx, 'commands.update.fail_title')
+                description = await i18n.t(ctx, 'commands.update.fail_description', error=error_output)
                 embed = discord.Embed(
                     title=title,
                     description=description,
                     color=discord.Color.red()
                 )
-                await ctx.send(embed=embed)
-        else:
-            await self._send_interactive_help(ctx)
-    
-    async def _send_interactive_help(self, ctx):
-        """Send interactive help with buttons for each cog"""
-        cogs = {}
-        for cmd in self.bot.commands:
-            if cmd.cog_name:
-                if cmd.cog_name not in cogs:
-                    cogs[cmd.cog_name] = []
-                cogs[cmd.cog_name].append(cmd)
-            else:
-                if "General" not in cogs:
-                    cogs["General"] = []
-                cogs["General"].append(cmd)
 
-        title = await i18n.t(ctx, "help.title")
-        description = await i18n.t(ctx, "help.description")
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.blue()
-        )
-
-        for cog_name, commands in cogs.items():
-            if commands:
-                category_name = await i18n.t(ctx, "help.category_format", name=cog_name)
-                commands_text = await i18n.t(ctx, "help.commands_available", count=len(commands))
-                embed.add_field(
-                    name=category_name,
-                    value=commands_text,
-                    inline=True
-                )
-        
-        tip_label = await i18n.t(ctx, "help.tip")
-        tip_text = await i18n.t(ctx, "help.tip_text", prefix=ctx.prefix)
-        embed.add_field(
-            name=tip_label,
-            value=tip_text,
-            inline=False
-        )
-
-        view = HelpView(ctx, cogs, timeout=300)
-        message = await ctx.send(embed=embed, view=view)
-        view.message = message
-
-
-class HelpView(discord.ui.View):
-    def __init__(self, ctx, cogs, timeout=300):
-        super().__init__(timeout=timeout)
-        self.ctx = ctx
-        self.cogs = cogs
-        self.message = None
-
-        cog_names = list(cogs.keys())[:25]
-
-        for i, cog_name in enumerate(cog_names):
-            button = CogButton(cog_name, self.cogs[cog_name], row=i // 5)
-            self.add_item(button)
-
-        self.add_item(BackButton(row=4))
-    
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Only allow the command author to use the buttons"""
-        return interaction.user == self.ctx.author
-    
-    async def on_timeout(self):
-        """Disable all buttons when a timeout occurs"""
-        for item in self.children:
-            item.disabled = True
-        
-        if self.message:
-            try:
-                await self.message.edit(view=self)
-            except discord.NotFound:
-                pass
-
-
-class CogButton(discord.ui.Button):
-    def __init__(self, cog_name, commands, row=0):
-        emoji_map = {
-            'General': '🔧',
-            'Music': '🎵',
-            'Moderation': '🛡️',
-            'Language': '🌐',
-            'Prefix': '⚙️'
-        }
-        
-        super().__init__(
-            label=cog_name,
-            emoji=emoji_map.get(cog_name, '📁'),
-            style=discord.ButtonStyle.primary,
-            row=row
-        )
-        self.cog_name = cog_name
-        self.commands = commands
-    
-    async def callback(self, interaction: discord.Interaction):
-        """Show detailed commands for this cog"""
-        # Use interaction for i18n
-        category_title = await i18n.t(interaction, "help.category_format", name=self.cog_name)
-        commands_label = await i18n.t(interaction, "help.commands_label")
-        title = f"{category_title} {commands_label}"
-        description = await i18n.t(interaction, "help.all_commands_in", category=self.cog_name)
-        
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.green()
-        )
-
-        cmd_list = []
-        no_desc = await i18n.t(interaction, "help.no_description")
-        for cmd in self.commands:
-            cmd_description = cmd.help or no_desc
-            if len(cmd_description) > 50:
-                cmd_description = cmd_description[:47] + "..."
-            cmd_list.append(f"`{interaction.message.content.split()[0] if interaction.message.content else '!'}{cmd.name}` - {cmd_description}")
-
-        commands_label = await i18n.t(interaction, "help.commands_label")
-        if len(cmd_list) <= 10:
-            embed.add_field(
-                name=commands_label,
-                value="\n".join(cmd_list),
-                inline=False
+        except subprocess.TimeoutExpired:
+            title = await i18n.t(ctx, 'commands.update.fail_title')
+            description = await i18n.t(ctx, 'commands.update.fail_description', error="Process timed out after 60 seconds")
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=discord.Color.red()
             )
-        else:
-            for i in range(0, len(cmd_list), 10):
-                chunk = cmd_list[i:i+10]
-                if i == 0:
-                    field_name = commands_label
-                else:
-                    field_name = await i18n.t(interaction, "help.commands_continued", page=i//10 + 1)
-                embed.add_field(
-                    name=field_name,
-                    value="\n".join(chunk),
-                    inline=False
-                )
-        
-        footer_text = await i18n.t(interaction, "help.back_to_menu")
-        embed.set_footer(text=footer_text)
-        
-        await interaction.response.edit_message(embed=embed, view=self.view)
+        except Exception as e:
+            title = await i18n.t(ctx, 'commands.update.fail_title')
+            description = await i18n.t(ctx, 'commands.update.fail_description', error=str(e))
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=discord.Color.red()
+            )
 
+        await status_message.edit(embed=embed)
 
-class BackButton(discord.ui.Button):
-    def __init__(self, row=4):
-        super().__init__(
-            label="Back",
-            emoji="⬅️",
-            style=discord.ButtonStyle.secondary,
-            row=row
-        )
-    
-    async def callback(self, interaction: discord.Interaction):
-        """Go back to the main help menu"""
-        title = await i18n.t(interaction, "help.title")
-        description = await i18n.t(interaction, "help.description")
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.blue()
-        )
-
-        for cog_name, commands in self.view.cogs.items():
-            if commands:
-                category_name = await i18n.t(interaction, "help.category_format", name=cog_name)
-                commands_text = await i18n.t(interaction, "help.commands_available", count=len(commands))
-                embed.add_field(
-                    name=category_name,
-                    value=commands_text,
-                    inline=True
-                )
-        
-        tip_label = await i18n.t(interaction, "help.tip")
-        tip_text = await i18n.t(interaction, "help.tip_text", prefix=self.view.ctx.prefix)
-        embed.add_field(
-            name=tip_label,
-            value=tip_text,
-            inline=False
-        )
-        
-        await interaction.response.edit_message(embed=embed, view=self.view)
-    
 async def setup(bot):
     await bot.add_cog(General(bot))

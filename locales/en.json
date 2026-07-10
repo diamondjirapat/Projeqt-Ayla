@@ -6,7 +6,9 @@
       "title": "Bot Information",
       "servers": "Servers",
       "users": "Users",
-      "version": "Discord.py Version"
+      "version": "Discord.py Version",
+      "commit": "Git Commit",
+      "commit_date": "Commit Date"
     },
     "profile": {
       "name": "profile",
@@ -56,6 +58,15 @@
     },
     "ping": {
       "title": "🏓 Pong!"
+    },
+    "update": {
+      "title": "📥 Updating from GitHub...",
+      "success_title": "✅ Update Complete",
+      "success_description": "Successfully pulled latest changes from GitHub.\n\n```\n{output}\n```",
+      "fail_title": "❌ Update Failed",
+      "fail_description": "Failed to pull latest changes from GitHub.\n\n```\n{error}\n```",
+      "no_url_title": "❌ No GitHub URL",
+      "no_url_description": "No GitHub URL configured. Set `GITHUB_URL` in your `.env` file."
     }
   },
   "errors": {
@@ -71,7 +82,6 @@
   "general": {
     "no_reason": "No reason provided",
     "unknown": "Unknown",
-    "test_command": "✅ Bot is working! Commands are being processed.",
     "language_update_error": "❌ An error occurred while updating your language."
   },
   "languages": {
@@ -96,37 +106,35 @@
     "server_prefix": "Server Prefix",
     "default_prefix": "Default Prefix",
     "not_set": "Not set",
-    "using_default": "Using default",
     "priority_explanation": "**Priority Order:**\n1. Personal prefix (highest)\n2. Server prefix\n3. Default prefix\n4. Mention: {mention}",
     "how_it_works": "How It Works",
     "commands_help": "`prefix set <prefix>` - Set your personal prefix\n`prefix remove` - Remove your personal prefix\n`prefix server <prefix>` - Set server prefix (Admin)\n`prefix server reset` - Reset server prefix (Admin)",
     "commands": "Commands",
     "set_success_title": "✅ Personal Prefix Set",
-    "set_success": "✅ Personal Prefix Set",
+    "set_success": "Your personal prefix has been set to `{prefix}`",
     "set_failed_title": "❌ Failed to Set Prefix",
-    "set_failed": "❌ Failed to Set Prefix",
+    "set_failed": "Could not set prefix. It may be invalid or too long.",
     "remove_success_title": "✅ Personal Prefix Removed",
-    "remove_success": "✅ Personal Prefix Removed",
+    "remove_success": "Personal prefix removed.\nNow using: `{prefix}`",
     "remove_failed_title": "❌ No Prefix to Remove",
-    "remove_failed": "❌ No Prefix to Remove",
+    "remove_failed": "You don't have a personal prefix set.",
     "server_set_success_title": "✅ Server Prefix Set",
-    "server_set_success": "✅ Server Prefix Set",
+    "server_set_success": "Server prefix has been set to `{prefix}`",
     "server_set_failed_title": "❌ Failed to Set Server Prefix",
-    "server_set_failed": "❌ Failed to Set Server Prefix",
+    "server_set_failed": "Could not set server prefix. It may be invalid or too long.",
     "server_reset_success_title": "✅ Server Prefix Reset",
-    "server_reset_success": "✅ Server Prefix Reset",
+    "server_reset_success": "Server prefix has been reset to default.",
     "server_reset_failed_title": "❌ No Custom Prefix to Reset",
-    "server_reset_failed": "❌ No Custom Prefix to Reset",
+    "server_reset_failed": "No custom server prefix was set.",
     "example_usage": "Example Usage",
     "note": "Note",
     "personal_prefix_note": "Users with personal prefixes will still use their own prefix.",
-    "your_current_prefix_title": "Your Current Prefix",
-    "your_current_prefix": "Your Current Prefix",
-    "example": "Example",
+    "your_current_prefix_title": "Your Current Prefix is `{prefix}`",
     "hello": "👋 Hello {username}!",
     "my_prefix_here": "My prefix here is `{prefix}`",
     "quick_start": "Quick Start",
     "help_command": "`{prefix}help` - Show all commands\n`{prefix}prefix` - Manage prefixes",
+    "mention_alternative_title": "Mention Alternative",
     "mention_alternative": "You can also use {mention} as a prefix!"
   },
   "help": {
@@ -135,7 +143,7 @@
     "category_format": "📁 {name}",
     "commands_available": "{count} commands available",
     "tip": "💡 Tip",
-    "tip_text": "Use `{prefix}help <command>` for detailed help on a specific command",
+    "tip_text": "Use {prefix}`help <command>` for detailed help on a specific command",
     "command_not_found_title": "Command Not Found",
     "command_not_found": "No command named '{command}' found.",
     "help_for": "Help: {command}",
@@ -237,7 +245,10 @@
       "imported_linked_server": "✅ Imported **{name}** linked to **{source}** ({count} tracks) for the server!",
       "list_imported_type": "🌍 Imported ({count} tracks)",
       "list_imported_additions": " + {additions} added",
-      "list_unknown_type": "❌ Unknown playlist type"
+      "list_unknown_type": "❌ Unknown playlist type",
+      "list_regular_type": "📄 {count} track(s)",
+      "view_more_tracks": "... and {count} more tracks",
+      "tracks_failed_to_load": " ({count} track(s) failed to load)"
     },
     "ui": {
       "select_track": "🔍 **Select a track to play:**",
@@ -342,6 +353,10 @@
       "skip": {
         "skipped": "⏭️ Skipped",
         "nothing_playing": "❌ Nothing is playing"
+      },
+      "skipto": {
+        "success": "⏭️ Skipped to position **{position}**: **{title}**",
+        "invalid_position": "❌ Invalid position. Please use a number between 1 and {max}."
       },
       "seek": {
         "success": "⏩ Seeked to **{position}**",
@@ -456,17 +471,20 @@
       "command_error": "❌ An error occurred: {error}",
       "no_nodes": "❌ No connected music nodes found.",
       "no_history": "❌ No previous songs in history.",
-      "voice_channel_mismatch": "❌ You must be in the same voice channel as the bot to use this command."
+      "voice_channel_mismatch": "❌ You must be in the same voice channel as the bot to use this command.",
+      "session_died": "The music session expired due to a server restart. I have disconnected, please try your command again!",
+      "node_offline": "Music server is currently offline."
     }
   },
   "reactionrole": {
-    "help": "**Reaction Roles Commands:**\n`!reactionrole add <message_id> <emoji> <role>` - Add a reaction role\n`!reactionrole remove <message_id> [emoji]` - Remove reaction role(s)\n`!reactionrole list` - List all reaction roles\n`!reactionrole create <channel> <title> [description]` - Create a new reaction role message\n`!reactionrole update <message_id>` - Update message to show roles\n`!reactionrole reload` - Reload from database\n`!reactionrole debug [message_id]` - Debug information",
+    "help": "**Reaction Roles Commands:**\n`!reactionrole add <message_id> <emoji> <role>` - Add a reaction role\n`!reactionrole remove <message_id> [emoji]` - Remove reaction role(s)\n`!reactionrole list` - List all reaction roles\n`!reactionrole create <channel> <title> [description]` - Create a new reaction role message\n`!reactionrole update <message_id>` - Update message to show roles\n`!reactionrole edit <message_id> [title] [description]` - Edit message title/description",
     "add": {
       "invalid_message_id": "❌ Invalid message ID. Please provide a valid number.",
       "role_too_high": "❌ I cannot assign this role because it's higher than my highest role.",
       "message_not_found": "❌ Message not found. Make sure the message ID is correct and in this server.",
       "invalid_emoji": "❌ Invalid emoji. Please use a valid emoji.",
-      "success": "✅ Reaction role added! {emoji} → {role} on message {message_id}"
+      "success": "✅ Reaction role added! {emoji} → {role} on message {message_id}",
+      "success_update": "✅ Updated message `{msg_id}` with {len(emoji_roles)} reaction role(s)!"
     },
     "remove": {
       "invalid_message_id": "❌ Invalid message ID. Please provide a valid number.",
@@ -482,6 +500,12 @@
       "success": "✅ Reaction role message created in {channel}!\nMessage ID: `{message_id}`\nUse `!reactionrole add {message_id} <emoji> <role>` to add roles.",
       "no_permission": "❌ I don't have permission to send messages in that channel.",
       "failed": "❌ Failed to create message: {error}"
+    },
+    "edit": {
+      "success": "✅ Successfully updated the embed for message `{msg_id}`.",
+      "no_embed": "❌ This message doesn't have an embed to edit.",
+      "forbidden": "❌ I don't have permission to edit this message. Ensure it was sent by me.",
+      "failed": "❌ Failed to edit message: {error}"
     },
     "errors": {
       "no_permission": "❌ You need the 'Manage Roles' permission to use this command.",
@@ -512,5 +536,84 @@
       "no_permission": "❌ You need the 'Manage Roles' permission to use this command.",
       "command_error": "❌ An error occurred: {error}"
     }
+  },
+  "help_descriptions": {
+    "ping": "Checks bot latency (Websocket and API)",
+    "botinfo": "Display bot information",
+    "userinfo": "Display a user profile from a database",
+    "help": "Show help information",
+    "reload": "Reload a cog or all cogs (Owner only)",
+    "restart": "Restart the entire bot (Owner only)",
+    "update": "Pull latest changes from GitHub (Owner only)",
+    "kick": "Kick a member from the server",
+    "ban": "Ban a member from the server",
+    "purge": "Delete multiple messages",
+    "langinfo": "View language settings and priorities",
+    "mylang": "Set your personal language",
+    "setlang": "Set server language (Admin only)",
+    "prefix": "Show current prefix information",
+    "prefix set": "Set your personal prefix",
+    "prefix remove": "Remove your personal prefix",
+    "prefix server": "Set server default prefix",
+    "prefix server reset": "Reset server prefix to default",
+    "myprefix": "Quick command to show your current prefix",
+    "play": "Play a song or saved playlist",
+    "playnow": "Play a song immediately (skips current)",
+    "playnext": "Play a song after the current one",
+    "playlist": "Manage personal playlists",
+    "playlist create": "Create a new empty playlist",
+    "playlist add": "Add the current song or a URL to a playlist",
+    "playlist remove": "Remove a track from a playlist by its number",
+    "playlist view": "View info about a playlist",
+    "playlist list": "List all your playlists",
+    "playlist delete": "Delete an entire playlist",
+    "playlist play": "Play all tracks from a playlist",
+    "playlist import": "Import a YouTube/Spotify playlist to your saved playlists",
+    "serverplaylist": "Manage server playlists",
+    "serverplaylist create": "Create a server playlist",
+    "serverplaylist add": "Add a track to a server playlist",
+    "serverplaylist remove": "Remove a track from a server playlist",
+    "serverplaylist view": "View a server playlist",
+    "serverplaylist list": "List all server playlists",
+    "serverplaylist delete": "Delete a server playlist",
+    "serverplaylist play": "Play all tracks from a server playlist",
+    "serverplaylist import": "Import a playlist for the server",
+    "previous": "Play the previous song",
+    "skip": "Skip the current song",
+    "skipto": "Skip to a specific song in the queue",
+    "seek": "Seek to a specific position in the current track",
+    "stop": "Stop playback and disconnect",
+    "queue": "Show the current queue",
+    "shuffle": "Shuffle the queue",
+    "move": "Move a song from one position to another",
+    "remove": "Remove a song from the queue",
+    "clear": "Clear the queue",
+    "volume": "Manage volume",
+    "volume set": "Set volume (0-100)",
+    "volume default": "Set the default volume for the server",
+    "musicchannel": "Manage static music channel",
+    "musicchannel set": "Set the static music channel",
+    "musicchannel remove": "Remove the static music channel",
+    "247": "Toggle 24/7 mode",
+    "autoplay": "Toggle Autoplay mode",
+    "lastfm": "Last.fm integration",
+    "lastfm login": "Login to Last.fm",
+    "lastfm info": "View your Last.fm account info",
+    "lastfm logout": "Logout from Last.fm",
+    "lastfm scrobble": "Toggle scrobbling on/off",
+    "reactionrole": "Manage reaction roles",
+    "reactionrole add": "Add a reaction role to a message",
+    "reactionrole remove": "Remove reaction role(s) from a message",
+    "reactionrole list": "List all reaction roles in this server",
+    "reactionrole create": "Create a new reaction role message",
+    "reactionrole update": "Update a reaction role message embed",
+    "reactionrole edit": "Edit the title or description of a reaction role message",
+    "autorole": "View current auto-role settings",
+    "autorole set": "Set the auto-role for new members",
+    "autorole remove": "Remove the auto-role",
+    "serverprefix": "Manage server default prefix",
+    "serverprefix set": "Set server default prefix",
+    "serverprefix remove": "Remove server default prefix",
+    "serverprefix reset": "Reset server default prefix"
   }
 }

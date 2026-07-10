@@ -4,9 +4,10 @@ import re
 import time
 from datetime import datetime
 from typing import cast, Optional
+from urllib.parse import urlparse
 
 import discord
-import wavelink
+import pomice
 from discord import app_commands
 from discord.ext import commands
 
@@ -14,9 +15,30 @@ from config import Config
 from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 from utils.lastfm import lastfm_handler
-from utils.queue import CustomPlayer
+from utils.queue import CustomPlayer, CustomQueue, LoopMode, QueueEmpty, QueueException, QueueFull
 
 logger = logging.getLogger(__name__)
+
+
+def build_queue_timeline(player):
+    history = list(player.history) if hasattr(player, "history") else []
+    current = [player.current] if player.current else []
+    queue = player.queue.to_list()
+
+    history_ids = {id(track) for track in history}
+    timeline = [(track, "Played") for track in history]
+
+    if current:
+        timeline.append((current[0], "Now"))
+
+    for track in queue:
+        status = "Loop" if player.queue.loop_mode == LoopMode.QUEUE and id(track) in history_ids else "Next"
+        timeline.append((track, status))
+
+    current_index = len(history) if current else -1
+    queue_start_index = len(history) + len(current)
+    return timeline, current_index, queue_start_index
+
 
 class Music(commands.Cog):
     def __init__(self, bot):
@@ -32,6 +54,45 @@ class Music(commands.Cog):
         """Automatically defer slash commands to prevent timeout"""
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
+
+    async def cog_command_error(self, ctx: commands.Context, error: Exception):
+        """Global error handler for the music cog to catch node and session errors gracefully."""
+        original = getattr(error, 'original', error)
+        err_str = str(original)
+
+        if "Session not found" in err_str:
+            if ctx.guild and ctx.guild.voice_client:
+                try:
+                    await ctx.guild.voice_client.disconnect(force=True)
+                except:
+                    pass
+            try:
+                msg = await i18n.t(ctx, "music.errors.session_died")
+                if ctx.interaction and not ctx.interaction.response.is_done():
+                    await ctx.send(msg, ephemeral=True)
+                else:
+                    await ctx.send(msg, delete_after=10)
+            except:
+                pass
+            return
+            
+        if "refused" in err_str.lower() or "connect" in err_str.lower():
+            if ctx.guild and ctx.guild.voice_client:
+                try:
+                    await ctx.guild.voice_client.disconnect(force=True)
+                except:
+                    pass
+            try:
+                msg = await i18n.t(ctx, "music.errors.node_offline")
+                if ctx.interaction and not ctx.interaction.response.is_done():
+                    await ctx.send(msg, ephemeral=True)
+                else:
+                    await ctx.send(msg, delete_after=10)
+            except:
+                pass
+            return
+            
+        logger.error(f"Unhandled command error in Music cog: {error}")
 
     def start_timeout(self, guild_id, player):
         """Starts a 3-minute disconnect timer"""
@@ -49,7 +110,7 @@ class Music(commands.Cog):
 
         self.timeout_tasks[guild_id] = self.bot.loop.create_task(_timeout())
 
-    async def _fetch_autoplay_track(self, player: wavelink.Player, last_track: wavelink.Playable) -> wavelink.Playable | None:
+    async def _fetch_autoplay_track(self, player: pomice.Player, last_track: pomice.Track) -> pomice.Track | None:
         """Fetch a recommended track based on the last played track's artist"""
         guild_id = player.guild.id
 
@@ -62,24 +123,36 @@ class Music(commands.Cog):
         if len(self.autoplay_played_uris[guild_id]) > 50:
             self.autoplay_played_uris[guild_id] = set(list(self.autoplay_played_uris[guild_id])[-50:])
 
-        query = f"{last_track.author}"
-        logger.debug(f"[AUTOPLAY] Searching for tracks by: {query}")
+        logger.info(f"[AUTOPLAY RECOMMENDATION] Fetching recommendations: '{last_track.title}' by {last_track.author}")
 
         try:
-            tracks = await wavelink.Playable.search(query)
+            tracks = await player.get_recommendations(track=last_track)
+            
+            # Fallback
             if not tracks:
-                logger.debug("[AUTOPLAY] No tracks found")
+                logger.info("[AUTOPLAY RECOMMENDATION] No recommendations found, falling back to author search.")
+                query = f"{last_track.author}"
+                tracks = await player.get_tracks(query)
+
+            if not tracks:
+                logger.info("[AUTOPLAY FALLBACK] No tracks found")
                 return None
 
+            if isinstance(tracks, pomice.Playlist):
+                tracks = tracks.tracks
+
             for track in tracks:
-                if track.uri and track.uri not in self.autoplay_played_uris[guild_id]:
-                    if track.title.lower() != last_track.title.lower():
-                        track.extras.requester = "AutoPlay 🎵"
-                        return track
+                if track.uri and track.uri in self.autoplay_played_uris[guild_id]:
+                    continue
+                if track.title.lower() == last_track.title.lower():
+                    continue
+                track.requester = "AutoPlay 🎵"
+                logger.info(f"[AUTOPLAY FALLBACK] Selected: '{track.title}' by {track.author}")
+                return track
             
             return None
         except Exception as e:
-            logger.warning(f"AutoPlay fallback search failed: {e}")
+            logger.warning(f"[AUTOPLAY] Search failed: {e}")
             return None
 
     def cancel_timeout(self, guild_id):
@@ -89,10 +162,62 @@ class Music(commands.Cog):
             del self.timeout_tasks[guild_id]
 
     async def cog_load(self):
-        logger.info(f"[LAVALINK] Connecting to Lavalink at {Config.LAVALINK_URI}")
-        nodes = [wavelink.Node(uri=Config.LAVALINK_URI, password=Config.LAVALINK_PASSWORD)]
-        await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
-        logger.info("[LAVALINK] Connection pool initialized")
+        self.pomice_pool = pomice.NodePool()
+        
+        # Monkey patch pomice.Node.connect to silence unretrieved task exceptions from its internal reconnect attempts. 
+        if not getattr(pomice.Node, "_patched_connect", False):
+            original_connect = pomice.Node.connect
+            
+            async def safe_connect(node_self, *args, **kwargs):
+                try:
+                    return await original_connect(node_self, *args, **kwargs)
+                except Exception as e:
+                    if type(e).__name__ == "NodeConnectionFailure" and kwargs.get("reconnect", False):
+                        logger.debug(f"[POMICE] Suppressed internal reconnect error: {e}")
+                        return node_self
+                    raise
+                    
+            pomice.Node._patched_connect = True
+            pomice.Node.connect = safe_connect
+
+        self.bot.loop.create_task(self._connect_lavalink())
+
+    async def _connect_lavalink(self):
+        """Connect to Lavalink after bot is ready with automatic retry on failure."""
+        await self.bot.wait_until_ready()
+        parsed = urlparse(Config.LAVALINK_URI)
+        host = parsed.hostname or '127.0.0.1'
+        port = parsed.port or 2333
+
+        backoff = 5 
+        max_backoff = 300 
+        attempt = 0
+
+        while True:
+            attempt += 1
+            logger.info(f"[LAVALINK] Connection attempt #{attempt} to {host}:{port}")
+            try:
+                try:
+                    existing = self.pomice_pool.get_node(identifier='MAIN')
+                    if existing:
+                        await existing.disconnect()
+                except Exception:
+                    pass
+
+                await self.pomice_pool.create_node(
+                    bot=self.bot,
+                    host=host,
+                    port=port,
+                    password=Config.LAVALINK_PASSWORD,
+                    identifier='MAIN',
+                )
+                logger.info("[LAVALINK] Connection pool initialized successfully")
+                return
+            except Exception as e:
+                logger.error(f"[LAVALINK] Failed to connect (attempt #{attempt}): {e}")
+                logger.info(f"[LAVALINK] Retrying in {backoff}s...")
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, max_backoff)
 
     async def check_voice_channel(self, ctx: commands.Context, response_channel=None, redirected: bool = False):
         """Check if the user is in the same voice channel as the bot.
@@ -152,19 +277,14 @@ class Music(commands.Cog):
             return await ctx.send(content=content, embed=embed, view=view, delete_after=delete_after)
         return await response_channel.send(content=content, embed=embed, view=view, delete_after=delete_after)
 
-    @commands.Cog.listener()
-    async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
-        logger.info(f"Wavelink Node connected: {payload.node.identifier}")
+    # Node ready is handled by pomice.NodePool.create_node()
 
     @commands.Cog.listener()
-    async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
-        player: wavelink.Player = payload.player
-        logger.info(f"[LASTFM DEBUG] Track START event fired: {payload.track.title}")
+    async def on_pomice_track_start(self, player: pomice.Player, track: pomice.Track):
+        logger.info(f"[LASTFM DEBUG] Track START event fired: {track.title}")
 
         if not player:
             return
-
-        track = payload.track
 
         player.current_track_start_time = int(time.time())
         self.cancel_timeout(player.guild.id)
@@ -207,14 +327,15 @@ class Music(commands.Cog):
             duration_label = await i18n.t(target_channel, "music.player.duration_label",
                                           duration=f"{track.length // 1000 // 60}:{track.length // 1000 % 60:02d}")
             requester_label = await i18n.t(target_channel, "music.player.requester_label",
-                                           user=getattr(track.extras, 'requester', 'Unknown'))
+                                           user=getattr(track, 'requester', 'Unknown'))
 
             embed.add_field(name=" ", value=artist_label, inline=False)
             embed.add_field(name=" ", value=duration_label, inline=False)
             embed.add_field(name=" ", value=requester_label, inline=False)
             embed.set_image(url=Config.BAR_URL)
+            embed.set_footer(text=f"⚠️ Running on the Pomice branch — not fully tested yet.")
 
-            if track.artwork: embed.set_thumbnail(url=track.artwork)
+            if track.thumbnail: embed.set_thumbnail(url=track.thumbnail)
 
             view = NowPlayingView(player, self.user_model, self.guild_model)
             msg = await target_channel.send(embed=embed, view=view)
@@ -236,9 +357,8 @@ class Music(commands.Cog):
                     )
 
     @commands.Cog.listener()
-    async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
-        logger.info(f"[LASTFM DEBUG] Track end event fired - reason: {payload.reason}")
-        player = payload.player
+    async def on_pomice_track_end(self, player: pomice.Player, track: pomice.Track, reason: str):
+        logger.info(f"[LASTFM DEBUG] Track end event fired - reason: {reason}")
         if not player:
             logger.warning("[LASTFM DEBUG] No player in payload")
             return
@@ -247,28 +367,48 @@ class Music(commands.Cog):
         if not hasattr(player, "history"):
             player.history = []
 
-        if payload.reason.upper() not in ("LOAD_FAILED", "CLEANUP", "REPLACED"):
-            player.history.append(payload.track)
-            if player.autoplay == wavelink.AutoPlayMode.enabled:
-                if player.queue.is_empty:
-                    await asyncio.sleep(0.5) # wait to avoid infinite skip loop
-                    if player.queue.is_empty and not player.playing:
-                        recommended = await self._fetch_autoplay_track(player, payload.track)
-                        if recommended:
-                            logger.info(f"AutoPlay fallback: Playing '{recommended.title}' by {recommended.author}")
-                            vol = await self.guild_model.get_default_volume(player.guild.id)
-                            await player.play(recommended, volume=vol)
-                        else:
-                            self.start_timeout(player.guild.id, player)
-                            await self.update_static_embed(player.guild.id)
-            elif not player.queue.is_empty:
-                await player.play(player.queue.get())
-            else:
-                self.start_timeout(player.guild.id, player)
-                await self.update_static_embed(player.guild.id)
+        if reason.upper() not in ("LOAD_FAILED", "CLEANUP", "REPLACED"):
+            # Avoid duplicate history entries when looping the same track
+            if not player.history or player.history[-1] is not track:
+                player.history.append(track) 
 
-        if payload.reason.lower() == "finished" and player.channel:
-            track = payload.track
+            if player.queue.loop_mode == LoopMode.TRACK and reason.upper() == "FINISHED":
+                logger.info(f"[TRACK_END] Track loop active, replaying: '{track.title}'")
+                next_track = player.queue.get()
+                vol = await self.guild_model.get_default_volume(player.guild.id)
+                await player.set_volume(vol)
+                await player.play(next_track)
+            else:
+                autoplay_on = getattr(player, 'autoplay_enabled', False)
+                queue_empty = player.queue.is_empty
+                logger.info(f"[TRACK_END] autoplay={autoplay_on}, queue_empty={queue_empty}, is_playing={player.is_playing}")
+                if autoplay_on:
+                    if queue_empty:
+                        await asyncio.sleep(0.5) # wait to avoid infinite skip loop
+                        if player.queue.is_empty and not player.is_playing:
+                            logger.info(f"[AUTOPLAY] Fetching recommendation based on: '{track.title}' by {track.author}")
+                            recommended = await self._fetch_autoplay_track(player, track)
+                            if recommended:
+                                logger.info(f"[AUTOPLAY] Playing '{recommended.title}' by {recommended.author}")
+                                vol = await self.guild_model.get_default_volume(player.guild.id)
+                                await player.set_volume(vol)
+                                await player.play(recommended)
+                            else:
+                                logger.info("[AUTOPLAY] No recommendation found, starting timeout")
+                                self.start_timeout(player.guild.id, player)
+                                await self.update_static_embed(player.guild.id)
+                    else:
+                        next_track = player.queue.get(force_next=True)
+                        logger.info(f"[AUTOPLAY] Queue not empty, playing next: '{next_track.title}'")
+                        await player.play(next_track)
+                elif not queue_empty:
+                    next_track = player.queue.get(force_next=True)
+                    await player.play(next_track)
+                else:
+                    self.start_timeout(player.guild.id, player)
+                    await self.update_static_embed(player.guild.id)
+
+        if reason.lower() == "finished" and player.channel:
             member_ids = [m.id for m in player.channel.members if not m.bot]
             logger.info(f"Track finished: {track.title} - checking scrobble for {len(member_ids)} users")
 
@@ -295,13 +435,9 @@ class Music(commands.Cog):
                 await lastfm_handler.scrobble(session_key, track.author, track.title, timestamp)
 
     @commands.Cog.listener()
-    async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
+    async def on_pomice_track_exception(self, player: pomice.Player, track: pomice.Track, exception: str):
         """Handler for when a track encounters an exception during playback."""
-        player = payload.player
-        exception = payload.exception
-        track = payload.track
-        
-        logger.warning(f"[WAVELINK] Track exception for '{track.title}': {exception}")
+        logger.warning(f"[POMICE] Track exception for '{track.title if track else 'Unknown'}': {exception}")
         
         if player:
             target_channel = getattr(player, "home_channel", None)
@@ -319,13 +455,9 @@ class Music(commands.Cog):
                 await target_channel.send(msg, delete_after=10)
 
     @commands.Cog.listener()
-    async def on_wavelink_track_stuck(self, payload: wavelink.TrackStuckEventPayload):
+    async def on_pomice_track_stuck(self, player: pomice.Player, track: pomice.Track, threshold: float):
         """Handler for when a track gets stuck (stops sending frames)."""
-        player = payload.player
-        track = payload.track
-        threshold = payload.threshold
-        
-        logger.warning(f"[WAVELINK] Track stuck: '{track.title}' at {threshold}ms")
+        logger.warning(f"[POMICE] Track stuck: '{track.title if track else 'Unknown'}' at {threshold}ms")
         
         if not player:
             return
@@ -342,41 +474,40 @@ class Music(commands.Cog):
         # Attempt to recover (searching the track again and playing from the stuck position)
         try:
             query = track.uri if track.uri else f"{track.title} - {track.author}"
-            logger.info(f"[WAVELINK] Recovery search query: {query}")
+            logger.info(f"[POMICE] Recovery search query: {query}")
             
-            tracks = await wavelink.Playable.search(query)
+            tracks = await player.get_tracks(query)
             if tracks:
                 new_track = tracks[0] if isinstance(tracks, list) else tracks.tracks[0] if hasattr(tracks, 'tracks') else None
                 
                 if new_track:
-                    if hasattr(track.extras, 'requester'):
-                        new_track.extras.requester = track.extras.requester
+                    if hasattr(track, 'requester'):
+                        new_track.requester = track.requester
                     
                     vol = await self.guild_model.get_default_volume(player.guild.id)
-                    await player.play(new_track, start=threshold, volume=vol)
-                    logger.info(f"[WAVELINK] Successfully recovered '{new_track.title}' from {threshold}ms")
+                    await player.set_volume(vol)
+                    await player.play(new_track, start=int(threshold))
+                    logger.info(f"[POMICE] Successfully recovered '{new_track.title}' from {threshold}ms")
                     return
             
-            logger.warning("[WAVELINK] Recovery failed: Could not find track to replay.")
+            logger.warning("[POMICE] Recovery failed: Could not find track to replay.")
             # If fail, skip
             if not player.queue.is_empty:
                 await player.play(player.queue.get())
                 
         except Exception as e:
-            logger.error(f"[WAVELINK] Error during stuck track recovery: {e}")
+            logger.error(f"[POMICE] Error during stuck track recovery: {e}")
             # Just in case
             if not player.queue.is_empty:
                 await player.play(player.queue.get())
 
     @commands.Cog.listener()
-    async def on_wavelink_node_disconnected(self, payload: wavelink.NodeDisconnectedEventPayload):
-        """Handler for when a node disconnects."""
-        logger.warning(f"[WAVELINK] Node disconnected: {payload.node.identifier}")
-
-    @commands.Cog.listener()
-    async def on_wavelink_websocket_closed(self, payload: wavelink.WebsocketClosedEventPayload):
+    async def on_pomice_websocket_closed(self, payload):
         """Handler for when the websocket is closed."""
-        logger.warning(f"[WAVELINK] WebSocket closed: {payload.code} - {payload.reason}")
+        logger.warning(f"[POMICE] WebSocket closed: {payload.code} - {payload.reason}")
+        if payload.code != 1000:
+            logger.info("[POMICE] Unexpected WebSocket closure — scheduling Lavalink reconnection...")
+            self.bot.loop.create_task(self._connect_lavalink())
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
@@ -393,7 +524,7 @@ class Music(commands.Cog):
             await self.update_static_embed(member.guild.id)
             return
 
-        player: wavelink.Player = wavelink.Pool.get_node().get_player(member.guild.id)
+        player = pomice.NodePool.get_node().get_player(member.guild.id)
         if not player or not player.channel:
             return
 
@@ -405,6 +536,7 @@ class Music(commands.Cog):
         elif len(player.channel.members) > 1:
             self.cancel_timeout(member.guild.id)
 
+        await asyncio.sleep(1)
         await self.update_static_embed(member.guild.id)
 
     async def update_static_embed(self, guild_id: int):
@@ -417,30 +549,33 @@ class Music(commands.Cog):
         if not channel:
             return
 
-        player: wavelink.Player = wavelink.Pool.get_node().get_player(guild_id)
+        player = pomice.NodePool.get_node().get_player(guild_id)
         locale = await i18n.get_guild_locale(guild_id) or "en"
+
+        is_connected = bool(player and player.is_connected)
+        is_playing = bool(player and player.is_playing)
+        current_track = player.current if player else None
 
         embed = discord.Embed(color=discord.Color.blurple())
 
-        if not player or not player.connected:
+        if not is_connected:
             embed.title = await i18n.t(channel, "music.player.idle.title", static_embed=True)
             embed.description = await i18n.t(channel, "music.player.idle.description_disconnect", static_embed=True)
             embed.set_image(url=Config.MUSIC_BANNER_URL)
 
-        elif not player.playing:
+        elif not is_playing or not current_track:
             embed.title = await i18n.t(channel, "music.player.idle.title", static_embed=True)
             embed.description = await i18n.t(channel, "music.player.idle.description_empty", static_embed=True)
             embed.set_image(url=Config.MUSIC_BANNER_URL)
         else:
-            track = player.current
-            now_playing_title = await i18n.t(channel, "music.player.now_playing", static_embed=True, title=track.title)
-            artist_label = await i18n.t(channel, "music.player.artist", artist=track.author, static_embed=True)
+            now_playing_title = await i18n.t(channel, "music.player.now_playing", static_embed=True, title=current_track.title)
+            artist_label = await i18n.t(channel, "music.player.artist", artist=current_track.author, static_embed=True)
             duration_label = await i18n.t(channel, "music.player.duration_label",
-                                          duration=f"{track.length // 1000 // 60}:{track.length // 1000 % 60:02d}",
-                                          static_embed=True)
+                                            duration=f"{current_track.length // 1000 // 60}:{current_track.length // 1000 % 60:02d}",
+                                            static_embed=True)
 
             # Detect Spotify source
-            is_spotify = track.uri and "spotify" in track.uri.lower()
+            is_spotify = current_track.uri and "spotify" in current_track.uri.lower()
             if is_spotify:
                 embed.color = discord.Color.green()
                 source_indicator = "🎵 Spotify\n"
@@ -449,14 +584,14 @@ class Music(commands.Cog):
                 source_indicator = "🎵 YouTube\n"
 
             embed.title = now_playing_title
-            embed.description = f"{source_indicator}**[{track.title}]({track.uri})**\n\n{artist_label}\n{duration_label}"
-            if track.artwork: embed.set_thumbnail(url=track.artwork)
-            if hasattr(track.extras, 'requester'):
-                req_text = await i18n.t(channel, "music.player.requester_label", user=track.extras.requester,
+            embed.description = f"{source_indicator}**[{current_track.title}]({current_track.uri})**\n\n{artist_label}\n{duration_label}"
+            if current_track.thumbnail: embed.set_thumbnail(url=current_track.thumbnail)
+            if hasattr(current_track, 'requester') and current_track.requester:
+                req_text = await i18n.t(channel, "music.player.requester_label", user=current_track.requester,
                                         static_embed=True)
                 embed.add_field(name=" ", value=req_text)
                 embed.set_image(url=Config.BAR_URL)
-            # embed.set_image(url=Config.BAR_URL)
+                embed.set_footer(text=f"⚠️ Running on the Pomice branch — not fully tested yet.")
 
         # Get existing message
         message_id = await self.guild_model.get_music_message(guild_id)
@@ -468,9 +603,9 @@ class Music(commands.Cog):
             except discord.NotFound:
                 pass
 
-        if player and player.connected and player.playing:
+        if is_connected and is_playing and current_track:
             view = NowPlayingView(player, self.user_model, self.guild_model, locale=locale)
-            self.bot.loop.create_task(view.async_init())
+            await view.async_init()
         else:
             view = IdlePlaylistView(guild_id, self.user_model, self.guild_model, self.bot, locale=locale)
 
@@ -522,13 +657,19 @@ class Music(commands.Cog):
         user_data = await self.user_model.get_user(ctx.author.id)
         guild_data = await self.guild_model.get_guild(ctx.guild.id)
 
-        # Check for saved playlists
+        # Check for saved playlists (use source_url for imported playlists)
+        saved_pl = None
         if user_data and 'playlists' in user_data and query in user_data['playlists']:
-            query = user_data['playlists'][query]
+            saved_pl = user_data['playlists'][query]
         elif guild_data and 'playlists' in guild_data and query in guild_data['playlists']:
-            query = guild_data['playlists'][query]
+            saved_pl = guild_data['playlists'][query]
+        if saved_pl:
+            if saved_pl.get('type') == 'imported' and saved_pl.get('source_url'):
+                query = saved_pl['source_url']
+            else:
+                saved_pl = None
 
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         if not player:
             try:
                 logger.debug(f"[VOICE] Connecting to voice channel: {ctx.author.voice.channel.name}")
@@ -549,37 +690,69 @@ class Music(commands.Cog):
         is_spotify = SPOTIFY_URL_PATTERN.match(query) is not None
 
         try:
-            tracks: wavelink.Search = await wavelink.Playable.search(query)
-        except wavelink.LavalinkLoadException as e:
-            msg = await i18n.t(ctx, "music.errors.track_failed", error=str(e))
-            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+            if player:
+                tracks = await player.get_tracks(query)
+            else:
+                tracks = await pomice.NodePool.get_node().get_tracks(query)
+        except Exception as e:
+            err_str = str(e)
+            if "Session not found" in err_str and player:
+                logger.warning(f"[RECOVERY] Session died for guild {ctx.guild.id}. Reconnecting...")
+                try:
+                    await player.destroy()
+                except:
+                    if ctx.guild.voice_client:
+                        await ctx.guild.voice_client.disconnect(force=True)
+                try:
+                    player = await ctx.author.voice.channel.connect(cls=CustomPlayer)
+                    player.home_channel = response_channel
+                    tracks = await player.get_tracks(query)
+                except Exception as inner_e:
+                    msg = await i18n.t(ctx, "music.errors.track_failed", error=str(inner_e))
+                    return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+            elif "refused" in err_str.lower() or "connect" in err_str.lower():
+                if player:
+                    try:
+                        await player.destroy()
+                    except:
+                        if ctx.guild.voice_client:
+                            await ctx.guild.voice_client.disconnect(force=True)
+                try:
+                    msg = await i18n.t(ctx, "music.errors.node_offline")
+                except:
+                    msg = "Music server is currently offline. Please try again later."
+                return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
+            else:
+                msg = await i18n.t(ctx, "music.errors.track_failed", error=err_str)
+                return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
         if not tracks:
             msg = await i18n.t(ctx, "music.commands.play.no_results", query=query)
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
         # If it's a URL or a specific Container (Playlist), auto-play/queue
-        if is_url or isinstance(tracks, wavelink.Playlist):
-            if isinstance(tracks, wavelink.Playlist):
-                for track in tracks:
-                    track.extras.requester = ctx.author.mention
+        if is_url or isinstance(tracks, pomice.Playlist):
+            if isinstance(tracks, pomice.Playlist):
+                for track in tracks.tracks:
+                    track.requester = ctx.author.mention
                 
                 # For playlists, mode only affects the first track
-                if mode == "now" and player.playing:
+                if mode == "now" and player.is_playing:
                     # Play first track immediately, queue the rest
-                    first_track = tracks[0]
-                    for track in tracks[1:]:
+                    first_track = tracks.tracks[0]
+                    for track in tracks.tracks[1:]:
                         player.queue.put_at_front(track)
                     vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                    await player.play(first_track, volume=vol)
+                    await player.set_volume(vol)
+                    await player.play(first_track)
                     msg = await i18n.t(ctx, "music.commands.play.playing_now", title=first_track.title)
                 elif mode == "next":
                     # Add all tracks to front of queue (in reverse order so first track is next)
-                    for track in reversed(tracks):
+                    for track in reversed(tracks.tracks):
                         player.queue.put_at_front(track)
-                    msg = await i18n.t(ctx, "music.commands.play.playlist_added_next", count=len(tracks), name=tracks.name)
+                    msg = await i18n.t(ctx, "music.commands.play.playlist_added_next", count=len(tracks.tracks), name=tracks.name)
                 else:
-                    await player.queue.put_wait(tracks)
-                    msg = await i18n.t(ctx, "music.commands.play.playlist_added", count=len(tracks), name=tracks.name)
+                    player.queue.extend(tracks.tracks)
+                    msg = await i18n.t(ctx, "music.commands.play.playlist_added", count=len(tracks.tracks), name=tracks.name)
                 
                 source_label = "🎵 Spotify" if is_spotify else "🎵 YouTube"
                 if source_label:
@@ -587,27 +760,29 @@ class Music(commands.Cog):
                 await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
             else:
                 track = tracks[0]
-                track.extras.requester = ctx.author.mention
+                track.requester = ctx.author.mention
                 source_label = "🎵 Spotify" if is_spotify else "🎵 YouTube"
                 
-                if mode == "now" and player.playing:
+                if mode == "now" and player.is_playing:
                     vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                    await player.play(track, volume=vol)
+                    await player.set_volume(vol)
+                    await player.play(track)
                     msg = await i18n.t(ctx, "music.commands.play.playing_now", title=track.title)
                 elif mode == "next":
                     player.queue.put_at_front(track)
                     msg = await i18n.t(ctx, "music.commands.play.added_next", title=track.title)
                 else:
-                    await player.queue.put_wait(track)
+                    player.queue.put(track)
                     msg = await i18n.t(ctx, "music.commands.play.added_to_queue", title=track.title)
                 
                 if source_label:
                     msg = f"{source_label} | {msg}"
                 await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-            if not player.playing:
+            if not player.is_playing:
                 vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                await player.play(player.queue.get(), volume=vol)
+                await player.set_volume(vol)
+                await player.play(player.queue.get())
 
             await self.update_static_embed(ctx.guild.id)
             return
@@ -647,20 +822,22 @@ class Music(commands.Cog):
 
                 if 1 <= choice <= len(tracks_top):
                     track = tracks_top[choice - 1]
-                    track.extras.requester = ctx.author.mention
+                    track.requester = ctx.author.mention
                     
-                    if mode == "now" and player.playing:
+                    if mode == "now" and player.is_playing:
                         vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                        await player.play(track, volume=vol)
+                        await player.set_volume(vol)
+                        await player.play(track)
                         added_text = await i18n.t(ctx, "music.commands.play.playing_now", title=track.title)
                     elif mode == "next":
                         player.queue.put_at_front(track)
                         added_text = await i18n.t(ctx, "music.commands.play.added_next", title=track.title)
                     else:
-                        await player.queue.put_wait(track)
-                        if not player.playing:
+                        player.queue.put(track)
+                        if not player.is_playing:
                             vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                            await player.play(player.queue.get(), volume=vol)
+                            await player.set_volume(vol)
+                            await player.play(player.queue.get())
                         added_text = await i18n.t(ctx, "music.commands.play.added_to_queue", title=track.title)
 
                     await msg.edit(content=added_text, delete_after=5)
@@ -686,8 +863,30 @@ class Music(commands.Cog):
         app_commands.Choice(name="Play Now (skip current)", value="now"),
         app_commands.Choice(name="Play Next (after current)", value="next"),
     ])
-    async def play(self, ctx: commands.Context, mode: str = "normal", *, query: str):
+    async def play(self, ctx: commands.Context, *, query: str, mode: str = "normal"): # temp fix (might be permanent)
         """Play a song or saved playlist."""
+        # if not ctx.interaction:
+        #     valid_modes = ("normal", "now", "next")
+        #     if mode.lower() not in valid_modes or mode.startswith(("http://", "https://")):
+        #         query = f"{mode} {query}" if query else mode
+        #         mode = "normal"
+        #     else:
+        #         mode = mode.lower()
+
+        await self._play_command_logic(ctx, query, "normal")
+
+    @commands.command(name="playnow", aliases=["pn"])
+    async def playnow(self, ctx: commands.Context, *, query: str):
+        """Play a song immediately (skips current)."""
+        await self._play_command_logic(ctx, query, "now")
+
+    @commands.command(name="playnext", aliases=["pnx"])
+    async def playnext(self, ctx: commands.Context, *, query: str):
+        """Play a song after the current one."""
+        await self._play_command_logic(ctx, query, "next")
+
+    async def _play_command_logic(self, ctx: commands.Context, query: str, mode: str = "normal"):
+        """Shared entry point for play commands."""
         await self.handle_command_cleanup(ctx)
 
         if not ctx.guild:
@@ -734,16 +933,16 @@ class Music(commands.Cog):
     @app_commands.describe(playlist_name="Playlist to add to", url="URL of the song (optional, uses current track if omitted)")
     async def playlist_add(self, ctx, playlist_name: str, url: str = None):
         """Add the current song or a URL to a playlist"""
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         
         if url:
             # Search for the track
             try:
-                tracks = await wavelink.Playable.search(url)
+                tracks = await pomice.NodePool.get_node().get_tracks(url)
                 if not tracks:
                     msg = await i18n.t(ctx, "music.playlist.track_not_found")
                     return await ctx.send(msg, delete_after=10)
-                track = tracks[0] if not isinstance(tracks, wavelink.Playlist) else tracks[0]
+                track = tracks[0] if not isinstance(tracks, pomice.Playlist) else tracks.tracks[0]
                 track_info = {'title': track.title, 'url': track.uri, 'author': track.author}
             except Exception as e:
                 msg = await i18n.t(ctx, "music.playlist.error", error=str(e))
@@ -824,6 +1023,20 @@ class Music(commands.Cog):
             if additions > 0:
                 modifications_footer = await i18n.t(ctx, "music.playlist.modifications_footer")
                 embed.set_footer(text=modifications_footer)
+        else:
+            tracks = playlist.get('tracks', [])
+            if tracks:
+                track_lines = []
+                for i, track in enumerate(tracks[:25], 1):
+                    title = track.get('title', 'Unknown')
+                    author = track.get('author', 'Unknown')
+                    track_lines.append(f"**{i}.** {title} — {author}")
+                embed.description = "\n".join(track_lines)
+                if len(tracks) > 25:
+                    footer_text = await i18n.t(ctx, "music.playlist.view_more_tracks", count=len(tracks) - 25)
+                    embed.set_footer(text=footer_text)
+            else:
+                embed.description = await i18n.t(ctx, "music.playlist.view_empty_desc")
 
         
         await ctx.send(embed=embed)
@@ -850,7 +1063,8 @@ class Music(commands.Cog):
                     additions_text = await i18n.t(ctx, "music.playlist.list_imported_additions", additions=additions)
                     val_text += additions_text
             else:
-                val_text = await i18n.t(ctx, "music.playlist.list_unknown_type")
+                count = len(playlist.get('tracks', []))
+                val_text = await i18n.t(ctx, "music.playlist.list_regular_type", count=count)
             
             embed.add_field(
                 name=f"📂 {playlist.get('name', key)}", 
@@ -886,10 +1100,12 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.playlist.playlist_not_found", name=name)
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
         
-        if playlist.get('type') != 'imported':
+        is_imported = playlist.get('type') == 'imported'
+        tracks_list = playlist.get('tracks', [])
+        if not is_imported and not tracks_list:
             msg = await i18n.t(ctx, "music.playlist.empty_playlist")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         if not player:
             if not ctx.author.voice:
                 msg = await i18n.t(ctx, "music.commands.play.not_in_voice")
@@ -899,60 +1115,112 @@ class Music(commands.Cog):
         
         playlist_name = playlist.get('name', name)
         
-        from utils.playlist_loader import PlaylistLoader
-        loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
-        status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
-        
-        try:
-            # Load source
-            tracks = await PlaylistLoader.load_playlist(playlist, player)
-            if not tracks:
-                load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
-                return await status_msg.edit(content=load_failed_msg)
+        if is_imported:
+            from utils.playlist_loader import PlaylistLoader
+            loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
+            status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
             
-            # Add to queue
+            try:
+                # Load source
+                tracks = await PlaylistLoader.load_playlist(playlist, player)
+                if not tracks:
+                    load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
+                    return await status_msg.edit(content=load_failed_msg)
+                
+                # Add to queue
+                count = 0
+                for track in tracks:
+                    track.requester = ctx.author.mention
+                    player.queue.put(track)
+                    count += 1
+                
+                if not player.is_playing:
+                    vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
+                
+                msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
+                
+                # Handle additions in background
+                additions = playlist.get('modifications', {}).get('additions', [])
+                if additions:
+                    loading_additions_msg = await i18n.t(ctx, "music.playlist.loading_additions", count=len(additions))
+                    msg_content += "\n" + loading_additions_msg
+                    await status_msg.edit(content=msg_content)
+                    
+                    _done = {'value': False}
+                    async def progress_callback(loaded, total):
+                        try:
+                            if not _done['value']:
+                                if loaded % 5 == 0:
+                                    progress_msg = await i18n.t(ctx, "music.playlist.loading_additions_progress", count=count, loaded=loaded, total=total)
+                                    await status_msg.edit(content=progress_msg)
+
+                            if not _done['value'] and (loaded == total or loaded % 5 != 0 or loaded == 0):
+                                _done['value'] = True
+                                final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
+                                await status_msg.edit(content=final_msg)
+                        except:
+                            pass
+                    
+                    self.bot.loop.create_task(
+                        PlaylistLoader.load_additions_background(additions, player, progress_callback)
+                    )
+                else:
+                    await status_msg.edit(content=msg_content)
+                
+                await self.update_static_embed(ctx.guild.id)
+                
+            except Exception as e:
+                logger.error(f"Error loading imported playlist: {e}")
+                error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
+                await status_msg.edit(content=error_msg)
+        else:
             count = 0
-            for track in tracks:
-                track.extras.requester = ctx.author.mention
-                await player.queue.put_wait(track)
-                count += 1
+            failed = 0
+            loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
+            status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
             
-            if not player.playing:
-                vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                await player.play(player.queue.get(), volume=vol)
-            
-            msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
-            
-            # Handle additions in background
-            additions = playlist.get('modifications', {}).get('additions', [])
-            if additions:
-                loading_additions_msg = await i18n.t(ctx, "music.playlist.loading_additions", count=len(additions))
-                msg_content += "\n" + loading_additions_msg
-                await status_msg.edit(content=msg_content)
-                
-                async def progress_callback(loaded, total):
+            try:
+                for track_data in tracks_list:
+                    track_url = track_data.get('url', '')
+                    if not track_url:
+                        failed += 1
+                        continue
                     try:
-                         if loaded % 5 == 0 or loaded == total:
-                            progress_msg = await i18n.t(ctx, "music.playlist.loading_additions_progress", count=count, loaded=loaded, total=total)
-                            await status_msg.edit(content=progress_msg)
-                         if loaded == total:
-                            final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
-                            await status_msg.edit(content=final_msg)
-                    except:
-                        pass
+                        results = await player.get_tracks(track_url)
+                        if results:
+                            t = results[0] if isinstance(results, list) else results.tracks[0] if hasattr(results, 'tracks') else None
+                            if t:
+                                t.requester = ctx.author.mention
+                                player.queue.put(t)
+                                count += 1
+                            else:
+                                failed += 1
+                        else:
+                            failed += 1
+                    except Exception:
+                        failed += 1
                 
-                self.bot.loop.create_task(
-                    PlaylistLoader.load_additions_background(additions, player, progress_callback)
-                )
-            else:
+                if count == 0:
+                    load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
+                    return await status_msg.edit(content=load_failed_msg)
+                
+                if not player.is_playing:
+                    vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
+                
+                msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
+                if failed > 0:
+                    failed_text = await i18n.t(ctx, "music.playlist.tracks_failed_to_load", count=failed)
+                    msg_content += failed_text
                 await status_msg.edit(content=msg_content)
-            
-            await self.update_static_embed(ctx.guild.id)
-            
-        except Exception as e:
-            logger.error(f"Error loading imported playlist: {e}")
-            error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
-            await status_msg.edit(content=error_msg)
+                await self.update_static_embed(ctx.guild.id)
+            except Exception as e:
+                logger.error(f"Error loading regular playlist: {e}")
+                error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
+                await status_msg.edit(content=error_msg)
 
 
 
@@ -967,7 +1235,7 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.playlist.importing")
             status_msg = await ctx.send(msg)
             try:
-                tracks = await wavelink.Playable.search(url)
+                tracks = await pomice.NodePool.get_node().get_tracks(url)
             except Exception as e:
                 logger.error(f"Search failed during import: {e}")
                 tracks = None
@@ -981,7 +1249,7 @@ class Music(commands.Cog):
             track_count = 0
             source_name = "Imported Playlist"
             
-            if isinstance(tracks, wavelink.Playlist):
+            if isinstance(tracks, pomice.Playlist):
                 track_count = len(tracks.tracks)
                 source_name = tracks.name
             elif isinstance(tracks, list):
@@ -1045,15 +1313,15 @@ class Music(commands.Cog):
     @app_commands.describe(playlist_name="Playlist to add to", url="URL of the song")
     async def server_add(self, ctx, playlist_name: str, url: str = None):
         """Add a song to a server playlist"""
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         
         if url:
             try:
-                tracks = await wavelink.Playable.search(url)
+                tracks = await pomice.NodePool.get_node().get_tracks(url)
                 if not tracks:
                     msg = await i18n.t(ctx, "music.playlist.track_not_found")
                     return await ctx.send(msg, delete_after=10)
-                track = tracks[0] if not isinstance(tracks, wavelink.Playlist) else tracks[0]
+                track = tracks[0] if not isinstance(tracks, pomice.Playlist) else tracks.tracks[0]
                 track_info = {'title': track.title, 'url': track.uri, 'author': track.author}
             except Exception as e:
                 msg = await i18n.t(ctx, "music.playlist.error", error=str(e))
@@ -1076,11 +1344,24 @@ class Music(commands.Cog):
     @app_commands.describe(playlist_name="Playlist to remove from", index="Track number to remove")
     async def server_remove(self, ctx, playlist_name: str, index: int):
         """Remove a track from a server playlist"""
-        success = await self.guild_model.remove_track_from_playlist(ctx.guild.id, playlist_name, index - 1)
+        success, result = await self.guild_model.remove_track_from_playlist(ctx.guild.id, playlist_name, index - 1)
+        
         if success:
-            msg = await i18n.t(ctx, "music.playlist.track_removed", index=index, playlist=playlist_name)
+            track_title = result.get('title', 'Unknown')
+            msg = await i18n.t(ctx, "music.playlist.track_removed_title", title=track_title, playlist=playlist_name)
         else:
-            msg = await i18n.t(ctx, "music.playlist.remove_failed")
+            error = result.get('error', 'unknown') if result else 'unknown'
+            if error == 'playlist_not_found':
+                msg = await i18n.t(ctx, "music.playlist.playlist_not_found", name=playlist_name)
+            elif error == 'empty_playlist':
+                msg = await i18n.t(ctx, "music.playlist.empty_playlist")
+            elif error == 'no_additions':
+                msg = await i18n.t(ctx, "music.playlist.remove_no_additions")
+            elif error == 'invalid_index':
+                max_index = result.get('max_index', 0)
+                msg = await i18n.t(ctx, "music.playlist.remove_invalid_index", index=index, max=max_index)
+            else:
+                msg = await i18n.t(ctx, "music.playlist.remove_failed")
         await ctx.send(msg, delete_after=10)
 
     @serverplaylist.command(name="view")
@@ -1120,6 +1401,20 @@ class Music(commands.Cog):
             if additions > 0:
                 modifications_footer = await i18n.t(ctx, "music.playlist.modifications_footer")
                 embed.set_footer(text=modifications_footer)
+        else:
+            tracks = playlist.get('tracks', [])
+            if tracks:
+                track_lines = []
+                for i, track in enumerate(tracks[:25], 1):
+                    title = track.get('title', 'Unknown')
+                    author = track.get('author', 'Unknown')
+                    track_lines.append(f"**{i}.** {title} — {author}")
+                embed.description = "\n".join(track_lines)
+                if len(tracks) > 25:
+                    footer_text = await i18n.t(ctx, "music.playlist.view_more_tracks", count=len(tracks) - 25)
+                    embed.set_footer(text=footer_text)
+            else:
+                embed.description = await i18n.t(ctx, "music.playlist.view_empty_server")
 
         
         await ctx.send(embed=embed)
@@ -1146,7 +1441,8 @@ class Music(commands.Cog):
                     additions_text = await i18n.t(ctx, "music.playlist.list_imported_additions", additions=additions)
                     val_text += additions_text
             else:
-                val_text = await i18n.t(ctx, "music.playlist.list_unknown_type")
+                count = len(playlist.get('tracks', []))
+                val_text = await i18n.t(ctx, "music.playlist.list_regular_type", count=count)
 
             embed.add_field(
                 name=f"📁 {playlist.get('name', key)}", 
@@ -1180,11 +1476,13 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.playlist.playlist_not_found", name=name)
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
 
-        if playlist.get('type') != 'imported':
+        is_imported = playlist.get('type') == 'imported'
+        tracks_list = playlist.get('tracks', [])
+        if not is_imported and not tracks_list:
             msg = await i18n.t(ctx, "music.playlist.empty_playlist")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
         
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         if not player:
             if not ctx.author.voice:
                 msg = await i18n.t(ctx, "music.commands.play.not_in_voice")
@@ -1194,58 +1492,109 @@ class Music(commands.Cog):
         
         playlist_name = playlist.get('name', name)
         
-        from utils.playlist_loader import PlaylistLoader
+        if is_imported:
+            from utils.playlist_loader import PlaylistLoader
 
-        loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
-        status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
-        
-        try:
-            tracks = await PlaylistLoader.load_playlist(playlist, player)
-            if not tracks:
-                load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
-                await status_msg.edit(content=load_failed_msg)
-                return
+            loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
+            status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
             
+            try:
+                tracks = await PlaylistLoader.load_playlist(playlist, player)
+                if not tracks:
+                    load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
+                    await status_msg.edit(content=load_failed_msg)
+                    return
+                
+                count = 0
+                for track in tracks:
+                    track.requester = ctx.author.mention
+                    player.queue.put(track)
+                    count += 1
+                
+                if not player.is_playing:
+                    vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
+                
+                msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
+                
+                additions = playlist.get('modifications', {}).get('additions', [])
+                if additions:
+                    loading_additions_msg = await i18n.t(ctx, "music.playlist.loading_additions", count=len(additions))
+                    msg_content += "\n" + loading_additions_msg
+                    await status_msg.edit(content=msg_content)
+                    
+                    _done = {'value': False}
+                    async def progress_callback(loaded, total):
+                        try:
+                            if not _done['value']:
+                                if loaded % 5 == 0:
+                                    progress_msg = await i18n.t(ctx, "music.playlist.loading_additions_progress", count=count, loaded=loaded, total=total)
+                                    await status_msg.edit(content=progress_msg)
+                            if not _done['value'] and (loaded == total or loaded % 5 != 0 or loaded == 0):
+                                _done['value'] = True
+                                final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
+                                await status_msg.edit(content=final_msg)
+                        except:
+                            pass
+                    
+                    self.bot.loop.create_task(
+                        PlaylistLoader.load_additions_background(additions, player, progress_callback)
+                    )
+                else:
+                    await status_msg.edit(content=msg_content)
+                
+                await self.update_static_embed(ctx.guild.id)
+            except Exception as e:
+                logger.error(f"Error loading imported server playlist: {e}")
+                error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
+                await status_msg.edit(content=error_msg)
+        else:
             count = 0
-            for track in tracks:
-                track.extras.requester = ctx.author.mention
-                await player.queue.put_wait(track)
-                count += 1
+            failed = 0
+            loading_msg = await i18n.t(ctx, "music.playlist.loading_imported", name=playlist_name)
+            status_msg = await self.send_response(ctx, response_channel, redirected, content=loading_msg)
             
-            if not player.playing:
-                vol = await self.guild_model.get_default_volume(ctx.guild.id)
-                await player.play(player.queue.get(), volume=vol)
-            
-            msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
-            
-            additions = playlist.get('modifications', {}).get('additions', [])
-            if additions:
-                loading_additions_msg = await i18n.t(ctx, "music.playlist.loading_additions", count=len(additions))
-                msg_content += "\n" + loading_additions_msg
-                await status_msg.edit(content=msg_content)
-                
-                async def progress_callback(loaded, total):
+            try:
+                for track_data in tracks_list:
+                    track_url = track_data.get('url', '')
+                    if not track_url:
+                        failed += 1
+                        continue
                     try:
-                        if loaded % 5 == 0 or loaded == total:
-                            progress_msg = await i18n.t(ctx, "music.playlist.loading_additions_progress", count=count, loaded=loaded, total=total)
-                            await status_msg.edit(content=progress_msg)
-                        if loaded == total:
-                            final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
-                            await status_msg.edit(content=final_msg)
-                    except:
-                        pass
+                        results = await player.get_tracks(track_url)
+                        if results:
+                            t = results[0] if isinstance(results, list) else results.tracks[0] if hasattr(results, 'tracks') else None
+                            if t:
+                                t.requester = ctx.author.mention
+                                player.queue.put(t)
+                                count += 1
+                            else:
+                                failed += 1
+                        else:
+                            failed += 1
+                    except Exception:
+                        failed += 1
                 
-                self.bot.loop.create_task(
-                    PlaylistLoader.load_additions_background(additions, player, progress_callback)
-                )
-            else:
+                if count == 0:
+                    load_failed_msg = await i18n.t(ctx, "music.playlist.load_failed")
+                    return await status_msg.edit(content=load_failed_msg)
+                
+                if not player.is_playing:
+                    vol = await self.guild_model.get_default_volume(ctx.guild.id)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
+                
+                msg_content = await i18n.t(ctx, "music.playlist.added_tracks", count=count, name=playlist_name)
+                if failed > 0:
+                    failed_text = await i18n.t(ctx, "music.playlist.tracks_failed_to_load", count=failed)
+                    msg_content += failed_text
                 await status_msg.edit(content=msg_content)
-            
-            await self.update_static_embed(ctx.guild.id)
-        except Exception as e:
-            logger.error(f"Error loading imported server playlist: {e}")
-            error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
-            await status_msg.edit(content=error_msg)
+                await self.update_static_embed(ctx.guild.id)
+            except Exception as e:
+                logger.error(f"Error loading regular server playlist: {e}")
+                error_msg = await i18n.t(ctx, "music.playlist.load_error", error=str(e))
+                await status_msg.edit(content=error_msg)
 
 
     @serverplaylist.command(name="import")
@@ -1259,7 +1608,7 @@ class Music(commands.Cog):
             status_msg = await ctx.send(msg)
             
             try:
-                tracks = await wavelink.Playable.search(url)
+                tracks = await pomice.NodePool.get_node().get_tracks(url)
             except Exception as e:
                 logger.error(f"Search failed during server import: {e}")
                 tracks = None
@@ -1273,7 +1622,7 @@ class Music(commands.Cog):
             track_count = 0
             source_name = "Imported Playlist"
             
-            if isinstance(tracks, wavelink.Playlist):
+            if isinstance(tracks, pomice.Playlist):
                 track_count = len(tracks.tracks)
                 source_name = tracks.name
             elif isinstance(tracks, list):
@@ -1324,7 +1673,7 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx):
             return
 
-        player: wavelink.Player | None = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player | None = cast(pomice.Player, ctx.voice_client)
 
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
@@ -1336,13 +1685,17 @@ class Music(commands.Cog):
 
         previous_track = player.history[-1]
 
-        if player.current:
-            player.queue.put_at(0, player.current)
+        if player.queue.loop_mode == LoopMode.QUEUE:
+            player.history.pop()
+            await player.play(previous_track)
+        else:
+            if player.current:
+                player.queue.put_at(0, player.current)
 
-        player.history.pop()
-        player.queue.put_at(0, previous_track)
+            player.history.pop()
+            player.queue.put_at(0, previous_track)
 
-        await player.skip(force=True)
+            await player.stop()
 
         msg = await i18n.t(ctx, "music.commands.previous.playing", title=previous_track.title)
         await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -1357,17 +1710,72 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx, response_channel, redirected):
             return
 
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-        if not player.playing:
+        if not player.is_playing:
             msg = await i18n.t(ctx, "music.commands.skip.nothing_playing")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-        await player.skip(force=True)
+        await player.stop()
         msg = await i18n.t(ctx, "music.commands.skip.skipped")
+        await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+    @commands.hybrid_command(name="skipto", aliases=["st", "jumpto"])
+    @app_commands.describe(position="Queue position to skip to (e.g. 3 to skip to the 3rd song)")
+    async def skipto(self, ctx: commands.Context, position: int):
+        """Skip to a specific song in the queue"""
+        await self.handle_command_cleanup(ctx)
+        response_channel = await self.get_response_channel(ctx)
+        redirected = await self.acknowledge_static_redirect(ctx)
+
+        if not await self.check_voice_channel(ctx, response_channel, redirected):
+            return
+
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
+        if not player:
+            msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
+            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+        if not player.is_playing:
+            msg = await i18n.t(ctx, "music.commands.skip.nothing_playing")
+            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+        timeline, current_index, queue_start_index = build_queue_timeline(player)
+        if position < 1 or position > len(timeline):
+            msg = await i18n.t(ctx, "music.commands.skipto.invalid_position", position=position, max=len(timeline))
+            return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
+
+        target_index = position - 1
+        target_track, _ = timeline[target_index]
+
+        if target_index == current_index:
+            target_title = target_track.title
+        else:
+            if player.current and player.current is not target_track:
+                if not hasattr(player, "history"):
+                    player.history = []
+                if not player.history or player.history[-1] is not player.current:
+                    player.history.append(player.current)
+
+            if player.queue.loop_mode == LoopMode.QUEUE:
+                await player.play(target_track)
+                target_title = target_track.title
+            elif target_index >= queue_start_index:
+                queue_index = target_index - queue_start_index
+                for _ in range(queue_index):
+                    player.queue.remove_at(0)
+
+                target_track = player.queue.remove_at(0)
+                target_title = target_track.title
+                await player.play(target_track)
+            else:
+                target_title = target_track.title
+                await player.play(target_track)
+
+        msg = await i18n.t(ctx, "music.commands.skipto.success", position=position, title=target_title)
         await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
     @commands.hybrid_command(name="seek")
@@ -1381,7 +1789,7 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx, response_channel, redirected):
             return
 
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -1437,12 +1845,18 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx):
             return
 
-        player: wavelink.Player = cast(wavelink.Player, ctx.voice_client)
+        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-        await player.disconnect()
+        try:
+            await player.destroy()
+        except Exception as e:
+            logger.error(f"Error destroying player gracefully: {e}")
+            if ctx.guild.voice_client:
+                await ctx.guild.voice_client.disconnect(force=True)
+        
         msg = await i18n.t(ctx, "music.commands.disconnect.disconnected")
         await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
         await self.update_static_embed(ctx.guild.id)
@@ -1454,7 +1868,7 @@ class Music(commands.Cog):
         response_channel = await self.get_response_channel(ctx)
         redirected = await self.acknowledge_static_redirect(ctx)
 
-        player = cast(wavelink.Player, ctx.voice_client)
+        player = cast(pomice.Player, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -1517,7 +1931,12 @@ class Music(commands.Cog):
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
         try:
-            player.queue.move(index_from - 1, index_to - 1)
+            _, _, queue_start_index = build_queue_timeline(player)
+            queue_start_position = queue_start_index + 1
+            if index_from < queue_start_position or index_to < queue_start_position:
+                raise IndexError
+
+            player.queue.move(index_from - queue_start_position, index_to - queue_start_position)
             msg = await i18n.t(ctx, "music.commands.move.success", from_index=index_from, to_index=index_to)
             await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
             await self.update_static_embed(ctx.guild.id)
@@ -1538,7 +1957,12 @@ class Music(commands.Cog):
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
         try:
-            removed_track = player.queue.remove_at(index - 1)
+            _, _, queue_start_index = build_queue_timeline(player)
+            queue_start_position = queue_start_index + 1
+            if index < queue_start_position:
+                raise IndexError
+
+            removed_track = player.queue.remove_at(index - queue_start_position)
             msg = await i18n.t(ctx, "music.commands.remove.success", title=removed_track.title)
             await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
             await self.update_static_embed(ctx.guild.id)
@@ -1659,7 +2083,7 @@ class Music(commands.Cog):
         player.twenty_four_seven = not player.twenty_four_seven
         
         if not player.twenty_four_seven:
-            if player.queue.is_empty and not player.playing:
+            if player.queue.is_empty and not player.is_playing:
                  self.start_timeout(ctx.guild.id, player)
 
             elif len(player.channel.members) == 1:
@@ -1683,11 +2107,11 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
-        if player.autoplay == wavelink.AutoPlayMode.enabled:
-            player.autoplay = wavelink.AutoPlayMode.disabled
+        if getattr(player, 'autoplay_enabled', False):
+            player.autoplay_enabled = False
             status = "disabled"
         else:
-            player.autoplay = wavelink.AutoPlayMode.enabled
+            player.autoplay_enabled = True
             status = "enabled"
 
         msg = await i18n.t(ctx, f"music.commands.autoplay.{status}")
@@ -1898,8 +2322,8 @@ class PlaylistSelect(discord.ui.Select):
         
         await interaction.response.defer(ephemeral=True)
         
-        player = wavelink.Pool.get_node().get_player(interaction.guild_id)
-        if not player or not player.connected:
+        player = pomice.NodePool.get_node().get_player(interaction.guild_id)
+        if not player or not player.is_connected:
             try:
                 player = await interaction.user.voice.channel.connect(cls=CustomPlayer)
                 player.home_channel = interaction.channel
@@ -1927,13 +2351,14 @@ class PlaylistSelect(discord.ui.Select):
                     return
                 
                 for track in tracks:
-                    track.extras.requester = interaction.user.mention
-                    await player.queue.put_wait(track)
+                    track.requester = interaction.user.mention
+                    player.queue.put(track)
                     count += 1
                     
-                if not player.playing:
+                if not player.is_playing:
                     vol = await self.guild_model.get_default_volume(interaction.guild_id)
-                    await player.play(player.queue.get(), volume=vol)
+                    await player.set_volume(vol)
+                    await player.play(player.queue.get())
                 
                 added_msg = await i18n.t(interaction, "music.ui.added_tracks", count=count, name=playlist_name)
                 
@@ -1946,12 +2371,15 @@ class PlaylistSelect(discord.ui.Select):
 
                     locale = self.locale
                     
+                    _done = {'value': False}
                     async def progress_callback(loaded, total):
                         try:
-                            if loaded % 5 == 0 or loaded == total:
-                                progress_msg = i18n.get_text("music.ui.loading_additions_progress", locale, count=count, loaded=loaded, total=total)
-                                await status_msg.edit(content=progress_msg)
-                            if loaded == total:
+                            if not _done['value']:
+                                if loaded % 5 == 0:
+                                    progress_msg = i18n.get_text("music.ui.loading_additions_progress", locale, count=count, loaded=loaded, total=total)
+                                    await status_msg.edit(content=progress_msg)
+                            if not _done['value'] and (loaded == total or loaded % 5 != 0 or loaded == 0):
+                                _done['value'] = True
                                 final_msg = i18n.get_text("music.ui.added_with_additions_custom", locale, count=count, additions=loaded, name=playlist_name)
                                 await status_msg.edit(content=final_msg)
                         except:
@@ -1973,17 +2401,18 @@ class PlaylistSelect(discord.ui.Select):
                         continue
                     
                     try:
-                        search_result = await wavelink.Playable.search(url)
+                        search_result = await player.get_tracks(url)
                         if search_result:
                             track = search_result[0] if isinstance(search_result, list) else search_result
-                            track.extras.requester = interaction.user.mention
-                            await player.queue.put_wait(track)
+                            track.requester = interaction.user.mention
+                            player.queue.put(track)
                             count += 1
                             
                             # Start playing after first track is loaded
-                            if count == 1 and not player.playing:
+                            if count == 1 and not player.is_playing:
                                 vol = await self.guild_model.get_default_volume(interaction.guild_id)
-                                await player.play(player.queue.get(), volume=vol)
+                                await player.set_volume(vol)
+                                await player.play(player.queue.get())
                             
                             # Update progress every 5 tracks
                             if count % 5 == 0:
@@ -2073,7 +2502,7 @@ class PlaylistSaveSelect(discord.ui.Select):
 
 
 class PlayerSettingsSelect(discord.ui.Select):
-    def __init__(self, player: wavelink.Player, user_model, guild_model, locale: str = "en"):
+    def __init__(self, player: pomice.Player, user_model, guild_model, locale: str = "en"):
         self.player = player
         self.user_model = user_model
         self.guild_model = guild_model
@@ -2093,7 +2522,7 @@ class PlayerSettingsSelect(discord.ui.Select):
         """Build options dynamically based on current player state"""
         locale = self.locale
 
-        autoplay_on = self.player.autoplay == wavelink.AutoPlayMode.enabled
+        autoplay_on = getattr(self.player, 'autoplay_enabled', False)
         autoplay_label = i18n.get_text("music.ui.settings_autoplay_on", locale) if autoplay_on else i18n.get_text("music.ui.settings_autoplay_off", locale)
         autoplay_desc = i18n.get_text("music.ui.settings_desc_autoplay", locale)
 
@@ -2120,11 +2549,11 @@ class PlayerSettingsSelect(discord.ui.Select):
         cog = interaction.client.get_cog("Music")
         
         if value == "autoplay":
-            if self.player.autoplay == wavelink.AutoPlayMode.enabled:
-                self.player.autoplay = wavelink.AutoPlayMode.disabled
+            if getattr(self.player, 'autoplay_enabled', False):
+                self.player.autoplay_enabled = False
                 msg = await i18n.t(interaction, "music.ui.settings_autoplay_disabled")
             else:
-                self.player.autoplay = wavelink.AutoPlayMode.enabled
+                self.player.autoplay_enabled = True
                 msg = await i18n.t(interaction, "music.ui.settings_autoplay_enabled")
             
             # Update options to reflect new state
@@ -2140,7 +2569,7 @@ class PlayerSettingsSelect(discord.ui.Select):
                     cog.cancel_timeout(interaction.guild_id)
                 msg = await i18n.t(interaction, "music.ui.settings_247_enabled")
             else:
-                if cog and self.player.queue.is_empty and not self.player.playing:
+                if cog and self.player.queue.is_empty and not self.player.is_playing:
                     cog.start_timeout(interaction.guild_id, self.player)
                 msg = await i18n.t(interaction, "music.ui.settings_247_disabled")
             
@@ -2224,7 +2653,7 @@ class PlayerSettingsSelect(discord.ui.Select):
 
 
 class NowPlayingView(discord.ui.View):
-    def __init__(self, player: wavelink.Player, user_model=None, guild_model=None, locale: str = "en"):
+    def __init__(self, player: pomice.Player, user_model=None, guild_model=None, locale: str = "en"):
         super().__init__(timeout=None)
         self.player = player
         self.user_model = user_model
@@ -2248,7 +2677,7 @@ class NowPlayingView(discord.ui.View):
 
         from utils.i18n import i18n
 
-        if self.player.paused:
+        if self.player.is_paused:
             self.play_pause_button.label = i18n.get_text("music.ui.resume", locale)
             self.play_pause_button.style = discord.ButtonStyle.success
             self.play_pause_button.emoji = "▶️"
@@ -2257,11 +2686,11 @@ class NowPlayingView(discord.ui.View):
             self.play_pause_button.style = discord.ButtonStyle.secondary
             self.play_pause_button.emoji = "⏸️"
 
-        if self.player.queue.mode == wavelink.QueueMode.loop:
+        if self.player.queue.loop_mode == LoopMode.TRACK:
             self.loop_button.style = discord.ButtonStyle.primary
             self.loop_button.emoji = "🔂"
             self.loop_button.label = i18n.get_text("music.ui.loop_track", locale)
-        elif self.player.queue.mode == wavelink.QueueMode.loop_all:
+        elif self.player.queue.loop_mode == LoopMode.QUEUE:
             self.loop_button.style = discord.ButtonStyle.success
             self.loop_button.emoji = "🔁"
             self.loop_button.label = i18n.get_text("music.ui.loop_queue", locale)
@@ -2287,30 +2716,34 @@ class NowPlayingView(discord.ui.View):
             return await interaction.followup.send(msg, ephemeral=True)
 
         previous_track = self.player.history.pop()
-        if self.player.playing:
+        if self.player.queue.loop_mode == LoopMode.QUEUE:
+            await self.player.play(previous_track)
+            return
+
+        if self.player.is_playing:
             current_track = self.player.current
             self.player.queue.put_at(0, current_track)
 
         self.player.queue.put_at(0, previous_track)
-        await self.player.skip(force=True)
+        await self.player.stop()
 
         # await interaction.followup.send(f"⏮️ Playing previous: {previous_track.title}", ephemeral=True)
 
     @discord.ui.button(label="Pause", style=discord.ButtonStyle.secondary, emoji="⏸️")
     async def play_pause_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.player.pause(not self.player.paused)
+        await self.player.set_pause(not self.player.is_paused)
         await self.update_buttons()
         await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label="Skip", style=discord.ButtonStyle.secondary, emoji="⏭️")
     async def skip_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        await self.player.skip(force=True)
+        await self.player.stop()
 
     @discord.ui.button(label="Stop", style=discord.ButtonStyle.danger, emoji="⏹️")
     async def stop_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        await self.player.disconnect()
+        await self.player.destroy()
 
         # Update static embed
         cog = interaction.client.get_cog("Music")
@@ -2319,12 +2752,12 @@ class NowPlayingView(discord.ui.View):
 
     @discord.ui.button(label="Loop", style=discord.ButtonStyle.secondary, emoji="🔁")
     async def loop_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.player.queue.mode == wavelink.QueueMode.normal:
-            self.player.queue.mode = wavelink.QueueMode.loop_all
-        elif self.player.queue.mode == wavelink.QueueMode.loop_all:
-            self.player.queue.mode = wavelink.QueueMode.loop
+        if not self.player.queue.is_looping:
+            self.player.queue.set_loop_mode(LoopMode.QUEUE)
+        elif self.player.queue.loop_mode == LoopMode.QUEUE:
+            self.player.queue.set_loop_mode(LoopMode.TRACK)
         else:
-            self.player.queue.mode = wavelink.QueueMode.normal
+            self.player.queue.disable_loop()
 
         await self.update_buttons()
         await interaction.response.edit_message(view=self)
@@ -2338,12 +2771,7 @@ class QueuePaginationView(discord.ui.View):
         self.per_page = per_page
         self.locale = locale
 
-        history = list(player.history) if hasattr(player, 'history') else []
-        current = [player.current] if player.current else []
-        queue = list(player.queue)
-
-        self.full_playlist = history + current + queue
-        self.current_index = len(history) if current else -1
+        self.full_playlist, self.current_index, _ = build_queue_timeline(player)
 
         self.total_pages = max(1, (len(self.full_playlist) + per_page - 1) // per_page)
 
@@ -2374,21 +2802,21 @@ class QueuePaginationView(discord.ui.View):
         title_with_count = i18n.get_text("music.commands.queue_view.title_with_count", self.locale, title=self.title, count=len(self.full_playlist))
         embed = discord.Embed(title=title_with_count, color=discord.Color.blue())
         queue_list = ""
-        for i, track in enumerate(current_items):
+        for i, (track, status) in enumerate(current_items):
             global_index = start + i
             num = global_index + 1
 
             if global_index == self.current_index:
-                line = f"▶️ **{num}. [{track.title}]({track.uri}) - {track.author}**"
+                line = f"[{status}] **{num}. [{track.title}]({track.uri}) - {track.author}**"
             else:
-                line = f"{num}. [{track.title}]({track.uri}) - {track.author}"
+                line = f"[{status}] {num}. [{track.title}]({track.uri}) - {track.author}"
 
             queue_list += line + "\n"
         
         empty_desc = i18n.get_text("music.commands.queue_view.empty_desc", self.locale)
         embed.description = queue_list or empty_desc
         
-        page_footer = i18n.get_text("music.commands.queue_view.page_footer", self.locale, current=self.current_page + 1, total=self.total_pages, loop_mode=str(self.player.queue.mode))
+        page_footer = i18n.get_text("music.commands.queue_view.page_footer", self.locale, current=self.current_page + 1, total=self.total_pages, loop_mode=str(self.player.queue.loop_mode))
         embed.set_footer(text=page_footer)
         return embed
 

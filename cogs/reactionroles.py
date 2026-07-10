@@ -3,12 +3,12 @@ from discord import app_commands
 from discord.ext import commands
 import logging
 from typing import Optional, Dict, List
+from datetime import datetime, timezone
 import json
 
 from utils.i18n import i18n
 from config import Config
 from database.models import GuildModel
-from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +20,11 @@ class ReactionRolesCog(commands.Cog):
         self.bot = bot
         self.guild_model = GuildModel()
         self.reaction_roles: Dict[int, Dict[int, Dict[str, int]]] = {}
-
-    # async def cog_load(self):
-    #     """Load reaction roles from a database when cog loads"""
-    #     pass
+    
+    async def cog_before_invoke(self, ctx: commands.Context):
+        """Automatically defer slash commands to prevent timeout"""
+        if ctx.interaction and not ctx.interaction.response.is_done():
+            await ctx.defer()
 
     async def load_reaction_roles(self):
         """Load all reaction roles from a database"""
@@ -62,26 +63,33 @@ class ReactionRolesCog(commands.Cog):
                                     ctx: commands.Context = None):
         """Update a message's embed to show configured reaction roles"""
         try:
-            # Get the configured roles
+            if not message.guild:
+                logger.warning(f"Cannot update embed for message {message_id}: message.guild is None")
+                return
+
             if guild_id not in self.reaction_roles or message_id not in self.reaction_roles[guild_id]:
                 return
 
             emoji_roles = self.reaction_roles[guild_id][message_id]
 
             title = "Reaction Roles"
-            custom_description = "React below to get roles!"
+            custom_description = None
 
             if message.embeds:
                 old_embed = message.embeds[0]
-                if old_embed.title:
+                if getattr(old_embed, "title", None) is not None:
                     title = old_embed.title
-                if old_embed.description and not any(x in str(old_embed.description) for x in ['|', '•', ' - ']):
+                if getattr(old_embed, "description", None) is not None:
                     custom_description = old_embed.description
+
+            color = discord.Color.blue()
+            if message.embeds and message.embeds[0].color:
+                color = message.embeds[0].color
 
             embed = discord.Embed(
                 title=title,
                 description=custom_description,
-                color=discord.Color.blue()
+                color=color
             )
 
             for emoji, role_id in emoji_roles.items():
@@ -99,7 +107,10 @@ class ReactionRolesCog(commands.Cog):
                         inline=True
                     )
 
-            embed.set_image(url=Config.BAR_URL)
+            if message.embeds and message.embeds[0].image:
+                embed.set_image(url=message.embeds[0].image.url)
+            else:
+                embed.set_image(url=Config.BAR_URL)
 
             await message.edit(embed=embed)
             logger.debug(f"Updated embed for message {message_id}")
@@ -123,9 +134,15 @@ class ReactionRolesCog(commands.Cog):
 
         reaction_roles_data[str(message_id)][emoji] = role_id
 
-        await self.guild_model.update_guild(guild_id, {
-            'reaction_roles': reaction_roles_data
-        })
+        # Use upsert via update_one directly in case guild doc doesn't exist yet
+        await self.guild_model.collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {
+                'reaction_roles': reaction_roles_data,
+                'updated_at': datetime.now(timezone.utc)
+            }},
+            upsert=True
+        )
 
     async def remove_reaction_role(self, guild_id: int, message_id: int, emoji: str = None):
         """Remove a reaction role mapping"""
@@ -138,6 +155,8 @@ class ReactionRolesCog(commands.Cog):
         if emoji:
             if emoji in self.reaction_roles[guild_id][message_id]:
                 del self.reaction_roles[guild_id][message_id][emoji]
+            else:
+                return False
         else:
             del self.reaction_roles[guild_id][message_id]
 
@@ -364,6 +383,18 @@ class ReactionRolesCog(commands.Cog):
 
             if message:
                 await self._update_message_embed(message, ctx.guild.id, msg_id)
+                
+                # Clear the reaction from the discord message itself
+                if emoji:
+                    try:
+                        await message.clear_reaction(emoji)
+                    except Exception as e:
+                        logger.error(f"Failed to clear reaction {emoji}: {e}")
+                else:
+                    try:
+                        await message.clear_reactions()
+                    except Exception as e:
+                        logger.error(f"Failed to clear all reactions: {e}")
 
             if emoji:
                 await ctx.send(await i18n.t(ctx, "reactionrole.remove.success_emoji",
@@ -443,7 +474,7 @@ class ReactionRolesCog(commands.Cog):
             return
 
         if ctx.guild.id not in self.reaction_roles or msg_id not in self.reaction_roles[ctx.guild.id]:
-            await ctx.send("❌ No reaction roles configured for this message.")
+            await ctx.send(await i18n.t(ctx, "reactionrole.remove.not_found"))
             return
 
         message = None
@@ -460,49 +491,60 @@ class ReactionRolesCog(commands.Cog):
             await ctx.send(await i18n.t(ctx, "reactionrole.add.message_not_found"))
             return
 
-        emoji_roles = self.reaction_roles[ctx.guild.id][msg_id]
+        await self._update_message_embed(message, ctx.guild.id, msg_id, ctx)
+        await ctx.send(await i18n.t(ctx, "reactionrole.add.success_update",
+                                    message_id=msg_id, count=len(self.reaction_roles[ctx.guild.id][msg_id])))
 
-        title = "Reaction Roles"
-        custom_description = "React below to get roles!"
-
-        if message.embeds:
-            old_embed = message.embeds[0]
-            if old_embed.title:
-                title = old_embed.title
-
-            if old_embed.description:
-                custom_description = old_embed.description
-
-        embed = discord.Embed(
-            title=title,
-            description=custom_description,
-            color=discord.Color(0x555555)
-        )
-
-        for emoji, role_id in emoji_roles.items():
-            role = ctx.guild.get_role(role_id)
-            if role:
-                embed.add_field(
-                    name=emoji,
-                    value=role.mention,
-                    inline=True
-                )
+    @reactionrole.command(name='edit')
+    @app_commands.describe(
+        message_id="ID of the message to edit",
+        title="New title for the embed",
+        description="New description (use 'none' to clear it)"
+    )
+    async def rr_edit(self, ctx: commands.Context, message_id: str, title: str = None, *, description: str = None):
+        """Edit the title or description of a reaction role message"""
+        try:
+            msg_id = int(message_id)
+        except ValueError:
+            await ctx.send(await i18n.t(ctx, "reactionrole.add.invalid_message_id"))
+            return
+            
+        message = None
+        for channel in ctx.guild.text_channels:
+            try:
+                message = await channel.fetch_message(msg_id)
+                break
+            except (discord.NotFound, discord.Forbidden):
+                continue
+            except Exception:
+                continue
+                
+        if not message:
+            await ctx.send(await i18n.t(ctx, "reactionrole.add.message_not_found"))
+            return
+            
+        if not message.embeds:
+            await ctx.send(await i18n.t(ctx, "reactionrole.edit.no_embed", default="❌ This message doesn't have an embed to edit."))
+            return
+            
+        embed = message.embeds[0].copy()
+        
+        if title is not None:
+            embed.title = title
+            
+        if description is not None:
+            if description.lower() == 'none':
+                embed.description = None
             else:
-                embed.add_field(
-                    name=emoji,
-                    value="(Deleted)",
-                    inline=True
-                )
-
-        embed.set_image(url=Config.BAR_URL)
-
+                embed.description = description
+                
         try:
             await message.edit(embed=embed)
-            await ctx.send(f"✅ Updated message {msg_id} with {len(emoji_roles)} reaction roles!")
+            await ctx.send(await i18n.t(ctx, "reactionrole.edit.success", msg_id=msg_id, default=f"✅ Successfully updated the embed for message `{msg_id}`."))
         except discord.Forbidden:
-            await ctx.send("❌ I don't have permission to edit that message.")
+            await ctx.send(await i18n.t(ctx, "reactionrole.edit.forbidden", default="❌ I don't have permission to edit this message. Ensure it was sent by me."))
         except Exception as e:
-            await ctx.send(f"❌ Failed to update message: {str(e)}")
+            await ctx.send(await i18n.t(ctx, "reactionrole.edit.failed", error=str(e), default=f"❌ Failed to edit message: {e}"))
 
     # @reactionrole.command(name='debug_rebuild_rr')
     # @commands.has_permissions(administrator=True)

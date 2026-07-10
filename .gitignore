@@ -226,3 +226,4 @@ bot.log
 /plugins
 *.zip
 TODO.md
+*.txt

@@ -19,6 +19,9 @@ class Config:
     LASTFM_API_KEY = os.getenv('LASTFM_API_KEY', '')
     LASTFM_API_SECRET = os.getenv('LASTFM_API_SECRET', '')
     
+    # GitHub
+    GITHUB_URL = os.getenv('GITHUB_URL', '')
+
     # Customisation
     MUSIC_BANNER_URL = os.getenv('MUSIC_BANNER_URL', '')
     BAR_URL = os.getenv('BAR_URL', '')

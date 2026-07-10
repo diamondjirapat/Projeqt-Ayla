@@ -494,5 +494,5 @@ class GuildModel(BaseModel):
         """Get the default music volume for the guild (defaults to 20)"""
         data = await self.collection.find_one({'guild_id': guild_id})
         if data and 'music' in data:
-            return data['music'].get('default_volume', 20)
-        return 20
+            return data['music'].get('default_volume', 25)
+        return 25

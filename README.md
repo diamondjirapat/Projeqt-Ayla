@@ -1,106 +1,80 @@
 # Projeqt-Ayla 🎵
 
-Just another  Discord bot built with discord.py, MongoDB, and Lavalink for music streaming.
-
-## ✨ Features
-
-- 🎵 **Music System** - High-quality music playback powered by Lavalink
-- 🌐 **i18n Support** - English & Thai translations with smart locale priority
-- 🗄️ **MongoDB Integration** - Persistent data storage
-- 🔧 **Modular Cog System** - Easy to extend and customize
-- 🎛️ **Static Music Channel** - Dedicated channel with persistent embed
-- 🎚️ **Interactive Controls** - Button-based player controls
-- 📻 **Last.fm Scrobbling** - Automatic track scrobbling for linked accounts
+Projeqt-Ayla is a powerful, feature-rich Discord bot designed for music lovers. Built with `discord.py`, `MongoDB`, and `Lavalink`, it provides a seamless, high-quality music streaming experience with advanced playback controls and multi-language support.
 
 ---
 
-## 📋 Requirements
+## ✨ Key Features
 
+### 🎵 Music Excellence
+- **High-Quality Audio**: Powered by Lavalink for smooth, low-latency streaming.
+- **Interactive Controls**: Play, Pause, Skip, Stop, Loop via easy-to-use buttons.
+- **Smart Playback**: Automatic song recommendations (AutoPlay) and persistent music channels.
+- **Playlist Support**: Create, save, and share your favorite music playlists (Work in Progress).
+
+### 🌐 Global & Social
+- **Multi-language Support**: Smooth experience in both **English** and **Thai**.
+- **Last.fm Integration**: Automatically scrobble your tracks to your Last.fm account.
+
+### ⚙️ Robust Backend
+- **Persistent Storage**: All user preferences and data are safely stored in MongoDB.
+- **Modular Architecture**: A highly extensible "Cog" system, making it easy to add new features.
+
+---
+
+
+
+## 🚀 Getting Started
+
+### 📋 Prerequisites
+Before running the bot, ensure you have the following installed:
 - [Python 3.13+](https://www.python.org/)
-- [MongoDB database](https://www.mongodb.com/)
-- [Lavalink server](https://github.com/lavalink-devs/Lavalink/releases) (for music features)
+- [MongoDB](https://www.mongodb.com/) (For data persistence)
+- [Lavalink Server](https://github.com/lavalink-devs/Lavalink/releases) (Required for music playback)
 
----
+### 🛠️ Installation & Setup
 
-## 🚀 Quick Start
-
-### 1. Clone the Repository
-
+#### 1. Clone the Repository
 ```bash
 git clone https://github.com/diamondjirapat/Projeqt-Ayla.git
 cd Projeqt-Ayla
 ```
 
-### 2. Configure Environment
-
+#### 2. Configure Environment
+Create a `.env` file in the root directory by copying the example:
 ```bash
 cp .env.example .env
 ```
+Open `.env` and fill in your credentials (Discord Token, MongoDB URI, Lavalink details, etc.).
 
-Edit `.env` with your credentials:
-```env
-PREFIX=!
-DISCORD_TOKEN=your_discord_bot_token_here
-MONGODB_URI=mongodb+srv://....
-OWNER_IDS=your_owner_id_here
-LAVALINK_URI=http://localhost:2333
-LAVALINK_PASSWORD=youshallnotpass
-```
+#### 3. Run the Bot
+Choose the method that best suits your environment:
 
-### 3. Run the Bot
-
-
-### 🏃Option 1: Windows Batch File (Recommended for Windows)
-
-Simply double-click `run.bat` or run:
+**A. Windows (Easiest)**
+Simply run the provided batch file:
 ```cmd
 run.bat
 ```
----
 
-### 🏃Option 2: Linux/macOS Shell Script
-
+** 🐍 Python (Manual Setup)**
+For both Windows and Linux/macOS:
 ```bash
-# Make the script executable (first time only)
-chmod +x start.sh
-
-# Run the bot
-./start.sh
-```
----
-### 🏃Option 3: Manual Python Execution
-
-**Windows:**
-```cmd
-# Create virtual environment (optional but recommended)
+# Create and activate a virtual environment (Recommended)
 python -m venv .venv
+# Windows:
 .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the bot
-python bot.py
-```
-
-**Linux/macOS:**
-```bash
-# Create virtual environment (optional but recommended)
-python3 -m venv .venv
+# Linux/macOS:
 source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the bot
-python3 bot.py
+# Start the bot
+python bot.py
 ```
 
----
-
-### Option 4: Docker 🐳
-
-**Build and run with Docker:**
+**🐳 Docker (Containerized)**
+Perfect for hosting on servers:
 ```bash
 # Build the image
 docker build -t projeqt-ayla .
@@ -109,113 +83,74 @@ docker build -t projeqt-ayla .
 docker run -d --name projeqt-ayla --env-file .env projeqt-ayla
 ```
 
-**View logs:**
-```bash
-docker logs -f projeqt-ayla
-```
+---
 
-**Stop the bot:**
-```bash
-docker stop projeqt-ayla
-```
+## ⚙️ Configuration Reference
+
+| Variable | Required | Description |
+|-----------|:--------:|-------------|
+| `PREFIX` | ✅ | Command prefix (default: `!`) |
+| `DISCORD_TOKEN` | ✅ | Your Discord Bot Token |
+| `MONGODB_URI` | ✅ | Your MongoDB connection string |
+| `OWNER_IDS` | ✅ | Discord User IDs of the bot owners |
+| `LAVALINK_URI` | ✅ | Lavalink server URI (e.g., `http://localhost:2333`) |
+| `LAVALINK_PASSWORD` | ✅ | Lavalink server password |
+| `LASTFM_API_KEY` | ❌ | Last.fm API key for scrobbling |
+| `LASTFM_API_SECRET` | ❌ | Last.fm API secret |
 
 ---
 
+## 🧑‍💻 For Developers
 
-
-## 🔧 Adding New Cogs
-
-1. Create a new file in the `cogs/` directory
-2. Follow the existing cog structure
-3. The bot will automatically load it on startup
+### 🧩 Adding New Features (Cogs)
+The bot uses a modular "Cog" system. To add a new feature:
+1. Create a new `.py` file in the `cogs/` directory.
+2. Follow the `commands.Cog` structure.
+3. The bot will automatically load your new cog on startup.
 
 ```python
 import discord
 from discord.ext import commands
 from utils.i18n import i18n
 
-class ExampleCog(commands.Cog):
+class MyNewFeature(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-    
+
     @commands.command()
-    async def example(self, ctx):
-        message = await i18n.t(ctx, 'example.message')
+    async def hello(self, ctx):
+        message = await i18n.t(ctx, 'hello_message')
         await ctx.send(message)
 
 async def setup(bot):
-    await bot.add_cog(ExampleCog(bot))
+    await bot.add_cog(MyNewFeature(bot))
 ```
 
----
+### 🌐 Internationalization (i18n)
+Translations are managed via JSON files in the `locales/` folder.
 
-## 🌐 Internationalization (i18n)
+**Locale Priority:**
+1. **User locale** (Personal preference)
+2. **Guild locale** (Server-wide setting)
+3. **Default locale** (English)
 
-### Locale Priority
-1. **User locale** - Personal preference
-2. **Guild locale** - Server-wide setting
-3. **Default locale** - English
-
-### Adding Translations
-
-Add your translations to the locale files in `locales/`:
-```json
-{
-  "commands": {
-    "ping": {
-      "response_title": "🏓 Pong!",
-      "response_description": "Latency: {latency}ms"
-    }
-  }
-}
-```
+**Process:** Add your keys to the relevant language JSON file. Remember to update `i18n.py` and `language.py` if you introduce a brand new language.
 
 ---
 
-## ⚙️ Environment Variables
+## ❓ Troubleshooting
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DISCORD_TOKEN` | ✅ | Your Discord bot token |
-| `MONGODB_URI` | ✅ | MongoDB connection string |
-| `OWNER_IDS` | ✅ | Bot owner Discord user IDs |
-| `LAVALINK_URI` | 🎵 | Lavalink server URI |
-| `LAVALINK_PASSWORD` | 🎵 | Lavalink server password |
-| `PREFIX` | ❌ | Command prefix (default: `!`) |
-| `LASTFM_API_KEY` | ❌ | Last.fm API key for scrobbling |
-| `LASTFM_API_SECRET` | ❌ | Last.fm API secret |
-| `BAR_URL` | ❌ | Bar image URL |
-| `MUSIC_BANNER_URL` | ❌ | Banner image URL |
+**Bot fails to start?**
+- Check if your `.env` file is correctly configured.
+- Ensure your `DISCORD_TOKEN` is valid.
+- Verify that your MongoDB instance is reachable.
 
----
-
-## 🎵 Music System Features
-
-- **Static Music Channel** - Dedicated channel with persistent embed
-- **Interactive Controls** - Play/Pause, Skip, Stop, Loop, Shuffle buttons
-- **Auto Message Cleanup** - Keeps the music channel clean
-- **Last.fm Scrobbling** - Automatic track scrobbling
-- **Multi-language Support** - Full English and Thai translations
-- **Rich Player Display** - Progress bar, duration, volume, queue info
-- **Playlist Support** - Create, save, and share playlists
-- **AutoPlay** - Automatic song recommendations
-
----
-
-## 🐛 Troubleshooting
-
-### Bot won't start
-- Check if `.env` file exists and is configured correctly
-- Verify your Discord token is valid
-- Ensure MongoDB is running and accessible
-
-### Music not working
-- Verify Lavalink server is running
-- Check `LAVALINK_URI` and `LAVALINK_PASSWORD` in `.env`
-- Ensure `application.yml` is properly configured
+**Music not playing?**
+- Ensure your Lavalink server is running.
+- Double-check `LAVALINK_URI` and `LAVALINK_PASSWORD` in your `.env`.
+- Check the `application.yml` configuration in your Lavalink setup.
 
 ---
 
 ## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the [MIT License](LICENSE).
