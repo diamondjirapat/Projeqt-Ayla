@@ -74,6 +74,8 @@ class CustomQueue:
     @property
     def is_empty(self) -> bool:
         """Check if the queue has no upcoming items."""
+        if self._loop_mode == LoopMode.QUEUE:
+            return len(self._queue) == 0 and self._current is None
         return len(self._queue) == 0
 
     @property
@@ -211,7 +213,7 @@ class CustomQueue:
         return self._queue[index]
 
     def __bool__(self) -> bool:
-        return bool(self._queue)
+        return not self.is_empty
 
 
 class CustomPlayer(pomice.Player):
