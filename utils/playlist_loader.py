@@ -51,19 +51,19 @@ class PlaylistLoader:
 
         reorder_ids = modifications.get('reorder', [])
         if reorder_ids:
-            uri_to_track = {t.uri: t for t in source_tracks}
+            from collections import defaultdict
+            uri_to_tracks = defaultdict(list)
+            for t in source_tracks:
+                uri_to_tracks[t.uri].append(t)
             
             reordered_tracks = []
-            seen_uris = set()
             
             for uri in reorder_ids:
-                if uri in uri_to_track:
-                    reordered_tracks.append(uri_to_track[uri])
-                    seen_uris.add(uri)
+                if uri_to_tracks[uri]:
+                    reordered_tracks.append(uri_to_tracks[uri].pop(0))
 
-            for t in source_tracks:
-                if t.uri not in seen_uris:
-                    reordered_tracks.append(t)
+            for uri, tracks in uri_to_tracks.items():
+                reordered_tracks.extend(tracks)
             
             source_tracks = reordered_tracks
 
