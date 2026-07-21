@@ -21,31 +21,47 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# ---------- Python checks ----------
+# ---------- Python presence ----------
+PYTHON="python3"
 if ! command -v python3 >/dev/null 2>&1; then
-    echo -e "${RED}[ERROR] Python 3 is not installed${NC}"
-    exit 1
+    if command -v python >/dev/null 2>&1; then
+        PYTHON="python"
+    else
+        echo -e "${RED}[ERROR] Python is not installed or not in PATH${NC}"
+        echo "Please install Python 3.13+ from https://www.python.org/downloads/"
+        exit 1
+    fi
 fi
 
-PYTHON_VERSION=$(python3 - <<'EOF'
+# ---------- Python version check ----------
+PYTHON_VERSION=$($PYTHON - <<'EOF'
 import sys
 print(f"{sys.version_info.major}.{sys.version_info.minor}")
 EOF
 )
 
-REQUIRED="3.13"
+MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
+MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
 
-if [[ "$(printf '%s\n' "$REQUIRED" "$PYTHON_VERSION" | sort -V | head -n1)" != "$REQUIRED" ]]; then
-    echo -e "${RED}[ERROR] Python >= ${REQUIRED} required (found ${PYTHON_VERSION})${NC}"
+if [ "$MAJOR" -lt 3 ]; then
+    echo -e "${RED}[ERROR] Python 3.13+ required. Found ${PYTHON_VERSION}${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}[INFO] Using Python $(python3 --version)${NC}"
+if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 13 ]; then
+    echo -e "${RED}[ERROR] Python 3.13+ required. Found ${PYTHON_VERSION}${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}[INFO] Using Python $($PYTHON --version)${NC}"
 
 # ---------- Virtual environment ----------
 if [ ! -f ".venv/bin/activate" ]; then
     echo -e "${YELLOW}[INFO] Creating virtual environment...${NC}"
-    python3 -m venv .venv
+    $PYTHON -m venv .venv || {
+        echo -e "${RED}[ERROR] Failed to create virtual environment${NC}"
+        exit 1
+    }
 fi
 
 echo -e "${GREEN}[INFO] Activating virtual environment...${NC}"
@@ -57,7 +73,10 @@ python -m pip install --upgrade pip setuptools wheel >/dev/null
 # ---------- Dependencies ----------
 if [ -f "requirements.txt" ]; then
     echo -e "${GREEN}[INFO] Installing/checking dependencies...${NC}"
-    pip install -r requirements.txt
+    pip install -r requirements.txt || {
+        echo -e "${RED}[ERROR] Dependency installation failed${NC}"
+        exit 1
+    }
 else
     echo -e "${YELLOW}[WARNING] requirements.txt not found${NC}"
 fi
@@ -76,4 +95,7 @@ echo -e "${GREEN}[INFO] Starting bot...${NC}"
 echo "========================================"
 echo ""
 
-exec python bot.py
+python bot.py
+
+echo ""
+echo -e "${GREEN}[INFO] Bot has stopped${NC}"

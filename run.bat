@@ -24,13 +24,13 @@ for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
 )
 
 if %MAJOR% LSS 3 (
-    echo [ERROR] Python 3.13+ required (found %PYVER%)
+    echo [ERROR] Python 3.13+ required. Found %PYVER%
     pause
     exit /b 1
 )
 
 if %MAJOR% EQU 3 if %MINOR% LSS 13 (
-    echo [ERROR] Python 3.13+ required (found %PYVER%)
+    echo [ERROR] Python 3.13+ required. Found %PYVER%
     pause
     exit /b 1
 )
