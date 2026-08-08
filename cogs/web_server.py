@@ -1,23 +1,16 @@
 import asyncio
+import json
 import logging
-import os
-import re
 from typing import Optional, cast
 import mimetypes
 import urllib.parse
 
-# Fix Windows registry MIME types bug where .js is served as text/plain
-mimetypes.init()
-mimetypes.add_type('application/javascript', '.js')
-mimetypes.add_type('text/css', '.css')
-
 import discord
 from discord.ext import commands
 import httpx
-from itsdangerous import Signer
+from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
 from fastapi import FastAPI, Request, HTTPException, Response, Query
 from fastapi.responses import RedirectResponse, JSONResponse, FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -27,6 +20,11 @@ from utils.queue import CustomPlayer, LoopMode
 from utils.lastfm import lastfm_handler
 import pomice
 
+# Fix a Windows registry issue that can map JavaScript files to text/plain.
+mimetypes.init()
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('text/css', '.css')
+
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
@@ -35,7 +33,7 @@ app = FastAPI(title="Projeqt-Ayla Glass Music Player API")
 # Enable CORS for local testing/development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=Config.WEB_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,19 +44,41 @@ NO_CACHE_HEADERS = {
     "Pragma": "no-cache",
     "Expires": "0"
 }
+IMMUTABLE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
+SESSION_MAX_AGE = 30 * 24 * 3600
+STATIC_DIR = (Config.PROJECT_ROOT / 'static').resolve()
 
 @app.middleware("http")
 async def add_no_cache_headers(request: Request, call_next):
     response = await call_next(request)
-    for k, v in NO_CACHE_HEADERS.items():
-        response.headers[k] = v
+    if request.url.path.startswith('/api/'):
+        for key, value in NO_CACHE_HEADERS.items():
+            response.headers[key] = value
     return response
 
 # Global variables to store bot instance and signer
 bot_instance: Optional[commands.Bot] = None
-signer: Optional[Signer] = None
+signer: Optional[TimestampSigner] = None
 user_model = UserModel()
 guild_model = GuildModel()
+
+
+def _parse_integer(value, field: str, *, minimum: int = 0, maximum: Optional[int] = None) -> int:
+    if isinstance(value, bool):
+        raise HTTPException(status_code=400, detail=f"{field} must be an integer.")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{field} must be an integer.") from exc
+    if parsed < minimum or (maximum is not None and parsed > maximum):
+        allowed = f"{minimum} to {maximum}" if maximum is not None else f"at least {minimum}"
+        raise HTTPException(status_code=400, detail=f"{field} must be {allowed}.")
+    return parsed
+
+
+def _find_guild(guild_id: int):
+    return next((guild for guild in get_all_guilds() if guild.id == guild_id), None)
+
 
 def get_all_voice_clients():
     if not bot_instance:
@@ -89,16 +109,17 @@ def get_user_from_request(request: Request):
     if not cookie:
         return None
     try:
-        unsigned = signer.unsign(cookie.encode()).decode()
-        parts = unsigned.split(":")
-        if len(parts) >= 3:
-            return {
-                "id": int(parts[0]),
-                "username": parts[1],
-                "avatar": parts[2]
-            }
-    except Exception as e:
-        logger.warning(f"[WEB] Failed to verify session cookie: {e}")
+        unsigned = signer.unsign(cookie, max_age=SESSION_MAX_AGE)
+        session_data = json.loads(unsigned)
+        return {
+            "id": int(session_data["id"]),
+            "username": str(session_data["username"]),
+            "avatar": str(session_data.get("avatar", "")),
+        }
+    except SignatureExpired:
+        logger.info("[WEB] Session cookie expired")
+    except (BadSignature, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        logger.warning("[WEB] Rejected an invalid session cookie")
     return None
 
 @app.get("/login")
@@ -164,15 +185,19 @@ async def auth_callback(code: str):
             await user_model.update_user(user_id, {"username": username, "avatar": avatar})
 
         # Set session cookie
-        cookie_value = signer.sign(f"{user_id}:{username}:{avatar}".encode()).decode()
+        session_data = json.dumps(
+            {"id": user_id, "username": username, "avatar": avatar},
+            separators=(',', ':'),
+        )
+        cookie_value = signer.sign(session_data.encode()).decode()
         response = RedirectResponse(url="/webplayer")
         response.set_cookie(
             key="ayla_session",
             value=cookie_value,
             httponly=True,
-            max_age=30 * 24 * 3600,  # 30 days
+            max_age=SESSION_MAX_AGE,
             samesite="lax",
-            secure=False,
+            secure=Config.SESSION_COOKIE_SECURE,
         )
         return response
 
@@ -1296,7 +1321,7 @@ async def get_guild_settings(request: Request, guild_id: int):
             
     guild_emojis = []
     for e in guild.emojis:
-        guild_emojis.append({"id": str(e.id), "name": e.name, "url": e.url})
+        guild_emojis.append({"id": str(e.id), "name": e.name, "url": e.url, "animated": getattr(e, 'animated', False)})
         
     reaction_roles = db_guild.get("reaction_roles", {}) if db_guild else {}
     reaction_role_titles = {}
@@ -1305,11 +1330,10 @@ async def get_guild_settings(request: Request, guild_id: int):
     async def fetch_message_title(guild, msg_id_str):
         try:
             msg_id = int(msg_id_str)
-        except:
+        except (TypeError, ValueError):
             return "Invalid ID"
             
         # Check cache first
-        import discord
         for b in getattr(bot_instance, "all_bots", [bot_instance]):
             msg = discord.utils.get(b.cached_messages, id=msg_id)
             if msg:
@@ -1319,7 +1343,7 @@ async def get_guild_settings(request: Request, guild_id: int):
         async def check_channel(ch):
             try:
                 return await ch.fetch_message(msg_id)
-            except:
+            except discord.HTTPException:
                 return None
                 
         results = await asyncio.gather(*(check_channel(ch) for ch in guild.text_channels))
@@ -1358,44 +1382,65 @@ async def save_guild_settings(request: Request):
     user_id = user["id"]
     
     data = await request.json()
-    guild_id = int(data.get("guild_id"))
+    raw_guild_id = data.get("guild_id")
+    if raw_guild_id is None:
+        raise HTTPException(status_code=400, detail="Missing guild_id in request body.")
+    guild_id = _parse_integer(raw_guild_id, "guild_id", minimum=1)
     
     can_edit = await check_user_guild_permission(user_id, guild_id)
     if not can_edit:
         raise HTTPException(status_code=403, detail="You do not have permission to edit settings for this server.")
         
-    from database.models import GuildModel
-    guild_model = GuildModel()
+    guild = _find_guild(guild_id)
+    if guild is None:
+        raise HTTPException(status_code=404, detail="Server not found.")
     
     # 1. Prefix
-    prefix = data.get("prefix")
-    if prefix:
+    if "prefix" in data:
+        prefix_val = data.get("prefix")
         from utils.prefix_manager import prefix_manager
-        success, msg = await prefix_manager.set_guild_prefix(guild_id, prefix)
-        if not success:
-            raise HTTPException(status_code=400, detail=msg)
+        if prefix_val is not None and str(prefix_val).strip() != "":
+            success, msg = await prefix_manager.set_guild_prefix(guild_id, str(prefix_val))
+            if not success:
+                raise HTTPException(status_code=400, detail=msg)
+        else:
+            await prefix_manager.remove_guild_prefix(guild_id)
             
     # 2. Volume
-    default_vol = data.get("default_volume")
-    if default_vol is not None:
-        await guild_model.set_default_volume(guild_id, int(default_vol))
+    if "default_volume" in data:
+        default_vol = data.get("default_volume")
+        if default_vol is not None:
+            volume = _parse_integer(default_vol, "default_volume", minimum=1, maximum=100)
+            await guild_model.set_default_volume(guild_id, volume)
         
     # 3. Channel
-    music_chan_id = data.get("music_channel_id")
-    if music_chan_id is not None and music_chan_id != "" and music_chan_id != "null":
-        await guild_model.set_music_channel(guild_id, int(music_chan_id))
-    else:
-        await guild_model.remove_music_channel(guild_id)
+    if "music_channel_id" in data:
+        music_chan_id = data.get("music_channel_id")
+        if music_chan_id is not None and music_chan_id != "" and str(music_chan_id).lower() != "null":
+            channel_id = _parse_integer(music_chan_id, "music_channel_id", minimum=1)
+            channel = guild.get_channel(channel_id)
+            if channel is None or not isinstance(channel, discord.TextChannel):
+                raise HTTPException(status_code=400, detail="music_channel_id must identify a text channel in this server.")
+            await guild_model.set_music_channel(guild_id, channel_id)
+        else:
+            await guild_model.remove_music_channel(guild_id)
         
     # 4. Locale
-    locale = data.get("locale")
-    if locale:
-        await guild_model.update_guild(guild_id, {"locale": locale})
+    if "locale" in data:
+        locale = data.get("locale")
+        if locale:
+            from utils.i18n import i18n
+            if not await i18n.set_guild_locale(guild_id, str(locale)):
+                raise HTTPException(status_code=400, detail="Unsupported locale.")
         
     # 5. AutoRole
     if "auto_role_id" in data:
         auto_role_id_raw = data.get("auto_role_id")
-        auto_role_id = int(auto_role_id_raw) if auto_role_id_raw and str(auto_role_id_raw).lower() not in ("none", "null", "") else None
+        auto_role_id = None
+        if auto_role_id_raw and str(auto_role_id_raw).lower() not in ("none", "null", ""):
+            auto_role_id = _parse_integer(auto_role_id_raw, "auto_role_id", minimum=1)
+            if guild.get_role(auto_role_id) is None:
+                raise HTTPException(status_code=400, detail="auto_role_id must identify a role in this server.")
         await guild_model.update_guild(guild_id, {"auto_role_id": auto_role_id})
         
         # Update AutoRole cog cache if it exists
@@ -1427,7 +1472,8 @@ async def save_guild_settings(request: Request):
                 import asyncio
                 async def sync_messages(cog, gid, r_roles):
                     guild = cog.bot.get_guild(gid)
-                    if not guild: return
+                    if not guild:
+                        return
                     for m_id_str, e_roles in r_roles.items():
                         m_id = int(m_id_str)
                         for ch in guild.text_channels:
@@ -1449,7 +1495,7 @@ async def save_guild_settings(request: Request):
                                         else:
                                             await msg.add_reaction(emoji_str)
                                     break
-                            except:
+                            except discord.HTTPException:
                                 pass
                 
                 asyncio.create_task(sync_messages(rr_cog, guild_id, reaction_roles))
@@ -1487,7 +1533,6 @@ async def generate_reaction_role_message(request: Request):
     title = data.get("title") or "Reaction Roles"
     description = data.get("description") or "React to this message to get your roles!"
         
-    import discord
     embed = discord.Embed(
         title=title,
         description=description,
@@ -1507,19 +1552,20 @@ async def serve_frontend(request: Request, path: str):
         raise HTTPException(status_code=404, detail="Not Found")
         
     # Check if file exists in static folder
-    static_file = os.path.join("static", path)
-    if path and os.path.exists(static_file) and os.path.isfile(static_file):
-        return FileResponse(static_file, headers=NO_CACHE_HEADERS)
+    static_file = (STATIC_DIR / path).resolve()
+    if path and static_file.is_relative_to(STATIC_DIR) and static_file.is_file():
+        headers = IMMUTABLE_CACHE_HEADERS if static_file.parent.name == 'assets' else NO_CACHE_HEADERS
+        return FileResponse(static_file, headers=headers)
         
     # Serve landing page for root
     if not path or path == "" or path == "landing":
-        landing_index = os.path.join("static", "index.html")
-        if os.path.exists(landing_index):
+        landing_index = STATIC_DIR / "index.html"
+        if landing_index.is_file():
             return FileResponse(landing_index, headers=NO_CACHE_HEADERS)
             
     # Fallback to serving SPA webplayer.html for frontend routing
-    spa_index = os.path.join("static", "webplayer.html")
-    if os.path.exists(spa_index):
+    spa_index = STATIC_DIR / "webplayer.html"
+    if spa_index.is_file():
         return FileResponse(spa_index, headers=NO_CACHE_HEADERS)
         
     # Standard fallback if frontend isn't generated yet
@@ -1538,7 +1584,7 @@ class WebServer(commands.Cog):
             return
 
         bot_instance = self.bot
-        signer = Signer(Config.SESSION_SECRET_KEY)
+        signer = TimestampSigner(Config.SESSION_SECRET_KEY)
         
         # Start uvicorn server in asyncio loop
         config = uvicorn.Config(

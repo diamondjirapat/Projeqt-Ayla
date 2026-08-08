@@ -110,7 +110,8 @@ class LastFMHandler:
 
     async def get_auth_data(self, cb=None):
         """Get auth URL and token"""
-        if not self.enabled: return None, None
+        if not self.enabled:
+            return None, None
         params = {}
         params['api_key'] = self.api_key
         params['method'] = 'auth.getToken'
@@ -138,13 +139,14 @@ class LastFMHandler:
         data = await self._request('auth.getSession', params, post=True)
         
         if data and 'session' in data:
-            logger.info(f"[LASTFM] Session obtained for user")
+            logger.info("[LASTFM] Session obtained for user")
             return data['session']['key']
-        logger.warning(f"[LASTFM] Failed to get session from token")
+        logger.warning("[LASTFM] Failed to get session from token")
         return None
 
     async def update_now_playing(self, session_key, artist, title):
-        if not self.enabled or not session_key: return
+        if not self.enabled or not session_key:
+            return
         logger.debug(f"[LASTFM] Updating now playing: {artist} - {title}")
 
         params = {
@@ -154,7 +156,8 @@ class LastFMHandler:
         await self._request('track.updateNowPlaying', params, session_key=session_key, post=True)
 
     async def scrobble(self, session_key, artist, title, timestamp):
-        if not self.enabled or not session_key: return
+        if not self.enabled or not session_key:
+            return
 
         params = {
             'artist': artist,
@@ -167,7 +170,8 @@ class LastFMHandler:
 
     async def get_username_from_session(self, session_key):
         """Get username from session key"""
-        if not self.enabled or not session_key: return None
+        if not self.enabled or not session_key:
+            return None
         data = await self._request('user.getInfo', {}, session_key=session_key)
         if data and 'user' in data:
             return data['user']['name']

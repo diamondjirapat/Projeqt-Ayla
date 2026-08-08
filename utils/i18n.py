@@ -1,10 +1,13 @@
 import json
-import os
-from typing import Dict, Any, Optional, Union
+import logging
+from typing import Any, Dict, Optional, Union
+
 import discord
 from discord.ext import commands
+
+from config import Config
 from database.models import UserModel, GuildModel
-import logging
+from utils.cache import CACHE_MISS, TTLCache
 
 logger = logging.getLogger(__name__)
 
@@ -15,19 +18,19 @@ class I18nManager:
         self.supported_locales = ['en', 'th']
         self.user_model = UserModel()
         self.guild_model = GuildModel()
-        # Add caching to avoid database lookups
-        self._user_locale_cache: Dict[int, str] = {}
-        self._guild_locale_cache: Dict[int, str] = {}
+        # Cache missing values too; most users do not set a custom locale.
+        self._user_locale_cache: TTLCache[int, Optional[str]] = TTLCache(ttl=300, max_size=5000)
+        self._guild_locale_cache: TTLCache[int, Optional[str]] = TTLCache(ttl=300, max_size=5000)
         self.load_translations()
     
     def load_translations(self):
         """Load all translation files"""
-        locales_dir = 'locales'
+        locales_dir = Config.PROJECT_ROOT / 'locales'
         
         for locale in self.supported_locales:
-            file_path = os.path.join(locales_dir, f'{locale}.json')
+            file_path = locales_dir / f'{locale}.json'
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with file_path.open('r', encoding='utf-8') as f:
                     self.translations[locale] = json.load(f)
                 logger.info(f"Loaded translations for locale: {locale}")
             except FileNotFoundError:
@@ -37,35 +40,35 @@ class I18nManager:
                 logger.error(f"Invalid JSON in translation file {file_path}: {e}")
                 continue
 
-    async def get_user_locale(self, user_id: int) -> str:
+    async def get_user_locale(self, user_id: int) -> Optional[str]:
         """Get the user's preferred locale from a database (with caching)"""
-        if user_id in self._user_locale_cache:
-            return self._user_locale_cache[user_id]
+        cached = self._user_locale_cache.get(user_id)
+        if cached is not CACHE_MISS:
+            return cached
         
         try:
             user_data = await self.user_model.get_user(user_id)
-            if user_data and 'locale' in user_data:
-                locale = user_data['locale']
-                self._user_locale_cache[user_id] = locale
-                return locale
-        except Exception as e:
-            logger.error(f"Error getting user locale: {e}")
-        return None
+            locale = user_data.get('locale') if user_data else None
+            self._user_locale_cache.set(user_id, locale)
+            return locale
+        except Exception:
+            logger.exception("Error getting locale for user %s", user_id)
+            return None
     
-    async def get_guild_locale(self, guild_id: int) -> str:
+    async def get_guild_locale(self, guild_id: int) -> Optional[str]:
         """Get guild's preferred locale from a database (with caching)"""
-        if guild_id in self._guild_locale_cache:
-            return self._guild_locale_cache[guild_id]
+        cached = self._guild_locale_cache.get(guild_id)
+        if cached is not CACHE_MISS:
+            return cached
         
         try:
             guild_data = await self.guild_model.get_guild(guild_id)
-            if guild_data and 'locale' in guild_data:
-                locale = guild_data['locale']
-                self._guild_locale_cache[guild_id] = locale
-                return locale
-        except Exception as e:
-            logger.error(f"Error getting guild locale: {e}")
-        return None
+            locale = guild_data.get('locale') if guild_data else None
+            self._guild_locale_cache.set(guild_id, locale)
+            return locale
+        except Exception:
+            logger.exception("Error getting locale for guild %s", guild_id)
+            return None
     
     async def set_user_locale(self, user_id: int, locale: str) -> bool:
         """Set user's preferred locale"""
@@ -78,7 +81,7 @@ class I18nManager:
                 await self.user_model.create_user(user_id, "Unknown", locale=locale)
             else:
                 await self.user_model.update_user(user_id, {'locale': locale})
-            self._user_locale_cache[user_id] = locale
+            self._user_locale_cache.set(user_id, locale)
             return True
         except Exception as e:
             logger.error(f"Error setting user locale: {e}")
@@ -95,7 +98,7 @@ class I18nManager:
                 await self.guild_model.create_guild(guild_id, "Unknown", locale=locale)
             else:
                 await self.guild_model.update_guild(guild_id, {'locale': locale})
-            self._guild_locale_cache[guild_id] = locale
+            self._guild_locale_cache.set(guild_id, locale)
             return True
         except Exception as e:
             logger.error(f"Error setting guild locale: {e}")
@@ -195,7 +198,7 @@ class I18nManager:
             return self.get_text(key, locale, **kwargs)
         except Exception as e:
             logger.error(f"Error getting translation for '{key}': {e}")
-            # return f"Error getting translation for '{key}': {e}"
+            return self.get_text(key, self.default_locale, **kwargs)
     
     def clear_cache(self):
         """Clear the locale cache (useful for testing or manual refresh)"""
@@ -205,12 +208,10 @@ class I18nManager:
     
     def clear_user_cache(self, user_id: int):
         """Clear cache for a specific user"""
-        if user_id in self._user_locale_cache:
-            del self._user_locale_cache[user_id]
+        self._user_locale_cache.pop(user_id)
     
     def clear_guild_cache(self, guild_id: int):
         """Clear cache for a specific guild"""
-        if guild_id in self._guild_locale_cache:
-            del self._guild_locale_cache[guild_id]
+        self._guild_locale_cache.pop(guild_id)
 
 i18n = I18nManager()

@@ -4,7 +4,6 @@ from discord.ext import commands
 from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 import logging
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 

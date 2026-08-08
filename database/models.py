@@ -1,10 +1,29 @@
 from datetime import datetime, UTC
 from typing import Optional, Dict, Any
 import logging
+import re
 
 from database.connection import db_manager
 
 logger = logging.getLogger(__name__)
+
+
+def _playlist_key(name: str) -> str:
+    """Sanitize a playlist name into a MongoDB-safe field key.
+
+    MongoDB interprets dots in field names as nested-path separators and a
+    leading ``$`` as an operator, so a playlist named ``"My.Mix"`` would
+    otherwise be stored as ``playlists.my.mix`` and corrupt the document.
+    Whitespace is collapsed to underscores and any ``.``/``$`` is replaced.
+    """
+    if not isinstance(name, str):
+        raise TypeError("Playlist name must be a string")
+
+    key = re.sub(r"\s+", "_", name.strip().lower())
+    key = re.sub(r"[.$]", "_", key)
+    if not key:
+        raise ValueError("Playlist name cannot be empty")
+    return key
 
 
 class BaseModel:
@@ -15,6 +34,21 @@ class BaseModel:
     def collection(self):
         return db_manager.get_collection(self.collection_name)
 
+    async def _upsert(self, identity: Dict[str, int], update_data: Dict[str, Any]) -> bool:
+        """Update a document without mutating the caller's mapping."""
+        now = datetime.now(UTC)
+        values = {**update_data, 'updated_at': now}
+        values.pop('created_at', None)
+        result = await self.collection.update_one(
+            identity,
+            {
+                '$set': values,
+                '$setOnInsert': {'created_at': now},
+            },
+            upsert=True,
+        )
+        return result.modified_count > 0 or result.upserted_id is not None
+
 
 class UserModel(BaseModel):
     def __init__(self):
@@ -22,13 +56,14 @@ class UserModel(BaseModel):
     
     async def create_user(self, user_id: int, username: str, **kwargs) -> Dict[str, Any]:
         """Create a new user"""
+        locale = kwargs.pop('locale', None)
         user_data = {
+            **kwargs,
             'user_id': user_id,
             'username': username,
-            'locale': kwargs.get('locale', None),
+            'locale': locale,
             'created_at': datetime.now(UTC),
             'updated_at': datetime.now(UTC),
-            **kwargs
         }
         
         result = await self.collection.insert_one(user_data)
@@ -40,12 +75,7 @@ class UserModel(BaseModel):
 
     async def update_user(self, user_id: int, update_data: Dict[str, Any]) -> bool:
         """Update user data"""
-        update_data['updated_at'] = datetime.now(UTC)
-        result = await self.collection.update_one(
-            {'user_id': user_id},
-            {'$set': update_data}
-        )
-        return result.modified_count > 0
+        return await self._upsert({'user_id': user_id}, update_data)
 
     async def update_lastfm(self, user_id: int, username: str, session_key: str):
         """Update Last.fm data"""
@@ -78,8 +108,10 @@ class UserModel(BaseModel):
         )
     
     async def create_playlist(self, user_id: int, name: str) -> bool:
-        """Create a new empty playlist"""
-        key = name.lower().replace(" ", "_")
+        """Create a new empty playlist. Returns False if it already exists."""
+        key = _playlist_key(name)
+        if await self.get_playlist(user_id, name):
+            return False
         result = await self.collection.update_one(
             {'user_id': user_id},
             {'$set': {f'playlists.{key}': {
@@ -93,7 +125,7 @@ class UserModel(BaseModel):
     
     async def delete_playlist(self, user_id: int, name: str) -> bool:
         """Delete an entire playlist"""
-        key = name.lower().replace(" ", "_")
+        key = _playlist_key(name)
         result = await self.collection.update_one(
             {'user_id': user_id},
             {'$unset': {f'playlists.{key}': ""}}
@@ -102,7 +134,7 @@ class UserModel(BaseModel):
     
     async def add_track_to_playlist(self, user_id: int, playlist_name: str, track_info: Dict[str, Any]) -> bool:
         """Add a track to a playlist (handles both regular and imported playlists)"""
-        key = playlist_name.lower().replace(" ", "_")
+        key = _playlist_key(playlist_name)
 
         playlist = await self.get_playlist(user_id, playlist_name)
         if not playlist:
@@ -130,7 +162,7 @@ class UserModel(BaseModel):
         Returns (success, track_info) where track_info is the removed track on success, or error info on failure.
         Handles both regular playlists (tracks array) and imported playlists (modifications.additions).
         """
-        key = playlist_name.lower().replace(" ", "_")
+        key = _playlist_key(playlist_name)
         user_data = await self.get_user(user_id)
         if not user_data or 'playlists' not in user_data:
             return (False, {'error': 'user_not_found'})
@@ -149,9 +181,13 @@ class UserModel(BaseModel):
                 return (False, {'error': 'invalid_index', 'max_index': len(additions)})
             
             track_to_remove = additions[index]
+            await self.collection.update_one(
+                {'user_id': user_id},
+                {'$unset': {f'playlists.{key}.modifications.additions.{index}': 1}}
+            )
             result = await self.collection.update_one(
                 {'user_id': user_id},
-                {'$pull': {f'playlists.{key}.modifications.additions': track_to_remove}}
+                {'$pull': {f'playlists.{key}.modifications.additions': None}}
             )
             if result.modified_count > 0:
                 return (True, track_to_remove)
@@ -164,9 +200,13 @@ class UserModel(BaseModel):
                 return (False, {'error': 'invalid_index', 'max_index': len(tracks)})
             
             track_to_remove = tracks[index]
+            await self.collection.update_one(
+                {'user_id': user_id},
+                {'$unset': {f'playlists.{key}.tracks.{index}': 1}}
+            )
             result = await self.collection.update_one(
                 {'user_id': user_id},
-                {'$pull': {f'playlists.{key}.tracks': track_to_remove}}
+                {'$pull': {f'playlists.{key}.tracks': None}}
             )
             if result.modified_count > 0:
                 return (True, track_to_remove)
@@ -174,7 +214,7 @@ class UserModel(BaseModel):
     
     async def get_playlist(self, user_id: int, name: str) -> Optional[Dict[str, Any]]:
         """Get a specific playlist with all tracks"""
-        key = name.lower().replace(" ", "_")
+        key = _playlist_key(name)
         user_data = await self.get_user(user_id)
         if user_data and 'playlists' in user_data:
             return user_data['playlists'].get(key)
@@ -188,8 +228,10 @@ class UserModel(BaseModel):
         return {}
 
     async def import_playlist(self, user_id: int, name: str, source_url: str, track_count: int) -> bool:
-        """Create a new imported playlist"""
-        key = name.lower().replace(" ", "_")
+        """Create a new imported playlist. Returns False if it already exists."""
+        key = _playlist_key(name)
+        if await self.get_playlist(user_id, name):
+            return False
         result = await self.collection.update_one(
             {'user_id': user_id},
             {'$set': {f'playlists.{key}': {
@@ -210,7 +252,7 @@ class UserModel(BaseModel):
 
     async def add_playlist_modification(self, user_id: int, playlist_name: str, mod_type: str, data: Any) -> bool:
         """Add a modification to an imported playlist (additions or removals)"""
-        key = playlist_name.lower().replace(" ", "_")
+        key = _playlist_key(playlist_name)
         
         playlist = await self.get_playlist(user_id, playlist_name)
         if not playlist or playlist.get('type') != 'imported':
@@ -218,8 +260,8 @@ class UserModel(BaseModel):
             
         update_op = {}
         if mod_type == 'additions':
-            data['added_at'] = datetime.now(UTC)
-            update_op = {'$push': {f'playlists.{key}.modifications.additions': data}}
+            addition = {**data, 'added_at': datetime.now(UTC)}
+            update_op = {'$push': {f'playlists.{key}.modifications.additions': addition}}
         elif mod_type == 'removals':
             update_op = {'$push': {f'playlists.{key}.modifications.removals': data}}
         else:
@@ -233,7 +275,7 @@ class UserModel(BaseModel):
 
     async def update_playlist_reorder(self, user_id: int, playlist_name: str, track_ids: list) -> bool:
         """Update the reorder list for an imported playlist"""
-        key = playlist_name.lower().replace(" ", "_")
+        key = _playlist_key(playlist_name)
         
         playlist = await self.get_playlist(user_id, playlist_name)
         if not playlist or playlist.get('type') != 'imported':
@@ -252,13 +294,14 @@ class GuildModel(BaseModel):
     
     async def create_guild(self, guild_id: int, name: str, **kwargs) -> Dict[str, Any]:
         """Create a new guild"""
+        locale = kwargs.pop('locale', 'en')
         guild_data = {
+            **kwargs,
             'guild_id': guild_id,
             'name': name,
-            'locale': kwargs.get('locale', 'en'),
+            'locale': locale,
             'created_at': datetime.now(UTC),
             'updated_at': datetime.now(UTC),
-            **kwargs
         }
         
         result = await self.collection.insert_one(guild_data)
@@ -269,16 +312,13 @@ class GuildModel(BaseModel):
         return await self.collection.find_one({'guild_id': guild_id})
 
     async def update_guild(self, guild_id: int, update_data: Dict[str, Any]) -> bool:
-        update_data['updated_at'] = datetime.now(UTC)
-        result = await self.collection.update_one(
-            {'guild_id': guild_id},
-            {'$set': update_data}
-        )
-        return result.modified_count > 0
+        return await self._upsert({'guild_id': guild_id}, update_data)
     
     async def create_playlist(self, guild_id: int, name: str) -> bool:
-        """Create a new empty server playlist"""
-        key = name.lower().replace(" ", "_")
+        """Create a new empty server playlist. Returns False if it already exists."""
+        key = _playlist_key(name)
+        if await self.get_playlist(guild_id, name):
+            return False
         result = await self.collection.update_one(
             {'guild_id': guild_id},
             {'$set': {f'playlists.{key}': {
@@ -292,7 +332,7 @@ class GuildModel(BaseModel):
     
     async def delete_playlist(self, guild_id: int, name: str) -> bool:
         """Delete an entire server playlist"""
-        key = name.lower().replace(" ", "_")
+        key = _playlist_key(name)
         result = await self.collection.update_one(
             {'guild_id': guild_id},
             {'$unset': {f'playlists.{key}': ""}}
@@ -301,7 +341,7 @@ class GuildModel(BaseModel):
     
     async def add_track_to_playlist(self, guild_id: int, playlist_name: str, track_info: Dict[str, Any]) -> bool:
         """Add a track to a server playlist (handles both regular and imported playlists)"""
-        key = playlist_name.lower().replace(" ", "_")
+        key = _playlist_key(playlist_name)
         
         playlist = await self.get_playlist(guild_id, playlist_name)
         if not playlist:
@@ -329,7 +369,7 @@ class GuildModel(BaseModel):
         Returns (success, track_info) where track_info is the removed track on success, or error info on failure.
         Handles both regular playlists (tracks array) and imported playlists (modifications.additions).
         """
-        key = playlist_name.lower().replace(" ", "_")
+        key = _playlist_key(playlist_name)
         guild_data = await self.get_guild(guild_id)
         if not guild_data or 'playlists' not in guild_data:
             return (False, {'error': 'guild_not_found'})
@@ -348,9 +388,13 @@ class GuildModel(BaseModel):
                 return (False, {'error': 'invalid_index', 'max_index': len(additions)})
             
             track_to_remove = additions[index]
+            await self.collection.update_one(
+                {'guild_id': guild_id},
+                {'$unset': {f'playlists.{key}.modifications.additions.{index}': 1}}
+            )
             result = await self.collection.update_one(
                 {'guild_id': guild_id},
-                {'$pull': {f'playlists.{key}.modifications.additions': track_to_remove}}
+                {'$pull': {f'playlists.{key}.modifications.additions': None}}
             )
             if result.modified_count > 0:
                 return (True, track_to_remove)
@@ -363,9 +407,13 @@ class GuildModel(BaseModel):
                 return (False, {'error': 'invalid_index', 'max_index': len(tracks)})
             
             track_to_remove = tracks[index]
+            await self.collection.update_one(
+                {'guild_id': guild_id},
+                {'$unset': {f'playlists.{key}.tracks.{index}': 1}}
+            )
             result = await self.collection.update_one(
                 {'guild_id': guild_id},
-                {'$pull': {f'playlists.{key}.tracks': track_to_remove}}
+                {'$pull': {f'playlists.{key}.tracks': None}}
             )
             if result.modified_count > 0:
                 return (True, track_to_remove)
@@ -373,7 +421,7 @@ class GuildModel(BaseModel):
     
     async def get_playlist(self, guild_id: int, name: str) -> Optional[Dict[str, Any]]:
         """Get a specific server playlist with all tracks"""
-        key = name.lower().replace(" ", "_")
+        key = _playlist_key(name)
         guild_data = await self.get_guild(guild_id)
         if guild_data and 'playlists' in guild_data:
             return guild_data['playlists'].get(key)
@@ -387,8 +435,10 @@ class GuildModel(BaseModel):
         return {}
 
     async def import_playlist(self, guild_id: int, name: str, source_url: str, track_count: int) -> bool:
-        """Create a new imported server playlist"""
-        key = name.lower().replace(" ", "_")
+        """Create a new imported server playlist. Returns False if it already exists."""
+        key = _playlist_key(name)
+        if await self.get_playlist(guild_id, name):
+            return False
         result = await self.collection.update_one(
             {'guild_id': guild_id},
             {'$set': {f'playlists.{key}': {
@@ -409,7 +459,7 @@ class GuildModel(BaseModel):
 
     async def add_playlist_modification(self, guild_id: int, playlist_name: str, mod_type: str, data: Any) -> bool:
         """Add a modification to an imported server playlist"""
-        key = playlist_name.lower().replace(" ", "_")
+        key = _playlist_key(playlist_name)
         
         # Verify playlist is imported type
         playlist = await self.get_playlist(guild_id, playlist_name)
@@ -418,8 +468,8 @@ class GuildModel(BaseModel):
             
         update_op = {}
         if mod_type == 'additions':
-            data['added_at'] = datetime.now(UTC)
-            update_op = {'$push': {f'playlists.{key}.modifications.additions': data}}
+            addition = {**data, 'added_at': datetime.now(UTC)}
+            update_op = {'$push': {f'playlists.{key}.modifications.additions': addition}}
         elif mod_type == 'removals':
             update_op = {'$push': {f'playlists.{key}.modifications.removals': data}}
         else:
@@ -433,7 +483,7 @@ class GuildModel(BaseModel):
 
     async def update_playlist_reorder(self, guild_id: int, playlist_name: str, track_ids: list) -> bool:
         """Update the reorder list for an imported server playlist"""
-        key = playlist_name.lower().replace(" ", "_")
+        key = _playlist_key(playlist_name)
         
         playlist = await self.get_playlist(guild_id, playlist_name)
         if not playlist or playlist.get('type') != 'imported':
@@ -456,7 +506,7 @@ class GuildModel(BaseModel):
     async def get_music_channel(self, guild_id: int) -> Optional[int]:
         """Get the static music channel ID"""
         data = await self.collection.find_one({'guild_id': guild_id})
-        if data and 'music' in data:
+        if data and isinstance(data.get('music'), dict):
             return data['music'].get('channel_id')
         return None
 
@@ -464,7 +514,7 @@ class GuildModel(BaseModel):
         """Remove the static music channel"""
         await self.collection.update_one(
             {'guild_id': guild_id},
-            {'$unset': {'music': ""}}
+            {'$unset': {'music.channel_id': ""}}
         )
 
     async def set_music_message(self, guild_id: int, message_id: int):
@@ -478,7 +528,7 @@ class GuildModel(BaseModel):
     async def get_music_message(self, guild_id: int) -> Optional[int]:
         """Get the static music embed message ID"""
         data = await self.collection.find_one({'guild_id': guild_id})
-        if data and 'music' in data:
+        if data and isinstance(data.get('music'), dict):
             return data['music'].get('message_id')
         return None
 
@@ -491,8 +541,8 @@ class GuildModel(BaseModel):
         )
 
     async def get_default_volume(self, guild_id: int) -> int:
-        """Get the default music volume for the guild (defaults to 20)"""
+        """Get the default music volume for the guild (defaults to 25)"""
         data = await self.collection.find_one({'guild_id': guild_id})
-        if data and 'music' in data:
+        if data and isinstance(data.get('music'), dict):
             return data['music'].get('default_volume', 25)
         return 25

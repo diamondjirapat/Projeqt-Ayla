@@ -56,6 +56,13 @@ fi
 echo -e "${GREEN}[INFO] Using Python $($PYTHON --version)${NC}"
 
 # ---------- Virtual environment ----------
+if [ -d ".venv" ]; then
+    if ! .venv/bin/python -c "import sys" >/dev/null 2>&1; then
+        echo -e "${YELLOW}[WARNING] Existing virtual environment is invalid or broken. Recreating...${NC}"
+        rm -rf .venv
+    fi
+fi
+
 if [ ! -f ".venv/bin/activate" ]; then
     echo -e "${YELLOW}[INFO] Creating virtual environment...${NC}"
     $PYTHON -m venv .venv || {
@@ -73,7 +80,7 @@ python -m pip install --upgrade pip setuptools wheel >/dev/null
 # ---------- Dependencies ----------
 if [ -f "requirements.txt" ]; then
     echo -e "${GREEN}[INFO] Installing/checking dependencies...${NC}"
-    pip install -r requirements.txt || {
+    python -m pip install -r requirements.txt || {
         echo -e "${RED}[ERROR] Dependency installation failed${NC}"
         exit 1
     }
@@ -87,6 +94,30 @@ if [ ! -f ".env" ]; then
     echo "Copy .env.example to .env and configure it:"
     echo "  cp .env.example .env"
     exit 1
+fi
+
+# ---------- Frontend build ----------
+if [ -f "frontend/package.json" ]; then
+    echo -e "${GREEN}[INFO] Building frontend...${NC}"
+    if ! command -v npm >/dev/null 2>&1; then
+        echo -e "${RED}[ERROR] npm is not installed or not in PATH${NC}"
+        echo "Please install Node.js from https://nodejs.org/"
+        exit 1
+    fi
+    (
+        cd frontend
+        if [ ! -d "node_modules" ]; then
+            echo -e "${YELLOW}[INFO] Installing frontend dependencies...${NC}"
+        else
+            echo -e "${GREEN}[INFO] Checking frontend dependencies...${NC}"
+        fi
+        npm install
+        echo -e "${GREEN}[INFO] Building frontend production bundle...${NC}"
+        npm run build
+    ) || {
+        echo -e "${RED}[ERROR] Frontend build failed${NC}"
+        exit 1
+    }
 fi
 
 # ---------- Run bot ----------

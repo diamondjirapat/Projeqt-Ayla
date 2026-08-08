@@ -96,7 +96,7 @@ class Prefix(commands.Cog):
     @prefix.command(name='set')
     async def set_user_prefix(self, ctx, *, prefix: str):
         """Set your personal prefix"""
-        success = await prefix_manager.set_user_prefix(ctx.author.id, prefix)
+        success, reason = await prefix_manager.set_user_prefix(ctx.author.id, prefix)
         
         if success:
             title = await i18n.t(ctx, "prefix.set_success_title")
@@ -114,7 +114,7 @@ class Prefix(commands.Cog):
             )
         else:
             title = await i18n.t(ctx, "prefix.set_failed_title")
-            description = await i18n.t(ctx, "prefix.set_failed")
+            description = reason or await i18n.t(ctx, "prefix.set_failed")
             embed = discord.Embed(
                 title=title,
                 description=description,
@@ -163,7 +163,7 @@ class Prefix(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def set_serverprefix(self, ctx, *, prefix: str):
         """Set server default prefix"""
-        success = await prefix_manager.set_guild_prefix(ctx.guild.id, prefix)
+        success, reason = await prefix_manager.set_guild_prefix(ctx.guild.id, prefix)
         
         if success:
             title = await i18n.t(ctx, "prefix.server_set_success_title")
@@ -188,7 +188,7 @@ class Prefix(commands.Cog):
             )
         else:
             title = await i18n.t(ctx, "prefix.server_set_failed_title")
-            description = await i18n.t(ctx, "prefix.server_set_failed")
+            description = reason or await i18n.t(ctx, "prefix.server_set_failed")
             embed = discord.Embed(
                 title=title,
                 description=description,

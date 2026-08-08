@@ -1,4 +1,5 @@
 import asyncio
+from collections import deque
 import logging
 import re
 import time
@@ -15,7 +16,7 @@ from config import Config
 from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 from utils.lastfm import lastfm_handler
-from utils.queue import CustomPlayer, CustomQueue, LoopMode, QueueEmpty, QueueException, QueueFull
+from utils.queue import CustomPlayer, LoopMode
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class Music(commands.Cog):
         self.guild_model = GuildModel()
         self.timeout_tasks = {}
         self.selecting_users = set()
-        self.autoplay_played_uris = {}  # guild_id -> set of played URIs to avoid repeats
+        self.autoplay_played_uris = {}  # guild_id -> bounded history of played URIs
         self.now_playing_messages = {}  # guild_id -> message reference for cleanup
 
     @property
@@ -69,7 +70,7 @@ class Music(commands.Cog):
             if ctx.guild and ctx.guild.voice_client:
                 try:
                     await ctx.guild.voice_client.disconnect(force=True)
-                except:
+                except Exception:
                     pass
             try:
                 msg = await i18n.t(ctx, "music.errors.session_died")
@@ -77,7 +78,7 @@ class Music(commands.Cog):
                     await ctx.send(msg, ephemeral=True)
                 else:
                     await ctx.send(msg, delete_after=10)
-            except:
+            except Exception:
                 pass
             return
 
@@ -85,7 +86,7 @@ class Music(commands.Cog):
             if ctx.guild and ctx.guild.voice_client:
                 try:
                     await ctx.guild.voice_client.disconnect(force=True)
-                except:
+                except Exception:
                     pass
             try:
                 msg = await i18n.t(ctx, "music.errors.node_offline")
@@ -93,7 +94,7 @@ class Music(commands.Cog):
                     await ctx.send(msg, ephemeral=True)
                 else:
                     await ctx.send(msg, delete_after=10)
-            except:
+            except Exception:
                 pass
             return
 
@@ -126,49 +127,78 @@ class Music(commands.Cog):
                     pass
 
     async def _fetch_autoplay_track(self, player: pomice.Player, last_track: pomice.Track) -> pomice.Track | None:
-        """Fetch a recommended track based on the last played track's artist"""
+        """Fetch a recommended track based on the last played track with multi-stage fallback"""
         guild_id = player.guild.id
 
-        if guild_id not in self.autoplay_played_uris:
-            self.autoplay_played_uris[guild_id] = set()
+        played_uris = self.autoplay_played_uris.setdefault(guild_id, deque(maxlen=50))
 
-        if last_track.uri:
-            self.autoplay_played_uris[guild_id].add(last_track.uri)
-
-        if len(self.autoplay_played_uris[guild_id]) > 50:
-            self.autoplay_played_uris[guild_id] = set(list(self.autoplay_played_uris[guild_id])[-50:])
+        if last_track.uri and last_track.uri not in played_uris:
+            played_uris.append(last_track.uri)
 
         logger.info(f"[AUTOPLAY RECOMMENDATION] Fetching recommendations: '{last_track.title}' by {last_track.author}")
 
+        def is_valid_candidate(t: pomice.Track) -> bool:
+            if t.uri and t.uri in played_uris:
+                return False
+            if t.title.lower() == last_track.title.lower():
+                return False
+            return True
+
+        def get_clean_artist(author: str) -> str:
+            if not author:
+                return ""
+            cleaned = re.sub(r'(?i)\s*(feat\.|ft\.|featuring|,|&|x|-).*$', '', author).strip()
+            return cleaned or author.strip()
+
+        # Stage 1: Standard node recommendations
         try:
             tracks = await player.get_recommendations(track=last_track)
-
-            # Fallback
-            if not tracks:
-                logger.info("[AUTOPLAY RECOMMENDATION] No recommendations found, falling back to author search.")
-                query = f"{last_track.author}"
-                tracks = await player.get_tracks(query)
-
-            if not tracks:
-                logger.info("[AUTOPLAY FALLBACK] No tracks found")
-                return None
-
-            if isinstance(tracks, pomice.Playlist):
-                tracks = tracks.tracks
-
-            for track in tracks:
-                if track.uri and track.uri in self.autoplay_played_uris[guild_id]:
-                    continue
-                if track.title.lower() == last_track.title.lower():
-                    continue
-                track.requester = "AutoPlay 🎵"
-                logger.info(f"[AUTOPLAY FALLBACK] Selected: '{track.title}' by {track.author}")
-                return track
-
-            return None
+            if tracks:
+                if isinstance(tracks, pomice.Playlist):
+                    tracks = tracks.tracks
+                for track in tracks:
+                    if is_valid_candidate(track):
+                        track.requester = "AutoPlay 🎵"
+                        logger.info(f"[AUTOPLAY STAGE 1 - RECOMMENDATION] Selected: '{track.title}' by {track.author}")
+                        return track
         except Exception as e:
-            logger.warning(f"[AUTOPLAY] Search failed: {e}")
-            return None
+            logger.warning(f"[AUTOPLAY STAGE 1] Search failed: {e}")
+
+        # Stage 2: Cleaned artist search
+        clean_artist = get_clean_artist(last_track.author)
+        if clean_artist:
+            try:
+                logger.info(f"[AUTOPLAY STAGE 2] Falling back to artist search: '{clean_artist}'")
+                tracks = await player.get_tracks(clean_artist)
+                if tracks:
+                    if isinstance(tracks, pomice.Playlist):
+                        tracks = tracks.tracks
+                    for track in tracks:
+                        if is_valid_candidate(track):
+                            track.requester = "AutoPlay 🎵"
+                            logger.info(f"[AUTOPLAY STAGE 2 - ARTIST] Selected: '{track.title}' by {track.author}")
+                            return track
+            except Exception as e:
+                logger.warning(f"[AUTOPLAY STAGE 2] Search failed: {e}")
+
+        # Stage 3: Title keyword/Radio search fallback to branch out
+        try:
+            clean_title = re.sub(r'[\(\[\{].*?[\)\]\}]', '', last_track.title).strip()
+            query = f"{clean_artist} radio" if clean_artist else f"{clean_title} mix"
+            logger.info(f"[AUTOPLAY STAGE 3] Falling back to mix/radio search: '{query}'")
+            tracks = await player.get_tracks(query)
+            if tracks:
+                if isinstance(tracks, pomice.Playlist):
+                    tracks = tracks.tracks
+                for track in tracks:
+                    if is_valid_candidate(track):
+                        track.requester = "AutoPlay 🎵"
+                        logger.info(f"[AUTOPLAY STAGE 3 - RADIO] Selected: '{track.title}' by {track.author}")
+                        return track
+        except Exception as e:
+            logger.warning(f"[AUTOPLAY STAGE 3] Search failed: {e}")
+
+        return None
 
     def cancel_timeout(self, guild_id):
         """Cancels the disconnect timer"""
@@ -293,7 +323,7 @@ class Music(commands.Cog):
         if static_channel_id and ctx.channel.id != static_channel_id:
             try:
                 await ctx.message.delete()
-            except:
+            except Exception:
                 pass
 
     async def acknowledge_static_redirect(self, ctx: commands.Context) -> bool:
@@ -369,9 +399,6 @@ class Music(commands.Cog):
                 target_channel = player.guild.text_channels[0]
 
         if target_channel:
-            # Delete previous now playing message if it exists
-            await self.delete_now_playing_message(player.guild.id)
-
             if not hasattr(player, "history"):
                 player.history = []
             position = len(player.history) + 1
@@ -399,12 +426,21 @@ class Music(commands.Cog):
             embed.add_field(name=" ", value=requester_label, inline=False)
             embed.set_image(url=Config.BAR_URL)
 
-            if track.thumbnail: embed.set_thumbnail(url=track.thumbnail)
+            if track.thumbnail:
+                embed.set_thumbnail(url=track.thumbnail)
 
             view = NowPlayingView(player, self.user_model, self.guild_model)
-            msg = await target_channel.send(embed=embed, view=view)
-            # message reference for cleanup
-            self.now_playing_messages[player.guild.id] = msg
+
+            existing_msg = self.now_playing_messages.get(player.guild.id)
+            if existing_msg:
+                try:
+                    await existing_msg.edit(embed=embed, view=view)
+                except Exception:
+                    msg = await target_channel.send(embed=embed, view=view)
+                    self.now_playing_messages[player.guild.id] = msg
+            else:
+                msg = await target_channel.send(embed=embed, view=view)
+                self.now_playing_messages[player.guild.id] = msg
 
         if not lastfm_handler.enabled:
             return
@@ -457,7 +493,13 @@ class Music(commands.Cog):
                                 logger.info(f"[AUTOPLAY] Playing '{recommended.title}' by {recommended.author}")
                                 vol = await self.guild_model.get_default_volume(player.guild.id)
                                 await player.set_volume(vol)
-                                await player.play(recommended)
+                                try:
+                                    await player.play(recommended)
+                                except Exception as play_err:
+                                    logger.error(f"[AUTOPLAY] Failed to play recommended track '{recommended.title}': {play_err}")
+                                    self.start_timeout(player.guild.id, player)
+                                    await self.update_static_embed(player.guild.id)
+                                    await self.delete_now_playing_message(player.guild.id)
                             else:
                                 logger.info("[AUTOPLAY] No recommendation found, starting timeout")
                                 self.start_timeout(player.guild.id, player)
@@ -676,7 +718,8 @@ class Music(commands.Cog):
 
             embed.title = now_playing_title
             embed.description = f"{source_indicator}**[{current_track.title}]({current_track.uri})**\n\n{artist_label}\n{duration_label}"
-            if current_track.thumbnail: embed.set_thumbnail(url=current_track.thumbnail)
+            if current_track.thumbnail:
+                embed.set_thumbnail(url=current_track.thumbnail)
             if hasattr(current_track, 'requester') and current_track.requester:
                 req_text = await i18n.t(channel, "music.player.requester_label", user=current_track.requester,
                                         static_embed=True)
@@ -855,7 +898,7 @@ class Music(commands.Cog):
                 logger.warning(f"[RECOVERY] Session died for guild {ctx.guild.id}. Reconnecting...")
                 try:
                     await player.destroy()
-                except:
+                except Exception:
                     if ctx.guild.voice_client:
                         await ctx.guild.voice_client.disconnect(force=True)
                 try:
@@ -869,12 +912,12 @@ class Music(commands.Cog):
                 if player:
                     try:
                         await player.destroy()
-                    except:
+                    except Exception:
                         if ctx.guild.voice_client:
                             await ctx.guild.voice_client.disconnect(force=True)
                 try:
                     msg = await i18n.t(ctx, "music.errors.node_offline")
-                except:
+                except Exception:
                     msg = "Music server is currently offline. Please try again later."
                 return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
             else:
@@ -965,7 +1008,7 @@ class Music(commands.Cog):
 
                 try:
                     await response.delete()
-                except:
+                except Exception:
                     pass
 
                 choice = int(response.content)
@@ -1003,7 +1046,7 @@ class Music(commands.Cog):
             timeout_text = await i18n.t(ctx, "music.ui.selection_timeout")
             try:
                 await self.edit_and_delete(msg, content=timeout_text, delete_after=5)
-            except:
+            except Exception:
                 pass
         finally:
             self.selecting_users.discard(ctx.author.id)
@@ -1315,7 +1358,7 @@ class Music(commands.Cog):
                                 _done['value'] = True
                                 final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
                                 await status_msg.edit(content=final_msg)
-                        except:
+                        except Exception:
                             pass
 
                     self.bot.loop.create_task(
@@ -1449,7 +1492,7 @@ class Music(commands.Cog):
             if status_msg:
                 try:
                     await status_msg.delete()
-                except:
+                except Exception:
                     pass
             msg = await i18n.t(ctx, "music.playlist.import_failed")
             await ctx.send(msg, delete_after=10)
@@ -1698,7 +1741,7 @@ class Music(commands.Cog):
                                 _done['value'] = True
                                 final_msg = await i18n.t(ctx, "music.playlist.added_with_additions", count=count, additions=loaded, name=playlist_name)
                                 await status_msg.edit(content=final_msg)
-                        except:
+                        except Exception:
                             pass
 
                     self.bot.loop.create_task(
@@ -1829,7 +1872,7 @@ class Music(commands.Cog):
             if status_msg:
                 try:
                     await status_msg.delete()
-                except:
+                except Exception:
                     pass
             msg = await i18n.t(ctx, "music.playlist.import_failed")
             await ctx.send(msg, delete_after=10)
@@ -2086,7 +2129,7 @@ class Music(commands.Cog):
                     await ctx.send(error_msg, delete_after=10)
                 else:
                     await ctx.send(error_msg, delete_after=10)
-            except:
+            except Exception:
                 pass
 
     @commands.hybrid_command(name="move")
@@ -2555,7 +2598,7 @@ class PlaylistSelect(discord.ui.Select):
                                 _done['value'] = True
                                 final_msg = i18n.get_text("music.ui.added_with_additions_custom", locale, count=count, additions=loaded, name=playlist_name)
                                 await status_msg.edit(content=final_msg)
-                        except:
+                        except Exception:
                             pass
 
                     self.bot.loop.create_task(
@@ -2999,7 +3042,7 @@ class QueuePaginationView(discord.ui.View):
         if self.message:
             try:
                 await self.message.delete()
-            except:
+            except Exception:
                 pass
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.grey, emoji="⏮️")
@@ -3020,7 +3063,7 @@ class QueuePaginationView(discord.ui.View):
         if self.message:
             try:
                 await self.message.delete()
-            except:
+            except Exception:
                 pass
         self.stop()
 

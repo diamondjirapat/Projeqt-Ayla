@@ -38,6 +38,14 @@ if %MAJOR% EQU 3 if %MINOR% LSS 13 (
 echo [INFO] Using Python %PYVER%
 
 REM ---------- Virtual environment ----------
+if exist ".venv\Scripts\python.exe" (
+    ".venv\Scripts\python.exe" -c "import sys" >nul 2>&1
+    if errorlevel 1 (
+        echo [WARNING] Existing virtual environment is invalid or broken. Recreating...
+        rmdir /s /q .venv
+    )
+)
+
 if not exist ".venv\Scripts\activate.bat" (
     echo [INFO] Creating virtual environment...
     python -m venv .venv
@@ -57,7 +65,7 @@ python -m pip install --upgrade pip setuptools wheel >nul
 REM ---------- Dependencies ----------
 if exist "requirements.txt" (
     echo [INFO] Installing/checking dependencies...
-    pip install -r requirements.txt
+    python -m pip install -r requirements.txt
     if errorlevel 1 (
         echo [ERROR] Dependency installation failed
         pause
@@ -74,6 +82,40 @@ if not exist ".env" (
     echo   copy .env.example .env
     pause
     exit /b 1
+)
+
+REM ---------- Frontend build ----------
+if exist "frontend\package.json" (
+    echo [INFO] Building frontend...
+    where npm >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] npm is not installed or not in PATH
+        echo Please install Node.js from https://nodejs.org/
+        pause
+        exit /b 1
+    )
+    pushd frontend
+    if not exist "node_modules" (
+        echo [INFO] Installing frontend dependencies...
+    ) else (
+        echo [INFO] Checking frontend dependencies...
+    )
+    call npm install
+    if errorlevel 1 (
+        echo [ERROR] Frontend dependency installation failed
+        popd
+        pause
+        exit /b 1
+    )
+    echo [INFO] Building frontend production bundle...
+    call npm run build
+    if errorlevel 1 (
+        echo [ERROR] Frontend build failed
+        popd
+        pause
+        exit /b 1
+    )
+    popd
 )
 
 REM ---------- Run bot ----------

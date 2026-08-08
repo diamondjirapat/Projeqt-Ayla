@@ -2,9 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
-from typing import Optional, Dict, List
+from typing import Dict
 from datetime import datetime, timezone
-import json
 
 from utils.i18n import i18n
 from config import Config
@@ -205,10 +204,12 @@ class ReactionRolesCog(commands.Cog):
 
         role_id = self.reaction_roles[guild_id][message_id][emoji_str]
         guild = self.bot.get_guild(guild_id)
-        if not guild: return
+        if not guild:
+            return
 
         role = guild.get_role(role_id)
-        if not role: return
+        if not role:
+            return
 
         member = payload.member
         if not member:

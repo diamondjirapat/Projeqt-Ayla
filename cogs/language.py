@@ -50,7 +50,7 @@ class Language(commands.Cog):
         settings_text = ""
         if user_locale:
             lang_name = await i18n.t(ctx, f'languages.{user_locale}')
-            settings_text += await i18n.t(ctx, f"languages.user_locale", lang_name=lang_name, user_locale=user_locale)
+            settings_text += await i18n.t(ctx, "languages.user_locale", lang_name=lang_name, user_locale=user_locale)
         else:
             settings_text += await i18n.t(ctx, "languages.no_user_locale")
         
