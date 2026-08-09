@@ -71,8 +71,23 @@ class ReactionRolesCog(commands.Cog):
 
             emoji_roles = self.reaction_roles[guild_id][message_id]
 
+            guild_data = await self.guild_model.get_guild(guild_id)
+            embed_settings = {}
+            inline_settings = {}
+            if guild_data:
+                stored_embeds = guild_data.get('reaction_role_embeds', {})
+                stored_inline = guild_data.get('reaction_role_inline', {})
+                if isinstance(stored_embeds, dict):
+                    embed_settings = stored_embeds.get(str(message_id), {}) or {}
+                if isinstance(stored_inline, dict):
+                    inline_settings = stored_inline.get(str(message_id), {}) or {}
+
             title = "Reaction Roles"
             custom_description = None
+            image_url = None
+            thumbnail_url = None
+            footer_text = ""
+            footer_url = ""
 
             if message.embeds:
                 old_embed = message.embeds[0]
@@ -80,6 +95,27 @@ class ReactionRolesCog(commands.Cog):
                     title = old_embed.title
                 if getattr(old_embed, "description", None) is not None:
                     custom_description = old_embed.description
+                if old_embed.image:
+                    image_url = old_embed.image.url
+                if old_embed.thumbnail:
+                    thumbnail_url = old_embed.thumbnail.url
+                if old_embed.footer:
+                    footer_text = old_embed.footer.text or ""
+                    footer_url = old_embed.footer.icon_url or ""
+
+            if isinstance(embed_settings, dict):
+                if "title" in embed_settings:
+                    title = embed_settings.get("title") or ""
+                if "description" in embed_settings:
+                    custom_description = embed_settings.get("description") or None
+                if "image_url" in embed_settings:
+                    image_url = embed_settings.get("image_url") or None
+                if "thumbnail_url" in embed_settings:
+                    thumbnail_url = embed_settings.get("thumbnail_url") or None
+                if "footer_text" in embed_settings:
+                    footer_text = embed_settings.get("footer_text") or ""
+                if "footer_url" in embed_settings:
+                    footer_url = embed_settings.get("footer_url") or ""
 
             color = discord.Color.blue()
             if message.embeds and message.embeds[0].color:
@@ -97,19 +133,23 @@ class ReactionRolesCog(commands.Cog):
                     embed.add_field(
                         name=emoji,
                         value=role.mention,
-                        inline=True
+                        inline=bool(inline_settings.get(emoji, True))
                     )
                 else:
                     embed.add_field(
                         name=emoji,
                         value="(Deleted)",
-                        inline=True
+                        inline=bool(inline_settings.get(emoji, True))
                     )
 
-            if message.embeds and message.embeds[0].image:
-                embed.set_image(url=message.embeds[0].image.url)
-            else:
+            if image_url:
+                embed.set_image(url=image_url)
+            elif not embed_settings:
                 embed.set_image(url=Config.BAR_URL)
+            if thumbnail_url:
+                embed.set_thumbnail(url=thumbnail_url)
+            if footer_text or footer_url:
+                embed.set_footer(text=footer_text, icon_url=footer_url or None)
 
             await message.edit(embed=embed)
             logger.debug(f"Updated embed for message {message_id}")
