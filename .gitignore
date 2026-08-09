@@ -228,3 +228,7 @@ bot.log
 TODO.md
 *.txt
 /.claude
+/frontend
+/static
+/tests
+Note.md
