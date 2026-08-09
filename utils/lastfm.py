@@ -2,6 +2,7 @@
 import hashlib
 import logging
 import re
+from urllib.parse import urlencode
 
 import aiohttp
 
@@ -109,7 +110,7 @@ class LastFMHandler:
                 return None
 
     async def get_auth_data(self, cb=None):
-        """Get auth URL and token"""
+        """Get a desktop-flow auth URL and token."""
         if not self.enabled:
             return None, None
         params = {}
@@ -123,13 +124,23 @@ class LastFMHandler:
                 data = await resp.json()
                 if 'token' in data:
                     token = data['token']
-                    url = f"https://www.last.fm/api/auth/?api_key={self.api_key}&token={token}"
+                    auth_params = {
+                        'api_key': self.api_key,
+                        'token': token,
+                    }
                     if cb:
-                        url += f"&cb={cb}"
+                        auth_params['cb'] = cb
+                    url = f"https://www.last.fm/api/auth/?{urlencode(auth_params)}"
                     return url, token
                 else:
                     logger.error(f"Failed to get token: {data}")
                     return None, None
+
+    def get_web_auth_url(self, cb):
+        """Build the web-flow URL; Last.fm returns the token to ``cb`` after approval."""
+        if not self.enabled or not cb:
+            return None
+        return f"https://www.last.fm/api/auth/?{urlencode({'api_key': self.api_key, 'cb': cb})}"
 
     async def get_session_from_token(self, token, url=None):
         """Exchange web token for session key"""
@@ -141,6 +152,12 @@ class LastFMHandler:
         if data and 'session' in data:
             logger.info("[LASTFM] Session obtained for user")
             return data['session']['key']
+        if data and data.get('error'):
+            logger.warning(
+                "[LASTFM] auth.getSession failed (%s): %s",
+                data.get('error'),
+                data.get('message', 'unknown error'),
+            )
         logger.warning("[LASTFM] Failed to get session from token")
         return None
 
