@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from typing import Optional, cast
+from html import escape
 import mimetypes
 import urllib.parse
 
@@ -46,6 +47,7 @@ NO_CACHE_HEADERS = {
 }
 IMMUTABLE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 SESSION_MAX_AGE = 30 * 24 * 3600
+LASTFM_AUTH_STATE_MAX_AGE = 15 * 60
 STATIC_DIR = (Config.PROJECT_ROOT / 'static').resolve()
 
 @app.middleware("http")
@@ -248,33 +250,113 @@ async def lastfm_auth_url(request: Request, cb: Optional[str] = None):
         
     if not lastfm_handler.enabled:
         return {"enabled": False}
-        
-    url, token = await lastfm_handler.get_auth_data(cb=cb)
-    if not url or not token:
-        raise HTTPException(status_code=500, detail="Failed to get auth token from Last.fm")
-        
-    return {"enabled": True, "url": url, "token": token}
 
+    if not signer:
+        raise HTTPException(status_code=503, detail="Web authentication is not ready")
+
+    # Put a short-lived, signed user id in the callback path. This lets the
+    # callback finish linking the account even when Last.fm/browser security
+    # severs window.opener during the cross-origin authorization round trip.
+    state = signer.sign(str(user["id"]).encode()).decode()
+    callback_base = cb or f"{str(request.base_url).rstrip('/')}/api/lastfm/callback"
+    callback_url = f"{callback_base.rstrip('/')}/{urllib.parse.quote(state, safe='')}"
+
+    # Web authentication must not call auth.getToken first. Last.fm creates
+    # the token only after the user clicks Allow, then appends it to this
+    # callback URL. Supplying a desktop-flow token here prevents that redirect.
+    url = lastfm_handler.get_web_auth_url(callback_url)
+    if not url:
+        raise HTTPException(status_code=500, detail="Failed to create Last.fm authorization URL")
+
+    logger.info("[WEB] Created Last.fm web authorization for user_id=%s", user["id"])
+
+    return {"enabled": True, "url": url}
+
+@app.get("/api/lastfm/callback/{state}", response_class=HTMLResponse)
 @app.get("/api/lastfm/callback", response_class=HTMLResponse)
-async def lastfm_callback(token: str):
+async def lastfm_callback(
+    request: Request,
+    state: Optional[str] = None,
+    token: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    callback_origin = f"{request.url.scheme}://{request.url.netloc}"
+    username: Optional[str] = None
+    error_text: Optional[str] = error
+
+    if not error_text and not token:
+        error_text = "Last.fm did not return an authorization token."
+
+    user_id: Optional[int] = None
+    if not error_text and state:
+        if not signer:
+            error_text = "Web authentication is not ready."
+        else:
+            try:
+                user_id = int(signer.unsign(state, max_age=LASTFM_AUTH_STATE_MAX_AGE).decode())
+            except (BadSignature, SignatureExpired, TypeError, ValueError):
+                error_text = "This Last.fm authorization request is invalid or expired."
+    elif not error_text:
+        # Backwards compatibility for callbacks opened before signed-state
+        # support was added. A same-origin session cookie is required here.
+        callback_user = get_user_from_request(request)
+        if callback_user:
+            user_id = callback_user["id"]
+        else:
+            error_text = "Your web session could not be matched to this Last.fm request."
+
+    if not error_text and token and user_id is not None:
+        logger.info("[WEB] Completing Last.fm authorization for user_id=%s", user_id)
+        session_key = await lastfm_handler.get_session_from_token(token)
+        if not session_key:
+            error_text = "Last.fm did not create a session. Please start the connection again."
+        else:
+            username = await lastfm_handler.get_username_from_session(session_key)
+            if not username:
+                error_text = "Last.fm created a session, but the username could not be loaded."
+            else:
+                await user_model.update_lastfm(user_id, username, session_key)
+                logger.info(
+                    "[WEB] Last.fm account linked for user_id=%s username=%s",
+                    user_id,
+                    username,
+                )
+
+    if username:
+        message = {
+            "source": "lastfm-auth",
+            "status": "success",
+            "username": username,
+        }
+        heading = "Last.fm Authorization Success"
+        body = f"Connected to Last.fm as {escape(username)}. This window will close automatically."
+    else:
+        safe_error = escape(error_text or "Authorization was cancelled.", quote=True)
+        logger.warning("[WEB] Last.fm authorization callback failed: %s", safe_error)
+        message = {
+            "source": "lastfm-auth",
+            "status": "error",
+            "error": safe_error,
+        }
+        heading = "Last.fm Authorization Failed"
+        body = f"Last.fm authorization was not completed: {safe_error} You can close this window now."
+
+    serialized_message = json.dumps(message).replace("</", "<\\/")
+
     return f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Last.fm Authorization Success</title>
+        <title>{heading}</title>
         <script>
             if (window.opener) {{
-                window.opener.postMessage({{
-                    source: 'lastfm-auth',
-                    status: 'success',
-                    token: {repr(token)}
-                }}, '*');
+                window.opener.postMessage({serialized_message}, {json.dumps(callback_origin)});
             }}
-            window.close();
+            window.setTimeout(() => window.close(), 150);
         </script>
     </head>
     <body>
-        <p>Authorization successful! You can close this window now.</p>
+        <p>{body}</p>
     </body>
     </html>
     """
@@ -1315,29 +1397,89 @@ async def get_guild_settings(request: Request, guild_id: int):
         channels.append({"id": str(ch.id), "name": ch.name})
         
     roles = []
+    role_names_by_id = {}
     for r in guild.roles:
         if r.name != "@everyone":
-            roles.append({"id": str(r.id), "name": r.name, "color": str(r.color)})
+            role_id = str(r.id)
+            roles.append({"id": role_id, "name": r.name, "color": str(r.color)})
+            role_names_by_id[role_id] = r.name
             
     guild_emojis = []
     for e in guild.emojis:
         guild_emojis.append({"id": str(e.id), "name": e.name, "url": e.url, "animated": getattr(e, 'animated', False)})
         
-    reaction_roles = db_guild.get("reaction_roles", {}) if db_guild else {}
+    raw_reaction_roles = db_guild.get("reaction_roles", {}) if db_guild else {}
+    reaction_roles = {
+        str(message_id): {
+            str(emoji): str(role_id)
+            for emoji, role_id in mappings.items()
+        }
+        for message_id, mappings in raw_reaction_roles.items()
+        if isinstance(mappings, dict)
+    }
+    stored_role_names = db_guild.get("reaction_role_names", {}) if db_guild else {}
+    reaction_role_names = dict(stored_role_names) if isinstance(stored_role_names, dict) else {}
+    for mappings in reaction_roles.values():
+        for raw_role_id in mappings.values():
+            role_id = str(raw_role_id)
+            if role_id in role_names_by_id:
+                reaction_role_names[role_id] = role_names_by_id[role_id]
+    stored_reaction_role_embeds = db_guild.get("reaction_role_embeds", {}) if db_guild else {}
+    reaction_role_embeds = {
+        str(message_id): dict(embed_settings)
+        for message_id, embed_settings in stored_reaction_role_embeds.items()
+        if isinstance(embed_settings, dict)
+    }
+    stored_reaction_role_inline = db_guild.get("reaction_role_inline", {}) if db_guild else {}
+    reaction_role_inline = {
+        str(message_id): {
+            str(emoji): bool(is_inline)
+            for emoji, is_inline in inline_settings.items()
+        }
+        for message_id, inline_settings in stored_reaction_role_inline.items()
+        if isinstance(inline_settings, dict)
+    }
     reaction_role_titles = {}
-    
+
     import asyncio
-    async def fetch_message_title(guild, msg_id_str):
+    async def fetch_message_embed(guild, msg_id_str):
         try:
             msg_id = int(msg_id_str)
         except (TypeError, ValueError):
-            return "Invalid ID"
+            return {
+                "title": "Invalid ID",
+                "description": "",
+                "image_url": "",
+                "thumbnail_url": "",
+                "footer_text": "",
+                "footer_url": ""
+            }
+
+        def serialize_message_embed(message):
+            embed = message.embeds[0] if message.embeds else None
+            if not embed:
+                return {
+                    "title": "Reaction Roles",
+                    "description": "",
+                    "image_url": "",
+                    "thumbnail_url": "",
+                    "footer_text": "",
+                    "footer_url": ""
+                }
+            return {
+                "title": embed.title or "Reaction Roles",
+                "description": embed.description or "",
+                "image_url": getattr(embed.image, "url", "") or "",
+                "thumbnail_url": getattr(embed.thumbnail, "url", "") or "",
+                "footer_text": getattr(embed.footer, "text", "") or "",
+                "footer_url": getattr(embed.footer, "icon_url", "") or ""
+            }
             
         # Check cache first
         for b in getattr(bot_instance, "all_bots", [bot_instance]):
             msg = discord.utils.get(b.cached_messages, id=msg_id)
             if msg:
-                return msg.embeds[0].title if msg.embeds and msg.embeds[0].title else "Reaction Roles"
+                return serialize_message_embed(msg)
                 
         # Search channels concurrently
         async def check_channel(ch):
@@ -1349,14 +1491,24 @@ async def get_guild_settings(request: Request, guild_id: int):
         results = await asyncio.gather(*(check_channel(ch) for ch in guild.text_channels))
         for msg in results:
             if msg:
-                return msg.embeds[0].title if msg.embeds and msg.embeds[0].title else "Reaction Roles"
-        return "Unknown Message"
+                return serialize_message_embed(msg)
+        return {
+            "title": "Unknown Message",
+            "description": "",
+            "image_url": "",
+            "thumbnail_url": "",
+            "footer_text": "",
+            "footer_url": ""
+        }
 
     if reaction_roles:
-        tasks = [fetch_message_title(guild, msg_id) for msg_id in reaction_roles.keys()]
-        titles = await asyncio.gather(*tasks)
-        for msg_id, title in zip(reaction_roles.keys(), titles):
-            reaction_role_titles[msg_id] = title
+        tasks = [fetch_message_embed(guild, msg_id) for msg_id in reaction_roles.keys()]
+        fetched_embeds = await asyncio.gather(*tasks)
+        for msg_id, fetched_embed in zip(reaction_roles.keys(), fetched_embeds):
+            stored_embed = reaction_role_embeds.setdefault(msg_id, {})
+            for key, value in fetched_embed.items():
+                stored_embed.setdefault(key, value)
+            reaction_role_titles[msg_id] = stored_embed.get("title") or "Reaction Roles"
         
     return {
         "guild_id": str(guild_id),
@@ -1371,7 +1523,10 @@ async def get_guild_settings(request: Request, guild_id: int):
         "roles": roles,
         "guild_emojis": guild_emojis,
         "reaction_roles": reaction_roles,
-        "reaction_role_titles": reaction_role_titles
+        "reaction_role_names": reaction_role_names,
+        "reaction_role_titles": reaction_role_titles,
+        "reaction_role_embeds": reaction_role_embeds,
+        "reaction_role_inline": reaction_role_inline
     }
 
 @app.post("/api/guild/settings")
@@ -1455,14 +1610,96 @@ async def save_guild_settings(request: Request):
     # 6. Reaction Roles
     if "reaction_roles" in data:
         reaction_roles = data.get("reaction_roles")
-        await guild_model.update_guild(guild_id, {"reaction_roles": reaction_roles})
+        if not isinstance(reaction_roles, dict):
+            raise HTTPException(status_code=400, detail="reaction_roles must be an object.")
+
+        stored_guild = await guild_model.get_guild(guild_id)
+        stored_role_names = stored_guild.get("reaction_role_names", {}) if stored_guild else {}
+        if not isinstance(stored_role_names, dict):
+            stored_role_names = {}
+        provided_role_names = data.get("reaction_role_names", {})
+        if not isinstance(provided_role_names, dict):
+            provided_role_names = {}
+        stored_embed_settings = stored_guild.get("reaction_role_embeds", {}) if stored_guild else {}
+        if not isinstance(stored_embed_settings, dict):
+            stored_embed_settings = {}
+        provided_embed_settings = data.get("reaction_role_embeds", {})
+        if not isinstance(provided_embed_settings, dict):
+            provided_embed_settings = {}
+        stored_inline_settings = stored_guild.get("reaction_role_inline", {}) if stored_guild else {}
+        if not isinstance(stored_inline_settings, dict):
+            stored_inline_settings = {}
+        provided_inline_settings = data.get("reaction_role_inline", {})
+        if not isinstance(provided_inline_settings, dict):
+            provided_inline_settings = {}
+
+        normalized_reaction_roles = {}
+        reaction_role_names = {}
+        reaction_role_embeds = {}
+        reaction_role_inline = {}
+        for message_id, emoji_roles in reaction_roles.items():
+            if not isinstance(emoji_roles, dict):
+                continue
+            normalized_emoji_roles = {}
+            for raw_role_id in emoji_roles.values():
+                try:
+                    role_id = str(_parse_integer(raw_role_id, "role_id", minimum=1))
+                except HTTPException:
+                    raise HTTPException(status_code=400, detail="reaction role IDs must be positive integers.")
+                try:
+                    role = guild.get_role(int(role_id))
+                except (TypeError, ValueError):
+                    role = None
+                role_name = role.name if role else provided_role_names.get(role_id) or stored_role_names.get(role_id)
+                if role_name:
+                    reaction_role_names[role_id] = str(role_name)
+
+            for emoji, raw_role_id in emoji_roles.items():
+                role_id = str(_parse_integer(raw_role_id, "role_id", minimum=1))
+                normalized_emoji_roles[str(emoji)] = int(role_id)
+            message_key = str(message_id)
+            normalized_reaction_roles[message_key] = normalized_emoji_roles
+
+            provided_embed = provided_embed_settings.get(message_key, {})
+            stored_embed = stored_embed_settings.get(message_key, {})
+            if not isinstance(provided_embed, dict):
+                provided_embed = {}
+            if not isinstance(stored_embed, dict):
+                stored_embed = {}
+            embed_settings = {}
+            for field in ("title", "description", "image_url", "thumbnail_url", "footer_text", "footer_url"):
+                if field in provided_embed:
+                    embed_settings[field] = str(provided_embed[field] or "")
+                elif field in stored_embed:
+                    embed_settings[field] = str(stored_embed[field] or "")
+            if embed_settings:
+                reaction_role_embeds[message_key] = embed_settings
+
+            provided_inline = provided_inline_settings.get(message_key, {})
+            stored_inline = stored_inline_settings.get(message_key, {})
+            if not isinstance(provided_inline, dict):
+                provided_inline = {}
+            if not isinstance(stored_inline, dict):
+                stored_inline = {}
+            reaction_role_inline[message_key] = {
+                emoji: bool(provided_inline[emoji]) if emoji in provided_inline
+                else bool(stored_inline.get(emoji, True))
+                for emoji in normalized_emoji_roles
+            }
+
+        await guild_model.update_guild(guild_id, {
+            "reaction_roles": normalized_reaction_roles,
+            "reaction_role_names": reaction_role_names,
+            "reaction_role_embeds": reaction_role_embeds,
+            "reaction_role_inline": reaction_role_inline
+        })
         
         # Update ReactionRoles cog cache
         for b in getattr(bot_instance, "all_bots", [bot_instance]):
             rr_cog = b.get_cog('ReactionRolesCog')
             if rr_cog:
                 rr_cog.reaction_roles[guild_id] = {}
-                for msg_id_str, emoji_roles in reaction_roles.items():
+                for msg_id_str, emoji_roles in normalized_reaction_roles.items():
                     msg_id = int(msg_id_str)
                     rr_cog.reaction_roles[guild_id][msg_id] = {}
                     for emoji, role_id in emoji_roles.items():
@@ -1498,7 +1735,7 @@ async def save_guild_settings(request: Request):
                             except discord.HTTPException:
                                 pass
                 
-                asyncio.create_task(sync_messages(rr_cog, guild_id, reaction_roles))
+                asyncio.create_task(sync_messages(rr_cog, guild_id, normalized_reaction_roles))
         
     return {"success": True}
 
