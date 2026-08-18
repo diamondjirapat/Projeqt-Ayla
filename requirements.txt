@@ -6,7 +6,7 @@ async-timeout==5.0.1
 attrs==25.4.0
 audioop-lts==0.2.2
 certifi==2025.11.12
-discord.py==2.6.4
+discord.py>=2.7.0
 dnspython==2.8.0
 fastapi
 frozenlist==1.8.0
@@ -17,11 +17,12 @@ idna==3.11
 itsdangerous
 motor==3.7.1
 multidict==6.7.0
-pomice==2.11.0
+wavelink==3.5.2
 propcache==0.4.1
 pymongo==4.15.5
 PyNaCl==1.6.2
 python-dotenv==1.2.1
+ruff==0.12.12
 typing_extensions==4.15.0
 uvicorn
 yarl==1.22.0
