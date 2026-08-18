@@ -138,7 +138,7 @@ class ReactionRolesCog(commands.Cog):
                 else:
                     embed.add_field(
                         name=emoji,
-                        value="(Deleted)",
+                        value=await i18n.t(ctx, "reactionrole.deleted_role"),
                         inline=bool(inline_settings.get(emoji, True))
                     )
 
@@ -467,11 +467,11 @@ class ReactionRolesCog(commands.Cog):
                 if role:
                     role_list.append(f"{emoji} → {role.mention}")
                 else:
-                    role_list.append(f"{emoji} → (Deleted Role)")
+                    role_list.append(f"{emoji} → {await i18n.t(ctx, 'reactionrole.deleted_role')}")
 
             embed.add_field(
-                name=f"Message ID: {message_id}",
-                value="\n".join(role_list) if role_list else "No roles",
+                name=await i18n.t(ctx, "reactionrole.message_id", message_id=message_id),
+                value="\n".join(role_list) if role_list else await i18n.t(ctx, "reactionrole.no_roles"),
                 inline=False
             )
 

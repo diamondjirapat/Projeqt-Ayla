@@ -16,10 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from config import Config
-from database.models import UserModel, GuildModel
+from database.models import UserModel, GuildModel, LevelingModel
 from utils.queue import CustomPlayer, LoopMode
 from utils.lastfm import lastfm_handler
-import pomice
+from utils.artwork import artwork_resolver, DEFAULT_ARTWORK
+import wavelink
 
 # Fix a Windows registry issue that can map JavaScript files to text/plain.
 mimetypes.init()
@@ -39,6 +40,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await artwork_resolver.close()
 
 NO_CACHE_HEADERS = {
     "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -63,6 +68,33 @@ bot_instance: Optional[commands.Bot] = None
 signer: Optional[TimestampSigner] = None
 user_model = UserModel()
 guild_model = GuildModel()
+leveling_model = LevelingModel()
+
+
+def get_track_artwork(track):
+    return artwork_resolver.resolve_track(track).artwork
+
+
+def serialize_track(track, **extra):
+    res = artwork_resolver.resolve_track(track)
+    payload = {
+        "title": getattr(track, "title", "Unknown Track"),
+        "author": getattr(track, "author", "Unknown Artist"),
+        "uri": getattr(track, "uri", ""),
+        "length": getattr(track, "length", 0),
+        "requester": getattr(track, "requester", "Unknown"),
+    }
+    payload.update(res.as_dict())
+    payload.update(extra)
+    return payload
+
+
+async def serialize_track_async(track, **extra):
+    payload = serialize_track(track, **extra)
+    if payload.get("artwork") == DEFAULT_ARTWORK or not payload.get("artwork"):
+        resolved = await artwork_resolver.resolve_track_async(payload)
+        payload.update(resolved.as_dict())
+    return payload
 
 
 def _parse_integer(value, field: str, *, minimum: int = 0, maximum: Optional[int] = None) -> int:
@@ -212,9 +244,12 @@ async def auth_me(request: Request):
     # Get user preferences from DB
     db_user = await user_model.get_user(user["id"])
     settings = {}
+    user_locale = "en"
     lastfm = None
     if db_user:
         settings = db_user.get("settings", {})
+        user_locale = db_user.get("locale") or settings.get("language") or settings.get("locale") or "en"
+        settings["language"] = user_locale
         lfm = db_user.get("lastfm")
         if lfm:
             lastfm = {
@@ -237,6 +272,7 @@ async def auth_me(request: Request):
         "authenticated": True,
         "user": user_copy,
         "is_admin": is_admin,
+        "locale": user_locale,
         "settings": settings,
         "lastfm": lastfm
     }
@@ -427,19 +463,14 @@ async def lastfm_recent(request: Request, limit: int = 50):
         title = t.get("name", "Unknown Track")
         
         artist_obj = t.get("artist", {})
-        artist = artist_obj.get("#text", "Unknown Artist") if isinstance(artist_obj, dict) else artist_obj
+        artist = artist_obj.get("#text", "Unknown Artist") if isinstance(artist_obj, dict) else str(artist_obj or "Unknown Artist")
         
         album_obj = t.get("album", {})
-        album = album_obj.get("#text", "") if isinstance(album_obj, dict) else album_obj
+        album = album_obj.get("#text", "") if isinstance(album_obj, dict) else str(album_obj or "")
         
-        artwork = ""
-        images = t.get("image", [])
-        if isinstance(images, list):
-            for img in images:
-                if img.get("size") == "large" or img.get("size") == "extralarge":
-                    artwork = img.get("#text", "")
-            if not artwork and images:
-                artwork = images[-1].get("#text", "")
+        artwork = extract_lastfm_artwork(t.get("image", []))
+        if artwork == DEFAULT_ARTWORK or "2a96cbd8b46e442fc41c2b86b821562f" in artwork:
+            artwork = ""
                 
         date_obj = t.get("date", {})
         date_text = date_obj.get("#text", "") if isinstance(date_obj, dict) else ""
@@ -451,7 +482,8 @@ async def lastfm_recent(request: Request, limit: int = 50):
             "title": title,
             "author": artist,
             "album": album,
-            "artwork": artwork or "/default_artwork.jpg",
+            "artwork": artwork,
+            "uri": f"ytsearch:{title} {artist}",
             "date": "Now Playing" if is_now_playing else date_text,
             "now_playing": is_now_playing
         })
@@ -459,64 +491,35 @@ async def lastfm_recent(request: Request, limit: int = 50):
     return {"success": True, "data": await enrich_artworks(tracks_list)}
 
 def extract_lastfm_artwork(images):
-    artwork = ""
     if isinstance(images, list):
+        for size in ("extralarge", "large", "medium", "small"):
+            for img in images:
+                if isinstance(img, dict) and img.get("size") == size:
+                    text = str(img.get("#text", "")).strip()
+                    if text and "2a96cbd8b46e442fc41c2b86b821562f" not in text:
+                        return text
         for img in images:
-            if isinstance(img, dict) and img.get("size") in ("extralarge", "large", "medium"):
-                artwork = img.get("#text", "")
-        if not artwork and images and isinstance(images[-1], dict):
-            artwork = images[-1].get("#text", "")
-    return artwork or "/default_artwork.jpg"
+            if isinstance(img, dict):
+                text = str(img.get("#text", "")).strip()
+                if text and "2a96cbd8b46e442fc41c2b86b821562f" not in text:
+                    return text
+    return DEFAULT_ARTWORK
 
-ITUNES_ARTWORK_CACHE = {}
-
-async def fetch_itunes_artwork(term: str) -> str:
-    cache_key = term
-    if cache_key in ITUNES_ARTWORK_CACHE:
-        return ITUNES_ARTWORK_CACHE[cache_key]
-        
-    try:
-        url = f"https://itunes.apple.com/search?term={urllib.parse.quote(term)}&entity=song&limit=1"
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, timeout=3.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("results"):
-                    url = data["results"][0].get("artworkUrl100", "")
-                    if url:
-                        url = url.replace("100x100bb", "500x500bb")
-                        ITUNES_ARTWORK_CACHE[cache_key] = url
-                        return url
-    except Exception as e:
-        logger.error(f"iTunes API error for {term}: {e}")
-        pass
-    
-    ITUNES_ARTWORK_CACHE[cache_key] = ""
-    return ""
 
 async def enrich_artworks(items, is_artist=False):
-    async def process_item(item):
-        if is_artist:
-            term = item.get("name", "")
-        else:
-            title = item.get("title", "")
-            if title.startswith("Top Hits by "):
-                term = title.replace("Top Hits by ", "")
-            else:
-                term = f"{title} {item.get('author', '')}"
-            
-        artwork = item.get("artwork", "")
-        if not artwork or "2a96cbd8b46e442fc41c2b86b821562f" in artwork or artwork == "/default_artwork.jpg":
-            itunes_art = await fetch_itunes_artwork(term)
-            if itunes_art:
-                item["artwork"] = itunes_art
-            else:
-                item["artwork"] = "/default_artwork.jpg"
-        return item
-        
-    if items:
-        await asyncio.gather(*(process_item(i) for i in items))
-    return items
+    if not items:
+        return []
+    if is_artist:
+        results = await artwork_resolver.resolve_artists_batch(items)
+    else:
+        results = await artwork_resolver.resolve_tracks_batch(items)
+
+    enriched_items = []
+    for item, res in zip(items, results):
+        enriched = dict(item)
+        enriched.update(res.as_dict())
+        enriched_items.append(enriched)
+    return enriched_items
 
 @app.get("/api/lastfm/top-tracks")
 async def lastfm_top_tracks(request: Request, limit: int = 20, period: str = "overall"):
@@ -797,60 +800,14 @@ async def player_state(request: Request, guild_id: Optional[int] = None):
         }
         
     # Get current track details
-    track_info = None
-    if active_player.current:
-        track = active_player.current
-        # Try to form artwork url
-        artwork = getattr(track, "artwork_url", None) or getattr(track, "artwork", None)
-        if not artwork:
-            if "youtube" in track.uri or "youtu.be" in track.uri:
-                artwork = f"https://img.youtube.com/vi/{track.identifier}/mqdefault.jpg"
-            else:
-                artwork = "/default_artwork.jpg"
-                
-        track_info = {
-            "title": track.title,
-            "author": track.author,
-            "uri": track.uri,
-            "length": track.length,
-            "requester": getattr(track, "requester", "Unknown"),
-            "artwork": artwork
-        }
-        
+    track_info = serialize_track(active_player.current) if active_player.current else None
+
     # Get queue details
-    queue_tracks = []
-    for track in active_player.queue._queue:
-        artwork = getattr(track, "artwork_url", None) or getattr(track, "artwork", None)
-        if not artwork and ("youtube" in track.uri or "youtu.be" in track.uri):
-            artwork = f"https://img.youtube.com/vi/{track.identifier}/mqdefault.jpg"
-            
-        queue_tracks.append({
-            "title": track.title,
-            "author": track.author,
-            "uri": track.uri,
-            "length": track.length,
-            "requester": getattr(track, "requester", "Unknown"),
-            "artwork": artwork or "/default_artwork.jpg"
-        })
+    queue_tracks = [serialize_track(track) for track in active_player.queue._queue]
 
     # Get history details
-    history_tracks = []
     player_history = getattr(active_player, "history", [])
-    for track in player_history:
-        artwork = getattr(track, "artwork_url", None) or getattr(track, "artwork", None)
-        if not artwork:
-            if "youtube" in track.uri or "youtu.be" in track.uri:
-                artwork = f"https://img.youtube.com/vi/{track.identifier}/mqdefault.jpg"
-            else:
-                artwork = "/default_artwork.jpg"
-        history_tracks.append({
-            "title": track.title,
-            "author": track.author,
-            "uri": track.uri,
-            "length": track.length,
-            "requester": getattr(track, "requester", "Unknown"),
-            "artwork": artwork
-        })
+    history_tracks = [serialize_track(track) for track in player_history]
         
     bitrate = min(getattr(active_player.channel, "bitrate", 64000) // 1000, 160)
     return {
@@ -910,7 +867,24 @@ async def player_control(request: Request):
         
     try:
         if action == "play":
-            if not value:
+            query_str = None
+            if isinstance(value, dict):
+                query_str = value.get("uri") or value.get("url") or value.get("query")
+                if not query_str:
+                    title = value.get("title")
+                    author = value.get("author")
+                    if title and author:
+                        query_str = f"ytsearch:{title} {author}"
+                    elif title:
+                        query_str = f"ytsearch:{title}"
+                    elif author:
+                        query_str = f"ytsearch:{author}"
+            elif isinstance(value, str):
+                query_str = value.strip()
+            elif value is not None:
+                query_str = str(value).strip()
+
+            if not query_str:
                 raise HTTPException(status_code=400, detail="No track or URL provided to play.")
             # Find user voice channel to connect if not already connected
             voice_channel = None
@@ -967,11 +941,11 @@ async def player_control(request: Request):
                 if db_user and db_user.get("settings", {}).get("autoplay") is not None:
                     active_player.autoplay_enabled = bool(db_user["settings"]["autoplay"])
                 
-            tracks = await active_player.get_tracks(value)
+            tracks = await active_player.get_tracks(query_str)
             if not tracks:
                 raise HTTPException(status_code=404, detail="No results found for query")
                 
-            if isinstance(tracks, pomice.Playlist):
+            if isinstance(tracks, wavelink.Playlist):
                 for track in tracks.tracks:
                     track.requester = f"@{user['username']} (Web)"
                     active_player.queue.put(track)
@@ -1151,55 +1125,54 @@ async def player_control(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/player/search")
-async def player_search(request: Request, q: str = Query(..., min_length=1)):
+async def player_search(request: Request, q: str = Query(..., min_length=1), mode: str = "track"):
     user = get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
         
     if not bot_instance:
-        return []
+        return {"mode": mode, "is_playlist": False, "playlist_name": None, "tracks": [], "playlists": []}
         
     try:
-        # Use Pomice Node to resolve search query without player requirement
-        node = pomice.NodePool.get_node()
-        tracks = await node.get_tracks(q)
+        explicit_search_prefixes = (
+            'ytsearch:',
+            'ytmsearch:',
+            'scsearch:',
+            'spsearch:',
+            'dzsearch:',
+            'amsearch:',
+            'bcsearch:',
+        )
+        try:
+            node = wavelink.Pool.get_node()
+        except Exception:
+            node = None
+
+        if q.lower().startswith(explicit_search_prefixes):
+            tracks = await wavelink.Pool.fetch_tracks(q, node=node)
+        else:
+            tracks = await wavelink.Playable.search(q, node=node)
+
         results = []
-        
-        if isinstance(tracks, pomice.Playlist):
+        if isinstance(tracks, wavelink.Playlist):
             # Return ALL playlist tracks (no cap), with playlist metadata
             for t in tracks.tracks:
-                artwork = getattr(t, "artwork_url", None) or getattr(t, "artwork", None)
-                if not artwork:
-                    artwork = f"https://img.youtube.com/vi/{t.identifier}/mqdefault.jpg" if "youtube" in t.uri or "youtu.be" in t.uri else "/default_artwork.jpg"
-                results.append({
-                    "title": t.title,
-                    "author": t.author,
-                    "uri": t.uri,
-                    "length": t.length,
-                    "artwork": artwork
-                })
+                results.append(serialize_track(t))
             return {
+                "mode": mode,
                 "is_playlist": True,
                 "playlist_name": getattr(tracks, "name", None) or "Playlist",
-                "playlist_url": getattr(tracks, "uri", None) or q,
-                "tracks": results
+                "playlist_url": getattr(tracks, "uri", None) or getattr(tracks, "url", None) or q,
+                "tracks": results,
+                "playlists": []
             }
         elif tracks:
             for t in tracks[:15]:
-                artwork = getattr(t, "artwork_url", None) or getattr(t, "artwork", None)
-                if not artwork:
-                    artwork = f"https://img.youtube.com/vi/{t.identifier}/mqdefault.jpg" if "youtube" in t.uri or "youtu.be" in t.uri else "/default_artwork.jpg"
-                results.append({
-                    "title": t.title,
-                    "author": t.author,
-                    "uri": t.uri,
-                    "length": t.length,
-                    "artwork": artwork
-                })
-        return {"is_playlist": False, "playlist_name": None, "tracks": results}
+                results.append(serialize_track(t))
+        return {"mode": mode, "is_playlist": False, "playlist_name": None, "tracks": results, "playlists": []}
     except Exception as e:
         logger.error(f"[WEB] Search error: {e}")
-        return {"is_playlist": False, "playlist_name": None, "tracks": []}
+        return {"mode": mode, "is_playlist": False, "playlist_name": None, "tracks": [], "playlists": []}
 
 @app.get("/api/playlists")
 async def list_playlists(request: Request):
@@ -1216,11 +1189,27 @@ async def list_playlists(request: Request):
         formatted.append({
             "key": key,
             "name": data.get("name", "Unknown Playlist"),
+            "cover": data.get("cover"),
             "track_count": len(data.get("tracks", [])),
             "tracks": data.get("tracks", []),
             "created_at": str(data.get("created_at", ""))
         })
     return formatted
+
+@app.post("/api/playlists/set-cover")
+async def playlist_set_cover(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    data = await request.json()
+    playlist_name = data.get("playlist_name")
+    cover_url = (data.get("cover_url") or "").strip() if data.get("cover_url") else ""
+    if not playlist_name:
+        raise HTTPException(status_code=400, detail="Playlist name is required")
+        
+    success = await user_model.set_playlist_cover(user["id"], playlist_name, cover_url)
+    return {"success": success}
 
 @app.post("/api/playlists/create")
 async def create_playlist(request: Request):
@@ -1287,8 +1276,14 @@ async def update_settings(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
         
     data = await request.json()
+    update_data = {"settings": data}
+    if "language" in data:
+        update_data["locale"] = data["language"]
+    elif "locale" in data:
+        update_data["locale"] = data["locale"]
+
     # Update settings fields in UserModel
-    success = await user_model.update_user(user["id"], {"settings": data})
+    success = await user_model.update_user(user["id"], update_data)
     
     # Sync autoplay setting with the active player if connected
     if "autoplay" in data:
@@ -1780,6 +1775,50 @@ async def generate_reaction_role_message(request: Request):
         return {"message_id": str(msg.id)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send message: {e}")
+
+
+# --- Leveling & Leaderboard Endpoints ---
+@app.get("/api/leveling/guilds")
+async def list_leveling_guilds(request: Request):
+    """List all Discord servers the bot is currently in for the leaderboard selector."""
+    guilds_list = []
+    seen_ids = set()
+    if bot_instance:
+        for b in getattr(bot_instance, "all_bots", [bot_instance]):
+            for g in getattr(b, "guilds", []):
+                if g.id not in seen_ids:
+                    seen_ids.add(g.id)
+                    icon_url = str(g.icon.url) if g.icon else ""
+                    guilds_list.append({
+                        "id": str(g.id),
+                        "name": g.name,
+                        "icon": icon_url
+                    })
+    guilds_list.sort(key=lambda x: x["name"].lower())
+    return guilds_list
+
+
+@app.get("/api/leveling/leaderboard/global")
+async def get_global_leaderboard_endpoint(request: Request, page: int = Query(1, ge=1), limit: int = Query(10, ge=1, le=50)):
+    """Get paginated global XP leaderboard across all servers."""
+    return await leveling_model.get_global_leaderboard(page=page, limit=limit)
+
+
+@app.get("/api/leveling/leaderboard/server/{guild_id}")
+async def get_server_leaderboard_endpoint(request: Request, guild_id: int, page: int = Query(1, ge=1), limit: int = Query(10, ge=1, le=50)):
+    """Get paginated server XP leaderboard for a specific guild."""
+    data = await leveling_model.get_guild_leaderboard(guild_id=guild_id, page=page, limit=limit)
+    guild = None
+    if bot_instance:
+        for b in getattr(bot_instance, "all_bots", [bot_instance]):
+            guild = b.get_guild(guild_id)
+            if guild:
+                break
+    if guild:
+        data["guild_name"] = guild.name
+        data["guild_icon"] = str(guild.icon.url) if guild.icon else ""
+    return data
+
 
 # Serves Frontend SPA
 @app.get("/{path:path}")

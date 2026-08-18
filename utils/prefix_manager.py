@@ -158,19 +158,19 @@ class PrefixManager:
 
     def validate_prefix(self, prefix: str) -> tuple[bool, str]:
         if prefix is None or not isinstance(prefix, str):
-            return False, "Prefix must be a valid text string"
+            return False, "invalid_type"
         if any(ord(character) < 32 or ord(character) == 127 for character in prefix):
-            return False, "Prefix cannot contain control characters"
+            return False, "control_characters"
         prefix_clean = prefix.strip()
         if not prefix_clean:
-            return False, "Prefix cannot be empty or only whitespace"
+            return False, "empty"
         if len(prefix_clean) > self.max_prefix_length:
-            return False, f"Prefix cannot be longer than {self.max_prefix_length} characters"
+            return False, "too_long"
         if any(prefix_clean.startswith(f) for f in self.forbidden_prefixes):
-            return False, f"Prefix `{prefix_clean}` is not allowed"
+            return False, "forbidden"
         if prefix_clean.startswith('<@') and prefix_clean.endswith('>'):
-            return False, "Prefix cannot be a mention"
-        return True, "Valid prefix"
+            return False, "mention"
+        return True, "valid"
 
     async def get_user_prefix(self, user_id: int) -> Optional[str]:
         cached = self._get_cached_value('user', user_id)

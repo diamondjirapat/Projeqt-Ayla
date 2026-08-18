@@ -49,38 +49,63 @@ class DatabaseManager:
             return False
 
     async def _ensure_indexes(self):
-        """Create indexes on the hot lookup fields.
+        """Create indexes on the hot lookup fields and clean up legacy schema indexes.
 
-        Unique indexes enforce one document per user/guild (and one prefix per
-        entity). If pre-existing duplicates prevent a unique index from being
-        created, we fall back to a non-unique index so lookups are still fast.
+        Unique indexes enforce one document per entity/pair. If pre-existing duplicates
+        prevent a unique index from being created, we fall back to a non-unique index.
         """
+        # Clean up legacy incorrect unique indexes
+        try:
+            user_levels_col = self.db['user_levels']
+            index_info = await user_levels_col.index_information()
+            for idx_name, idx_details in index_info.items():
+                keys = idx_details.get('key', [])
+                if idx_details.get('unique') and len(keys) == 1 and keys[0][0] == 'user_id':
+                    logger.warning(
+                        "Dropping legacy single-field unique index %r from user_levels "
+                        "in favor of compound (guild_id, user_id) index.",
+                        idx_name,
+                    )
+                    await user_levels_col.drop_index(idx_name)
+        except Exception:
+            logger.exception("Could not check/drop legacy index from user_levels")
+
         index_specs = [
-            ('users', 'user_id'),
-            ('guilds', 'guild_id'),
-            ('user_prefixes', 'user_id'),
-            ('guild_prefixes', 'guild_id'),
+            # Collection, Index Keys, Unique Flag
+            ('users', [('user_id', 1)], True),
+            ('guilds', [('guild_id', 1)], True),
+            ('user_prefixes', [('user_id', 1)], True),
+            ('guild_prefixes', [('guild_id', 1)], True),
+            # Leveling: compound unique per guild and user
+            ('user_levels', [('guild_id', 1), ('user_id', 1)], True),
+            # Leveling: query indexes for aggregations and leaderboards
+            ('user_levels', [('user_id', 1)], False),
+            ('user_levels', [('guild_id', 1), ('xp', -1)], False),
+            # Custom commands: unique command name per guild
+            ('custom_commands', [('guild_id', 1), ('name', 1)], True),
+            ('custom_commands', [('guild_id', 1)], False),
         ]
-        for collection_name, field in index_specs:
+        for collection_name, keys, unique in index_specs:
             collection = self.db[collection_name]
             try:
-                await collection.create_index(field, unique=True)
+                await collection.create_index(keys, unique=unique)
             except DuplicateKeyError as exc:
-                logger.warning(
-                    "Unique index on %s.%s could not be created because duplicate "
-                    "records already exist (%s); creating a lookup index instead.",
-                    collection_name,
-                    field,
-                    exc,
-                )
-                try:
-                    await collection.create_index(field, unique=False)
-                except Exception:
-                    logger.exception("Could not create index on %s.%s", collection_name, field)
+                if unique:
+                    logger.warning(
+                        "Unique index on %s.%s could not be created because duplicate "
+                        "records already exist (%s); creating a lookup index instead.",
+                        collection_name,
+                        keys,
+                        exc,
+                    )
+                    try:
+                        await collection.create_index(keys, unique=False)
+                    except Exception:
+                        logger.exception("Could not create index on %s.%s", collection_name, keys)
+                else:
+                    logger.exception("DuplicateKeyError creating index on %s.%s", collection_name, keys)
             except Exception:
-                # An existing non-unique index, permissions, or a transient database
-                # problem should not prevent the bot from starting.
-                logger.exception("Could not ensure unique index on %s.%s", collection_name, field)
+                logger.exception("Could not ensure index on %s.%s", collection_name, keys)
 
     async def disconnect(self):
         if self.client is not None:

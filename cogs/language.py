@@ -42,7 +42,7 @@ class Language(commands.Cog):
         priority_text = await i18n.t(ctx, "languages.priority_text")
         
         embed.add_field(
-            name="📊 How It Works",
+            name=await i18n.t(ctx, "languages.how_it_works"),
             value=priority_text,
             inline=False
         )
@@ -58,13 +58,13 @@ class Language(commands.Cog):
             lang_name = await i18n.t(ctx, f'languages.{guild_locale}')
             settings_text += await i18n.t(ctx, "languages.server_locale", lang_name=lang_name, guild_locale=guild_locale)
         else:
-            settings_text += "**Server Language:** Not set (using English)\n"
+            settings_text += await i18n.t(ctx, "languages.no_server_locale")
         
         effective_lang_name = await i18n.t(ctx, f'languages.{effective_locale}')
         settings_text += await i18n.t(ctx, "languages.effective_lang", effective_lang_name=effective_lang_name, effective_locale=effective_locale)
         
         embed.add_field(
-            name="⚙️ Current Settings",
+            name=await i18n.t(ctx, "languages.current_settings"),
             value=settings_text,
             inline=False
         )
@@ -74,7 +74,7 @@ class Language(commands.Cog):
         commands_text += await i18n.t(ctx, "languages.commands_text3")
         
         embed.add_field(
-            name="🔧 Commands",
+            name=await i18n.t(ctx, "languages.commands"),
             value=commands_text,
             inline=False
         )
@@ -118,13 +118,13 @@ class Language(commands.Cog):
                 available_langs.append(f"{lang_name} ({lang_code})")
             
             embed.add_field(
-                name="Available Languages",
+                name=await i18n.t(ctx, "language.available_languages"),
                 value="\n".join(available_langs),
                 inline=False
             )
             embed.add_field(
-                name="Usage",
-                value=f"`{ctx.prefix}mylang <language_code>`",
+                name=await i18n.t(ctx, "language.usage"),
+                value=await i18n.t(ctx, "language.usage_text", prefix=ctx.prefix),
                 inline=False
             )
             
@@ -135,7 +135,7 @@ class Language(commands.Cog):
         
         if language not in i18n.supported_locales:
             available_langs = ', '.join([f"{await i18n.t(ctx, f'languages.{lang}')} ({lang})" for lang in i18n.supported_locales])
-            error_msg = f"❌ Invalid language. Available: {available_langs}"
+            error_msg = await i18n.t(ctx, "language.invalid_language", languages=available_langs)
             await ctx.send(error_msg)
             return
 

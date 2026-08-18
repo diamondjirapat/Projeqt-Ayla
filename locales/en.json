@@ -18,6 +18,47 @@
       "last_updated": "Last Updated",
       "not_found": "User not found in database"
     },
+    "rank": {
+      "name": "rank",
+      "description": "View leveling card and rank",
+      "title": "📊 {username}'s Rank Card",
+      "guild_rank": "Server Rank",
+      "guild_level": "Server Level",
+      "guild_xp": "Server XP",
+      "global_rank": "Global Rank",
+      "global_level": "Global Level",
+      "global_xp": "Global XP",
+      "progress": "Progress to Next Level",
+      "messages": "Messages Sent"
+    },
+    "leaderboard": {
+      "name": "leaderboard",
+      "description": "View server or global leveling leaderboard",
+      "title_server": "🏆 {server_name} Leaderboard",
+      "title_global": "🌐 Global Leveling Leaderboard",
+      "empty": "No leveling data available yet.",
+      "empty_hint": "No leveling data yet. Start chatting to earn XP!",
+      "entry": "{rank} **{name}** — **Level {level}** ({xp} XP)\n> {progress} • 💬 {messages} messages",
+      "footer": "Total members: {total} | Page {page}/{pages}",
+      "author_only": "❌ Only the person who ran the command can use these buttons.",
+      "page": "Page {page}/{pages}",
+      "global_button": "🌐 Global",
+      "server_button": "🏰 Server"
+    },
+    "level_up": {
+      "title": "🎉 Level Up!",
+      "description": "Congratulations {member}! You've reached **Level {level}**! 🚀",
+      "total_xp": "Total XP",
+      "footer": "{server} Leveling System"
+    },
+    "setxp": {
+      "success": "✅ Set XP for {member} to **{xp}** XP (Level {level}).",
+      "no_permission": "❌ You need Administrator permissions to use this command."
+    },
+    "addxp": {
+      "success": "✅ Added **{amount}** XP to {member}. Total: **{xp}** XP (Level {level}).",
+      "no_permission": "❌ You need Administrator permissions to use this command."
+    },
     "kick": {
       "name": "kick",
       "description": "Kick a member from the server",
@@ -57,7 +98,25 @@
       "no_permission": "❌ You need 'Manage Server' permission to change language."
     },
     "ping": {
-      "title": "🏓 Pong!"
+      "title": "🏓 Pong!",
+      "loading": "Pinging…",
+      "websocket_latency": "WebSocket Latency 📡",
+      "api_latency": "API Latency 📝",
+      "processing_time": "Internal Processing Time ⚙️",
+      "total_time": "Total Time 📊"
+    },
+    "reload": {
+      "title": "🔄 Reload Complete",
+      "reloaded_count": "✅ Reloaded ({count})",
+      "failed_count": "❌ Failed ({count})",
+      "success": "✅ Reloaded: `{extension}`",
+      "not_loaded": "❌ Extension `{extension}` is not loaded.",
+      "not_found": "❌ Extension `{extension}` was not found.",
+      "failed": "❌ Could not reload `{extension}`: {error}"
+    },
+    "restart": {
+      "title": "🔄 Restarting Bot…",
+      "description": "The bot is shutting down and will restart shortly."
     },
     "update": {
       "title": "📥 Updating from GitHub...",
@@ -74,15 +133,18 @@
     "missing_permissions": "❌ You don't have permission to use this command.",
     "missing_argument": "❌ Missing required argument: {param}",
     "bad_argument": "❌ Invalid argument provided.",
-    "unexpected_error": "❌ เกิดข้อผิดพลาดที่ไม่คาดคิด",
-    "bot_missing_permissions": "❌ I don't have permission to do that (check my role hierarchy).",
+    "unexpected_error": "❌ Something unexpected went wrong. Please try again.",
+    "bot_missing_permissions": "❌ I need the following permission(s) to do that: {perms}",
     "check_failure": "❌ You don't have permission to use this command or my role is lower.",
-    "forbidden": "❌ I don't have permission to do this (check my role hierarchy)."
+    "forbidden": "❌ I don't have permission to do this (check my role hierarchy).",
+    "command_outdated": "⚠️ This command is out of date. Please try again shortly.",
+    "command_cooldown": "⏳ This command is on cooldown. Try again in {seconds} seconds."
   },
   "general": {
     "no_reason": "No reason provided",
     "unknown": "Unknown",
-    "language_update_error": "❌ An error occurred while updating your language."
+    "language_update_error": "❌ An error occurred while updating your language.",
+    "server_only": "❌ This command can only be used in a server."
   },
   "languages": {
     "info_title": "\uD83C\uDF10 Language Settings",
@@ -97,7 +159,11 @@
     "commands_text": "`{prefix}mylang <code>` - Set your personal language\n",
     "commands_text2": "`{prefix}setlang <code>` - Set server language (Admin only)\n",
     "commands_text3": "\n**Available:** English (en), ไทย (th)",
-    "tip": "Tip: Personal language overrides server language for you!"
+    "tip": "Tip: Personal language overrides server language for you!",
+    "how_it_works": "📊 How It Works",
+    "current_settings": "⚙️ Current Settings",
+    "commands": "🔧 Commands",
+    "no_server_locale": "**Server Language:** Not set (using English)\n"
   },
   "prefix": {
     "info_title": "🔧 Prefix Information",
@@ -135,7 +201,20 @@
     "quick_start": "Quick Start",
     "help_command": "`{prefix}help` - Show all commands\n`{prefix}prefix` - Manage prefixes",
     "mention_alternative_title": "Mention Alternative",
-    "mention_alternative": "You can also use {mention} as a prefix!"
+    "mention_alternative": "You can also use {mention} as a prefix!",
+    "effective_source": "{prefix} ({source})",
+    "source_user": "personal",
+    "source_guild": "server",
+    "source_default": "default",
+    "validation": {
+      "invalid_type": "Prefix must be text.",
+      "control_characters": "Prefix cannot contain control characters.",
+      "empty": "Prefix cannot be empty.",
+      "too_long": "Prefix cannot be longer than {max} characters.",
+      "forbidden": "Prefix `{prefix}` is not allowed.",
+      "mention": "Prefix cannot be a mention.",
+      "valid": "Valid prefix"
+    }
   },
   "help": {
     "title": "🤖 Bot Commands",
@@ -163,7 +242,8 @@
     "usage": "Usage",
     "updated_title": "Language Updated",
     "updated": "Your personal language has been set to {language}",
-    "invalid_language": "❌ Invalid language. Available: {languages}"
+    "invalid_language": "❌ Invalid language. Available: {languages}",
+    "usage_text": "`{prefix}mylang <language_code>`"
   },
   "music": {
     "player": {
@@ -203,6 +283,7 @@
       "personal_title": "📂 Your Playlists",
       "no_server": "No server playlists. Admins can use `serverplaylist create <name>` to create one.",
       "server_title": "📁 Server Playlists",
+      "server_view_title": "📁 {name} (Server)",
       "track_added": "✅ Added **{title}** to playlist `{playlist}`",
       "track_added_server": "✅ Added **{title}** to server playlist `{playlist}`",
       "track_removed": "🗑️ Removed track #{index} from `{playlist}`",
@@ -246,9 +327,9 @@
       "list_imported_type": "🌍 Imported ({count} tracks)",
       "list_imported_additions": " + {additions} added",
       "list_unknown_type": "❌ Unknown playlist type",
-      "list_regular_type": "📄 {count} track(s)",
+      "list_regular_type": "📄 Tracks: {count}",
       "view_more_tracks": "... and {count} more tracks",
-      "tracks_failed_to_load": " ({count} track(s) failed to load)"
+      "tracks_failed_to_load": " ({count} tracks failed to load)"
     },
     "ui": {
       "select_track": "🔍 **Select a track to play:**",
@@ -300,6 +381,10 @@
       "tracks_count": "{count} tracks",
       "my_playlists_button": "📂 My Playlists",
       "server_playlists_button": "📁 Server Playlists",
+      "web_player": "Web Player",
+      "save_failed": "Failed to save the track",
+      "favorites_name": "Favorites",
+      "server_favorites_name": "Server Favorites",
       "select_playlist": "🎵 Select a playlist to play:",
       "choose_playlist": "🎵 Choose a playlist...",
       "no_user_playlists": "❌ You don't have any saved playlists.",
@@ -359,7 +444,7 @@
         "invalid_position": "❌ Invalid position. Please use a number between 1 and {max}."
       },
       "seek": {
-        "success": "⏩ Seeked to **{position}**",
+        "success": "⏩ Jumped to **{position}**",
         "invalid_format": "❌ Invalid format. Use: `1:30`, `90`, or `1:30:00`",
         "out_of_bounds": "❌ Position is outside the track duration",
         "nothing_playing": "❌ Nothing is playing"
@@ -473,7 +558,8 @@
       "no_history": "❌ No previous songs in history.",
       "voice_channel_mismatch": "❌ You must be in the same voice channel as the bot to use this command.",
       "session_died": "The music session expired due to a server restart. I have disconnected, please try your command again!",
-      "node_offline": "Music server is currently offline."
+      "node_offline": "Music server is currently offline.",
+      "track_stuck": "⚠️ Playback stopped responding after {seconds} seconds. Trying to recover…"
     }
   },
   "reactionrole": {
@@ -484,7 +570,7 @@
       "message_not_found": "❌ Message not found. Make sure the message ID is correct and in this server.",
       "invalid_emoji": "❌ Invalid emoji. Please use a valid emoji.",
       "success": "✅ Reaction role added! {emoji} → {role} on message {message_id}",
-      "success_update": "✅ Updated message `{msg_id}` with {len(emoji_roles)} reaction role(s)!"
+      "success_update": "✅ Updated message `{message_id}` with {count} reaction role(s)!"
     },
     "remove": {
       "invalid_message_id": "❌ Invalid message ID. Please provide a valid number.",
@@ -510,7 +596,10 @@
     "errors": {
       "no_permission": "❌ You need the 'Manage Roles' permission to use this command.",
       "command_error": "❌ An error occurred: {error}"
-    }
+    },
+    "message_id": "Message ID: {message_id}",
+    "deleted_role": "Deleted role",
+    "no_roles": "No roles"
   },
   "autorole": {
     "info": {
@@ -537,8 +626,133 @@
       "command_error": "❌ An error occurred: {error}"
     }
   },
+  "discord_strings": {
+    "add_xp_admin": "Add XP to a member in this server (Admin only).",
+    "channel_send": "Channel to send the message in",
+    "check_latency": "Checks bot latency (Websocket and API)",
+    "command_trigger": "Command trigger name",
+    "command_trigger_delete": "Command trigger name to delete",
+    "custom_menu": "Custom command management menu.",
+    "playlist_custom_name": "Custom name for the playlist (optional, uses source name if not provided)",
+    "description_text": "Description text",
+    "emoji_react": "Emoji to react with",
+    "emoji_remove": "Emoji to remove (optional - removes all if not specified)",
+    "scrobble_toggle": "Enable or disable scrobbling (on/off)",
+    "message_id": "ID of the message",
+    "message_id_add": "ID of the message to add reaction role to",
+    "message_id_edit": "ID of the message to edit",
+    "message_id_update": "ID of the message to update",
+    "language_code": "Language code (en, th)",
+    "server_playlists_admin": "Manage server playlists (Admin only)",
+    "member_add_xp": "Member to add XP to",
+    "member_set_xp": "Member to set XP for",
+    "playlist_new_name": "Name for the new playlist",
+    "server_playlist_new_name": "Name for the new server playlist",
+    "new_description": "New description (use 'none' to clear it)",
+    "new_response": "New response content template",
+    "new_embed_title": "New title for the embed",
+    "purge_count": "Number of messages to delete (1-100)",
+    "page_number": "Page number",
+    "play_mode": "Play mode: 'now' to play immediately, 'next' to play after current song",
+    "playlist_add": "Playlist to add to",
+    "playlist_delete": "Playlist to delete",
+    "playlist_play": "Playlist to play",
+    "playlist_remove": "Playlist to remove from",
+    "playlist_view": "Playlist to view",
+    "playlist_cover_url": "Image URL for the cover (leave empty to remove)",
+    "playlist_setcover": "Set or remove a custom thumbnail for a playlist",
+    "playlist_setcover_desc": "Playlist to set thumbnail for",
+    "seek_position": "Position to seek to (e.g. 1:30, 90, or 1:30:00)",
+    "skip_position": "Queue position to skip to (e.g. 3 to skip to the 3rd song)",
+    "global_leaderboard_shortcut": "Quick shortcut to Global Leaderboard.",
+    "server_leaderboard_shortcut": "Quick shortcut to Server Leaderboard.",
+    "ban_reason": "Reason for banning",
+    "kick_reason": "Reason for kicking",
+    "response_template": "Response content template",
+    "role_assign": "Role to assign",
+    "leaderboard_scope": "Scope of leaderboard (server or global)",
+    "server_playlist_delete": "Server playlist to delete",
+    "server_playlist_play": "Server playlist to play",
+    "server_playlist_view": "Server playlist to view",
+    "server_playlist_setcover": "Set or remove a custom thumbnail for a server playlist",
+    "server_playlist_setcover_desc": "Server playlist to set thumbnail for",
+    "server_prefix_commands": "Server prefix commands",
+    "set_xp_admin": "Set XP for a member in this server (Admin only).",
+    "set_server_language": "Set server language",
+    "set_personal_language": "Set your personal language preference",
+    "language_info": "Show language priority and current settings",
+    "song_query": "Song name, URL, or playlist name",
+    "member_ban": "The member to ban",
+    "member_kick": "The member to kick",
+    "member_profile": "The member to view profile for",
+    "member_rank": "The member whose rank you want to inspect",
+    "autorole_member": "The role to auto-assign to new members",
+    "reaction_title": "Title of the reaction role message",
+    "total_xp": "Total XP to set",
+    "track_number": "Track number to remove",
+    "song_url": "URL of the song",
+    "optional_song_url": "URL of the song (optional, uses current track if omitted)",
+    "rank_card": "View leveling rank card for yourself or another member.",
+    "xp_amount": "XP amount to add",
+    "playlist_url": "YouTube/Spotify playlist URL",
+    "custom_add": "Add a new custom command for this server.",
+    "server_playlist_add_song": "Add a song to a server playlist",
+    "lastfm_status": "Check your Last.fm status",
+    "server_playlist_create": "Create a new empty server playlist",
+    "custom_delete": "Delete a custom command from this server.",
+    "server_playlist_delete_entire": "Delete an entire server playlist",
+    "custom_edit": "Edit an existing custom command.",
+    "server_playlist_import": "Import a YouTube/Spotify playlist to server playlists",
+    "custom_list": "List all custom commands in this server.",
+    "reaction_role_remove": "Remove a reaction role from a message",
+    "custom_toggle": "Toggle a custom command between enabled and disabled.",
+    "lastfm_unlink": "Unlink your Last.fm account",
+    "reaction_role_update": "Update a reaction role message to show configured roles",
+    "custom_info": "View detailed information about a custom command.",
+    "server_playlist_info": "View info about a server playlist"
+  },
+  "custom_commands": {
+    "menu_title": "✨ Custom Commands",
+    "menu_description": "Create and manage custom bot responses for this server.",
+    "available_commands": "Available Commands",
+    "commands_help": "`!cc list` - List this server's custom commands\n`!cc add <name> <response>` - Create a custom command\n`!cc edit <name> <response>` - Edit a custom command\n`!cc delete <name>` - Delete a custom command\n`!cc info <name>` - View command details\n`!cc toggle <name>` - Enable or disable a command",
+    "response_variables": "Response Variables",
+    "dashboard_tip": "You can also manage custom commands from the web player.",
+    "invalid_name": "❌ Command names can contain only letters, numbers, underscores, and hyphens.",
+    "built_in_conflict": "❌ `{name}` conflicts with a built-in bot command.",
+    "already_exists": "❌ Custom command `{name}` already exists. Use `!cc edit {name} <response>` to update it.",
+    "created_title": "✅ Custom Command Created",
+    "created_description": "Trigger: `{name}`\nResponse:\n```{response}```",
+    "create_failed": "❌ Could not create the custom command.",
+    "not_found": "❌ Custom command `{name}` does not exist.",
+    "updated_title": "✏️ Custom Command Updated",
+    "updated_description": "Trigger: `{name}`\nNew response:\n```{response}```",
+    "update_failed": "❌ Could not update the custom command.",
+    "deleted": "🗑️ Custom command `{name}` was deleted.",
+    "delete_failed": "❌ Could not delete the custom command.",
+    "list_empty": "ℹ️ This server has no custom commands yet. Create one with `!cc add <name> <response>`.",
+    "list_title": "📜 Custom Commands for {server}",
+    "list_total": "Total commands: **{count}**",
+    "commands": "Commands",
+    "list_item": "{status} `{name}`{type} ({uses} uses)",
+    "embed_badge": " [Embed]",
+    "list_more": "And {count} more… View them all in the web player.",
+    "info_title": "ℹ️ Command Info: !{name}",
+    "status": "Status",
+    "enabled": "Enabled 🟢",
+    "disabled": "Disabled 🔴",
+    "type": "Type",
+    "rich_embed": "Rich Embed",
+    "plain_text": "Plain Text",
+    "times_used": "Times Used",
+    "created_by": "Created By",
+    "description": "Description",
+    "response_template": "Response Template",
+    "toggled": "Custom command `{name}` is now **{status}**.",
+    "toggle_failed": "❌ Could not change the command status."
+  },
   "help_descriptions": {
-    "ping": "Checks bot latency (Websocket and API)",
+    "ping": "Check bot latency (WebSocket and API)",
     "botinfo": "Display bot information",
     "userinfo": "Display a user profile from a database",
     "help": "Show help information",

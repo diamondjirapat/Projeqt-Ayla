@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, Optional, Union
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from config import Config
@@ -18,6 +19,7 @@ class I18nManager:
         self.supported_locales = ['en', 'th']
         self.user_model = UserModel()
         self.guild_model = GuildModel()
+        self._discord_translation_index: Dict[str, Dict[str, str]] = {}
         # Cache missing values too; most users do not set a custom locale.
         self._user_locale_cache: TTLCache[int, Optional[str]] = TTLCache(ttl=300, max_size=5000)
         self._guild_locale_cache: TTLCache[int, Optional[str]] = TTLCache(ttl=300, max_size=5000)
@@ -39,6 +41,42 @@ class I18nManager:
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON in translation file {file_path}: {e}")
                 continue
+
+        self._build_discord_translation_index()
+
+    @staticmethod
+    def _flatten_strings(value: Dict[str, Any], prefix: str = "") -> Dict[str, str]:
+        flattened: Dict[str, str] = {}
+        for key, item in value.items():
+            path = f"{prefix}.{key}" if prefix else key
+            if isinstance(item, dict):
+                flattened.update(I18nManager._flatten_strings(item, path))
+            elif isinstance(item, str):
+                flattened[path] = item
+        return flattened
+
+    @staticmethod
+    def _normalize_discord_source(value: str) -> str:
+        return value.strip().rstrip(".").casefold()
+
+    def _build_discord_translation_index(self):
+        """Build source-text indexes used by Discord's application-command translator."""
+        default = self.translations.get(self.default_locale, {})
+        default_flat = self._flatten_strings(default)
+        for locale in self.supported_locales:
+            target_flat = self._flatten_strings(self.translations.get(locale, {}))
+            index: Dict[str, str] = {}
+            for key, source in default_flat.items():
+                target = target_flat.get(key)
+                if not target or target == source:
+                    continue
+                index.setdefault(source, target)
+                index.setdefault(self._normalize_discord_source(source), target)
+            self._discord_translation_index[locale] = index
+
+    def translate_discord_string(self, source: str, locale: str) -> Optional[str]:
+        index = self._discord_translation_index.get(locale, {})
+        return index.get(source) or index.get(self._normalize_discord_source(source))
 
     async def get_user_locale(self, user_id: int) -> Optional[str]:
         """Get the user's preferred locale from a database (with caching)"""
@@ -215,3 +253,19 @@ class I18nManager:
         self._guild_locale_cache.pop(guild_id)
 
 i18n = I18nManager()
+
+
+class I18nTranslator(app_commands.Translator):
+    """Translate Discord slash-command metadata from the shared locale catalog."""
+
+    async def translate(
+        self,
+        string: app_commands.locale_str,
+        locale: discord.Locale,
+        context: app_commands.TranslationContext,
+    ) -> Optional[str]:
+        locale_code = str(locale.value).lower()
+        target_locale = "th" if locale_code.startswith("th") else "en"
+        if target_locale == i18n.default_locale:
+            return None
+        return i18n.translate_discord_string(string.message, target_locale)

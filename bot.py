@@ -48,6 +48,9 @@ class DiscordBot(commands.Bot):
 
         await self.load_cogs()
 
+        from utils.i18n import I18nTranslator
+        await self.tree.set_translator(I18nTranslator())
+
         from cogs.music import IdlePlaylistView
         from database.models import UserModel, GuildModel
         self.add_view(IdlePlaylistView(0, UserModel(), GuildModel(), self))
@@ -234,11 +237,13 @@ class DiscordBot(commands.Bot):
                 pass
 
         if isinstance(error, app_commands.CommandNotFound):
-            await send_error("⚠️ This command is outdated. Please try again — it should update shortly!")
+            await send_error(await i18n.t(interaction, 'errors.command_outdated'))
             return
 
         if isinstance(error, app_commands.CommandOnCooldown):
-            await send_error(f"⏳ Command on cooldown. Try again in {error.retry_after:.1f}s")
+            await send_error(await i18n.t(
+                interaction, 'errors.command_cooldown', seconds=f"{error.retry_after:.1f}"
+            ))
 
         elif isinstance(error, app_commands.MissingPermissions):
             error_msg = await i18n.t(interaction, 'errors.missing_permissions')

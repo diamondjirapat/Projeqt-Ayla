@@ -34,6 +34,11 @@ class Prefix(commands.Cog):
         priority_text = await i18n.t(ctx, "prefix.priority_explanation", mention=self.bot.user.mention)
         commands_label = await i18n.t(ctx, "prefix.commands")
         commands_help = await i18n.t(ctx, "prefix.commands_help")
+        source = await i18n.t(ctx, f"prefix.source_{prefix_info['priority']}")
+        effective_prefix = await i18n.t(
+            ctx, "prefix.effective_source",
+            prefix=f"`{prefix_info['effective_prefix']}`", source=source
+        )
 
         embed = discord.Embed(
             title=title,
@@ -42,7 +47,7 @@ class Prefix(commands.Cog):
 
         embed.add_field(
             name=current_prefix_name,
-            value=f"`{prefix_info['effective_prefix']}` ({prefix_info['priority']} priority)",
+            value=effective_prefix,
             inline=False
         )
 
@@ -114,7 +119,10 @@ class Prefix(commands.Cog):
             )
         else:
             title = await i18n.t(ctx, "prefix.set_failed_title")
-            description = reason or await i18n.t(ctx, "prefix.set_failed")
+            description = await i18n.t(
+                ctx, f"prefix.validation.{reason}",
+                max=prefix_manager.max_prefix_length, prefix=prefix
+            ) if reason else await i18n.t(ctx, "prefix.set_failed")
             embed = discord.Embed(
                 title=title,
                 description=description,
@@ -188,7 +196,10 @@ class Prefix(commands.Cog):
             )
         else:
             title = await i18n.t(ctx, "prefix.server_set_failed_title")
-            description = reason or await i18n.t(ctx, "prefix.server_set_failed")
+            description = await i18n.t(
+                ctx, f"prefix.validation.{reason}",
+                max=prefix_manager.max_prefix_length, prefix=prefix
+            ) if reason else await i18n.t(ctx, "prefix.server_set_failed")
             embed = discord.Embed(
                 title=title,
                 description=description,

@@ -3,7 +3,9 @@ from __future__ import annotations
 import random
 from enum import Enum
 from typing import Any, Iterable, List, Optional
-import pomice
+import discord
+from discord.utils import MISSING
+import wavelink
 
 
 class LoopMode(Enum):
@@ -31,8 +33,7 @@ class QueueFull(QueueException):
 class CustomQueue:
     """
     Standalone custom Queue system.
-    Replaces pomice.Queue completely while maintaining intuitive behavior for
-    LoopMode.OFF, LoopMode.TRACK, and LoopMode.QUEUE.
+    Maintains intuitive behavior for LoopMode.OFF, LoopMode.TRACK, and LoopMode.QUEUE.
     """
 
     def __init__(self, max_size: Optional[int] = None, *, overflow: bool = True):
@@ -216,34 +217,110 @@ class CustomQueue:
         return not self.is_empty
 
 
-class CustomPlayer(pomice.Player):
+class CustomPlayer(wavelink.Player):
     """
-    Custom player using our standalone CustomQueue.
+    Custom player using our standalone CustomQueue with Wavelink.
     """
 
-    def __init__(self, client, channel, *, node=None):
-        super().__init__(client, channel, node=node)
+    def __init__(
+        self,
+        client: discord.Client = MISSING,
+        channel: discord.abc.Connectable = MISSING,
+        *,
+        nodes: list[wavelink.Node] | None = None,
+    ):
+        if not nodes and client is not MISSING:
+            client_nodes = [
+                n for n in wavelink.Pool.nodes.values()
+                if n.client == client and n.status == wavelink.NodeStatus.CONNECTED
+            ]
+            if client_nodes:
+                nodes = client_nodes
+        super().__init__(client, channel, nodes=nodes)
 
         self.queue: CustomQueue = CustomQueue()
         self.twenty_four_seven: bool = False
         self.autoplay_enabled: bool = False
-        self.history: List[pomice.Track] = []
+        self.history: List[wavelink.Playable] = []
         self.home_channel = None
         self.current_track_start_time = None
 
+    @property
+    def is_playing(self) -> bool:
+        return self.playing
+
+    @property
+    def is_paused(self) -> bool:
+        return self.paused
+
+    @property
+    def is_connected(self) -> bool:
+        return self.connected
+
+    async def set_pause(self, pause: bool) -> None:
+        await self.pause(pause)
+
+    async def destroy(self) -> None:
+        await self.disconnect()
+
+    async def get_tracks(self, query: str | dict[str, Any]) -> list[wavelink.Playable] | wavelink.Playlist:
+        if isinstance(query, dict):
+            query = query.get("uri") or query.get("url") or query.get("query") or (
+                f"ytsearch:{query.get('title', '')} {query.get('author', '')}".strip()
+                if query.get('title') or query.get('author')
+                else ""
+            )
+        if not isinstance(query, str):
+            query = str(query or "").strip()
+
+        # Playable.search adds its own default search prefix. Preserve explicit
+        # prefixes so queries such as ``ytsearch:...`` do not become
+        # ``ytmsearch:ytsearch:...`` and return unrelated artwork/results.
+        explicit_search_prefixes = (
+            'ytsearch:',
+            'ytmsearch:',
+            'scsearch:',
+            'spsearch:',
+            'dzsearch:',
+            'amsearch:',
+            'bcsearch:',
+        )
+        if query.lower().startswith(explicit_search_prefixes):
+            return await wavelink.Pool.fetch_tracks(query, node=self.node)
+        return await wavelink.Playable.search(query, node=self.node)
+
     async def play(
         self,
-        track: pomice.Track,
+        track: wavelink.Playable,
         *,
+        replace: bool = True,
         start: int = 0,
-        end: int = 0,
-        ignore_if_playing: bool = False,
-    ) -> pomice.Track:
+        end: Optional[int] = None,
+        volume: Optional[int] = None,
+        paused: Optional[bool] = None,
+        add_history: bool = False,
+        filters: Optional[wavelink.Filters] = None,
+        populate: bool = False,
+        max_populate: int = 5,
+        **kwargs: Any,
+    ) -> wavelink.Playable:
+        custom_art = getattr(track, 'custom_artwork', None)
+        requester = getattr(track, 'requester', None)
         played = await super().play(
             track,
+            replace=replace,
             start=start,
             end=end,
-            ignore_if_playing=ignore_if_playing,
+            volume=volume,
+            paused=paused,
+            add_history=False,
+            filters=filters,
+            populate=populate,
+            max_populate=max_populate,
         )
+        if custom_art:
+            played.custom_artwork = custom_art
+        if requester:
+            played.requester = requester
         self.queue.set_current(played)
         return played

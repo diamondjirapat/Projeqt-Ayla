@@ -42,11 +42,14 @@ class TTLCache(Generic[KeyT, ValueT]):
         self._values[key] = (value, expiry)
         return value
 
-    def set(self, key: KeyT, value: ValueT) -> None:
+    def set(self, key: KeyT, value: ValueT, *, ttl: float | None = None) -> None:
+        entry_ttl = self._ttl if ttl is None else ttl
+        if entry_ttl <= 0:
+            raise ValueError("ttl must be positive")
         self._values.pop(key, None)
         while len(self._values) >= self._max_size:
             self._values.popitem(last=False)
-        self._values[key] = (value, self._clock() + self._ttl)
+        self._values[key] = (value, self._clock() + entry_ttl)
 
     def pop(self, key: KeyT) -> None:
         self._values.pop(key, None)

@@ -8,7 +8,7 @@ from typing import cast, Optional
 from urllib.parse import urlparse
 
 import discord
-import pomice
+import wavelink
 from discord import app_commands
 from discord.ext import commands
 
@@ -17,6 +17,7 @@ from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 from utils.lastfm import lastfm_handler
 from utils.queue import CustomPlayer, LoopMode
+from utils.artwork import artwork_contract
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,12 @@ def build_queue_timeline(player):
     return timeline, current_index, queue_start_index
 
 
+def get_track_artwork(track: Optional[wavelink.Playable]) -> Optional[str]:
+    if not track:
+        return None
+    return artwork_contract(track)["artwork"]
+
+
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -54,7 +61,10 @@ class Music(commands.Cog):
     @property
     def node(self):
         node_id = 'MAIN' if getattr(self.bot, 'is_main', True) else f'MAIN_{self.bot.user.id}'
-        return pomice.NodePool.get_node(identifier=node_id)
+        try:
+            return wavelink.Pool.get_node(identifier=node_id)
+        except Exception:
+            return wavelink.Pool.get_node()
 
     async def cog_before_invoke(self, ctx: commands.Context):
         """Automatically defer slash commands to prevent timeout"""
@@ -126,7 +136,7 @@ class Music(commands.Cog):
                 except Exception:
                     pass
 
-    async def _fetch_autoplay_track(self, player: pomice.Player, last_track: pomice.Track) -> pomice.Track | None:
+    async def _fetch_autoplay_track(self, player: CustomPlayer, last_track: wavelink.Playable) -> wavelink.Playable | None:
         """Fetch a recommended track based on the last played track with multi-stage fallback"""
         guild_id = player.guild.id
 
@@ -137,7 +147,7 @@ class Music(commands.Cog):
 
         logger.info(f"[AUTOPLAY RECOMMENDATION] Fetching recommendations: '{last_track.title}' by {last_track.author}")
 
-        def is_valid_candidate(t: pomice.Track) -> bool:
+        def is_valid_candidate(t: wavelink.Playable) -> bool:
             if t.uri and t.uri in played_uris:
                 return False
             if t.title.lower() == last_track.title.lower():
@@ -150,11 +160,21 @@ class Music(commands.Cog):
             cleaned = re.sub(r'(?i)\s*(feat\.|ft\.|featuring|,|&|x|-).*$', '', author).strip()
             return cleaned or author.strip()
 
-        # Stage 1: Standard node recommendations
+        # Stage 1: Standard node recommendations (Spotify LavaSrc or YouTube Music)
         try:
-            tracks = await player.get_recommendations(track=last_track)
+            tracks = None
+            if getattr(last_track, "source", "") == "spotify" or (last_track.uri and "spotify" in last_track.uri.lower()):
+                tracks = await wavelink.Pool.fetch_tracks(f"sprec:seed_tracks={last_track.identifier}&limit=10", node=player.node)
+            elif getattr(last_track, "source", "") in ("youtube", "youtubemusic") or (last_track.uri and ("youtube" in last_track.uri.lower() or "youtu.be" in last_track.uri.lower())):
+                tracks = await wavelink.Pool.fetch_tracks(f"https://music.youtube.com/watch?v={last_track.identifier}&list=RD{last_track.identifier}", node=player.node)
+
+            if not tracks:
+                clean_artist = get_clean_artist(last_track.author)
+                query = f"{last_track.title} {clean_artist}"
+                tracks = await wavelink.Playable.search(query, node=player.node)
+
             if tracks:
-                if isinstance(tracks, pomice.Playlist):
+                if isinstance(tracks, wavelink.Playlist):
                     tracks = tracks.tracks
                 for track in tracks:
                     if is_valid_candidate(track):
@@ -171,7 +191,7 @@ class Music(commands.Cog):
                 logger.info(f"[AUTOPLAY STAGE 2] Falling back to artist search: '{clean_artist}'")
                 tracks = await player.get_tracks(clean_artist)
                 if tracks:
-                    if isinstance(tracks, pomice.Playlist):
+                    if isinstance(tracks, wavelink.Playlist):
                         tracks = tracks.tracks
                     for track in tracks:
                         if is_valid_candidate(track):
@@ -188,7 +208,7 @@ class Music(commands.Cog):
             logger.info(f"[AUTOPLAY STAGE 3] Falling back to mix/radio search: '{query}'")
             tracks = await player.get_tracks(query)
             if tracks:
-                if isinstance(tracks, pomice.Playlist):
+                if isinstance(tracks, wavelink.Playlist):
                     tracks = tracks.tracks
                 for track in tracks:
                     if is_valid_candidate(track):
@@ -207,24 +227,6 @@ class Music(commands.Cog):
             del self.timeout_tasks[guild_id]
 
     async def cog_load(self):
-        self.pomice_pool = pomice.NodePool()
-
-        # Monkey patch pomice.Node.connect to silence unretrieved task exceptions from its internal reconnect attempts.
-        if not getattr(pomice.Node, "_patched_connect", False):
-            original_connect = pomice.Node.connect
-
-            async def safe_connect(node_self, *args, **kwargs):
-                try:
-                    return await original_connect(node_self, *args, **kwargs)
-                except Exception as e:
-                    if type(e).__name__ == "NodeConnectionFailure" and kwargs.get("reconnect", False):
-                        logger.debug(f"[POMICE] Suppressed internal reconnect error: {e}")
-                        return node_self
-                    raise
-
-            pomice.Node._patched_connect = True
-            pomice.Node.connect = safe_connect
-
         self.bot.loop.create_task(self._connect_lavalink())
 
     async def _connect_lavalink(self):
@@ -233,6 +235,9 @@ class Music(commands.Cog):
         parsed = urlparse(Config.LAVALINK_URI)
         host = parsed.hostname or '127.0.0.1'
         port = parsed.port or 2333
+        scheme = parsed.scheme or 'http'
+        uri = f"{scheme}://{host}:{port}"
+        node_id = 'MAIN' if getattr(self.bot, 'is_main', True) else f'MAIN_{self.bot.user.id}'
 
         backoff = 5
         max_backoff = 300
@@ -242,21 +247,19 @@ class Music(commands.Cog):
             attempt += 1
             logger.info(f"[LAVALINK] Connection attempt #{attempt} to {host}:{port}")
             try:
-                node_id = 'MAIN' if getattr(self.bot, 'is_main', True) else f'MAIN_{self.bot.user.id}'
-                try:
-                    existing = self.pomice_pool.get_node(identifier=node_id)
-                    if existing:
-                        await existing.disconnect()
-                except Exception:
-                    pass
+                if node_id in wavelink.Pool.nodes:
+                    try:
+                        await wavelink.Pool.nodes[node_id].close()
+                    except Exception:
+                        pass
 
-                await self.pomice_pool.create_node(
-                    bot=self.bot,
-                    host=host,
-                    port=port,
-                    password=Config.LAVALINK_PASSWORD,
+                node = wavelink.Node(
                     identifier=node_id,
+                    uri=uri,
+                    password=Config.LAVALINK_PASSWORD,
+                    client=self.bot,
                 )
+                await wavelink.Pool.connect(nodes=[node], client=self.bot)
                 logger.info("[LAVALINK] Connection pool initialized successfully")
                 return
             except Exception as e:
@@ -369,14 +372,18 @@ class Music(commands.Cog):
                             pass
                     self.bot.loop.create_task(delayed_delete())
 
-    # Node ready is handled by pomice.NodePool.create_node()
+    @commands.Cog.listener()
+    async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
+        logger.info(f"[LAVALINK] Node ready: {payload.node.identifier} (resumed={payload.resumed})")
 
     @commands.Cog.listener()
-    async def on_pomice_track_start(self, player: pomice.Player, track: pomice.Track):
-        logger.info(f"[LASTFM DEBUG] Track START event fired: {track.title}")
-
-        if not player:
+    async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload):
+        player: CustomPlayer = cast(CustomPlayer, payload.player)
+        track: wavelink.Playable = payload.track
+        if not player or not track:
             return
+
+        logger.info(f"[LASTFM DEBUG] Track START event fired: {track.title}")
 
         player.current_track_start_time = int(time.time())
         self.cancel_timeout(player.guild.id)
@@ -418,18 +425,24 @@ class Music(commands.Cog):
             artist_label = await i18n.t(target_channel, "music.player.artist", artist=track.author)
             duration_label = await i18n.t(target_channel, "music.player.duration_label",
                                           duration=f"{track.length // 1000 // 60}:{track.length // 1000 % 60:02d}")
-            requester_label = await i18n.t(target_channel, "music.player.requester_label",
-                                           user=getattr(track, 'requester', 'Unknown'))
+            unknown = await i18n.t(target_channel, "general.unknown")
+            requester_label = await i18n.t(
+                target_channel, "music.player.requester_label",
+                user=getattr(track, 'requester', None) or unknown
+            )
 
             embed.add_field(name=" ", value=artist_label, inline=False)
             embed.add_field(name=" ", value=duration_label, inline=False)
             embed.add_field(name=" ", value=requester_label, inline=False)
             embed.set_image(url=Config.BAR_URL)
 
-            if track.thumbnail:
-                embed.set_thumbnail(url=track.thumbnail)
+            artwork = get_track_artwork(track)
+            if artwork:
+                embed.set_thumbnail(url=artwork)
 
-            view = NowPlayingView(player, self.user_model, self.guild_model)
+            locale = await i18n.get_guild_locale(player.guild.id) or i18n.default_locale
+            view = NowPlayingView(player, self.user_model, self.guild_model, locale=locale)
+            await view.async_init()
 
             existing_msg = self.now_playing_messages.get(player.guild.id)
             if existing_msg:
@@ -458,7 +471,11 @@ class Music(commands.Cog):
                     )
 
     @commands.Cog.listener()
-    async def on_pomice_track_end(self, player: pomice.Player, track: pomice.Track, reason: str):
+    async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
+        player: CustomPlayer = cast(CustomPlayer, payload.player)
+        track: wavelink.Playable = payload.track
+        reason: str = payload.reason
+
         logger.info(f"[LASTFM DEBUG] Track end event fired - reason: {reason}")
         if not player:
             logger.warning("[LASTFM DEBUG] No player in payload")
@@ -545,9 +562,12 @@ class Music(commands.Cog):
                 await lastfm_handler.scrobble(session_key, artist, title, timestamp)
 
     @commands.Cog.listener()
-    async def on_pomice_track_exception(self, player: pomice.Player, track: pomice.Track, exception: str):
+    async def on_wavelink_track_exception(self, payload: wavelink.TrackExceptionEventPayload):
         """Handler for when a track encounters an exception during playback."""
-        logger.warning(f"[POMICE] Track exception for '{track.title if track else 'Unknown'}': {exception}")
+        player: CustomPlayer = cast(CustomPlayer, payload.player)
+        track: wavelink.Playable = payload.track
+        exception = payload.exception
+        logger.warning(f"[WAVELINK] Track exception for '{track.title if track else 'Unknown'}': {exception}")
 
         if player:
             target_channel = getattr(player, "home_channel", None)
@@ -565,9 +585,12 @@ class Music(commands.Cog):
                 await target_channel.send(msg, delete_after=10)
 
     @commands.Cog.listener()
-    async def on_pomice_track_stuck(self, player: pomice.Player, track: pomice.Track, threshold: float):
+    async def on_wavelink_track_stuck(self, payload: wavelink.TrackStuckEventPayload):
         """Handler for when a track gets stuck (stops sending frames)."""
-        logger.warning(f"[POMICE] Track stuck: '{track.title if track else 'Unknown'}' at {threshold}ms")
+        player: CustomPlayer = cast(CustomPlayer, payload.player)
+        track: wavelink.Playable = payload.track
+        threshold: float = float(payload.threshold)
+        logger.warning(f"[WAVELINK] Track stuck: '{track.title if track else 'Unknown'}' at {threshold}ms")
 
         if not player:
             return
@@ -579,49 +602,22 @@ class Music(commands.Cog):
                  target_channel = self.bot.get_channel(static_channel_id)
 
         if target_channel:
-             await target_channel.send(f"⚠️ Track stuck at {threshold//1000}s. Attempting to recover playback...", delete_after=10)
-
-        # Attempt to recover (searching the track again and playing from the stuck position)
-        try:
-            query = track.uri if track.uri else f"{track.title} - {track.author}"
-            logger.info(f"[POMICE] Recovery search query: {query}")
-
-            tracks = await player.get_tracks(query)
-            if tracks:
-                new_track = tracks[0] if isinstance(tracks, list) else tracks.tracks[0] if hasattr(tracks, 'tracks') else None
-
-                if new_track:
-                    if hasattr(track, 'requester'):
-                        new_track.requester = track.requester
-
-                    vol = await self.guild_model.get_default_volume(player.guild.id)
-                    await player.set_volume(vol)
-                    await player.play(new_track, start=int(threshold))
-                    logger.info(f"[POMICE] Successfully recovered '{new_track.title}' from {threshold}ms")
-                    return
-
-            logger.warning("[POMICE] Recovery failed: Could not find track to replay.")
-            # If fail, skip
-            if not player.queue.is_empty:
-                await player.play(player.queue.get())
-
-        except Exception as e:
-            logger.error(f"[POMICE] Error during stuck track recovery: {e}")
-            # Just in case
-            if not player.queue.is_empty:
-                await player.play(player.queue.get())
+            locale = await i18n.get_guild_locale(player.guild.id) or i18n.default_locale
+            await target_channel.send(
+                i18n.get_text("music.errors.track_stuck", locale, seconds=int(threshold // 1000)),
+                delete_after=10
+            )
 
     @commands.Cog.listener()
-    async def on_pomice_websocket_closed(self, payload):
-        """Handler for when the websocket is closed."""
-        logger.warning(f"[POMICE] WebSocket closed: {payload.code} - {payload.reason}")
-        if payload.code != 1000:
-            logger.info("[POMICE] Unexpected WebSocket closure — scheduling Lavalink reconnection...")
-            self.bot.loop.create_task(self._connect_lavalink())
+    async def on_wavelink_websocket_closed(self, payload: wavelink.WebsocketClosedEventPayload):
+        player: CustomPlayer = cast(CustomPlayer, payload.player)
+        logger.warning(
+            f"[WAVELINK] WebSocket closed for guild {player.guild.id if player and player.guild else 'Unknown'}: "
+            f"Code {payload.code}, Reason: {payload.reason} (by_remote={payload.by_remote})"
+        )
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member, before, after):
-        # Check if bot disconnected
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if member.id == self.bot.user.id and before.channel and not after.channel:
             logger.info(f"[VOICE] Bot disconnected from voice in guild {member.guild.id}")
             await self.delete_now_playing_message(member.guild.id)
@@ -718,8 +714,9 @@ class Music(commands.Cog):
 
             embed.title = now_playing_title
             embed.description = f"{source_indicator}**[{current_track.title}]({current_track.uri})**\n\n{artist_label}\n{duration_label}"
-            if current_track.thumbnail:
-                embed.set_thumbnail(url=current_track.thumbnail)
+            artwork = get_track_artwork(current_track)
+            if artwork:
+                embed.set_thumbnail(url=artwork)
             if hasattr(current_track, 'requester') and current_track.requester:
                 req_text = await i18n.t(channel, "music.player.requester_label", user=current_track.requester,
                                         static_embed=True)
@@ -867,7 +864,7 @@ class Music(commands.Cog):
             else:
                 saved_pl = None
 
-        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
         if not player:
             try:
                 logger.debug(f"[VOICE] Connecting to voice channel: {ctx.author.voice.channel.name}")
@@ -891,7 +888,7 @@ class Music(commands.Cog):
             if player:
                 tracks = await player.get_tracks(query)
             else:
-                tracks = await self.node.get_tracks(query)
+                tracks = await wavelink.Playable.search(query, node=self.node)
         except Exception as e:
             err_str = str(e)
             if "Session not found" in err_str and player:
@@ -928,8 +925,8 @@ class Music(commands.Cog):
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
 
         # If it's a URL or a specific Container (Playlist), auto-play/queue
-        if is_url or isinstance(tracks, pomice.Playlist):
-            if isinstance(tracks, pomice.Playlist):
+        if is_url or isinstance(tracks, wavelink.Playlist):
+            if isinstance(tracks, wavelink.Playlist):
                 for track in tracks.tracks:
                     track.requester = ctx.author.mention
 
@@ -1131,16 +1128,16 @@ class Music(commands.Cog):
     @app_commands.describe(playlist_name="Playlist to add to", url="URL of the song (optional, uses current track if omitted)")
     async def playlist_add(self, ctx, playlist_name: str, url: str = None):
         """Add the current song or a URL to a playlist"""
-        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
 
         if url:
             # Search for the track
             try:
-                tracks = await self.node.get_tracks(url)
+                tracks = await wavelink.Playable.search(url, node=self.node)
                 if not tracks:
                     msg = await i18n.t(ctx, "music.playlist.track_not_found")
                     return await ctx.send(msg, delete_after=10)
-                track = tracks[0] if not isinstance(tracks, pomice.Playlist) else tracks.tracks[0]
+                track = tracks[0] if not isinstance(tracks, wavelink.Playlist) else tracks.tracks[0]
                 track_info = {'title': track.title, 'url': track.uri, 'author': track.author}
             except Exception as e:
                 msg = await i18n.t(ctx, "music.playlist.error", error=str(e))
@@ -1166,7 +1163,7 @@ class Music(commands.Cog):
         success, result = await self.user_model.remove_track_from_playlist(ctx.author.id, playlist_name, index - 1)
 
         if success:
-            track_title = result.get('title', 'Unknown')
+            track_title = result.get('title') or await i18n.t(ctx, "general.unknown")
             msg = await i18n.t(ctx, "music.playlist.track_removed_title", title=track_title, playlist=playlist_name)
         else:
             error = result.get('error', 'unknown') if result else 'unknown'
@@ -1201,7 +1198,7 @@ class Music(commands.Cog):
         )
 
         if is_imported:
-            source_url = playlist.get('source_url', 'Unknown')
+            source_url = playlist.get('source_url') or await i18n.t(ctx, "general.unknown")
             track_count = playlist.get('source_track_count', 0)
             created_at = playlist.get('created_at', datetime.now()).strftime("%Y-%m-%d")
 
@@ -1226,8 +1223,8 @@ class Music(commands.Cog):
             if tracks:
                 track_lines = []
                 for i, track in enumerate(tracks[:25], 1):
-                    title = track.get('title', 'Unknown')
-                    author = track.get('author', 'Unknown')
+                    title = track.get('title') or await i18n.t(ctx, "general.unknown")
+                    author = track.get('author') or await i18n.t(ctx, "general.unknown")
                     track_lines.append(f"**{i}.** {title} — {author}")
                 embed.description = "\n".join(track_lines)
                 if len(tracks) > 25:
@@ -1236,8 +1233,26 @@ class Music(commands.Cog):
             else:
                 embed.description = await i18n.t(ctx, "music.playlist.view_empty_desc")
 
+        if playlist.get('cover'):
+            embed.set_thumbnail(url=playlist.get('cover'))
+        elif not is_imported and playlist.get('tracks') and playlist.get('tracks')[0].get('artwork'):
+            embed.set_thumbnail(url=playlist.get('tracks')[0].get('artwork'))
 
         await ctx.send(embed=embed)
+
+    @playlist.command(name="setcover", aliases=["cover", "thumbnail"])
+    @app_commands.describe(playlist_name="Playlist to set thumbnail for", url="Image URL for the cover (leave empty to remove)")
+    async def playlist_setcover(self, ctx, playlist_name: str, url: str = None):
+        """Set or remove a custom thumbnail for a playlist"""
+        cover_url = url.strip() if url else ""
+        success = await self.user_model.set_playlist_cover(ctx.author.id, playlist_name, cover_url)
+        if not success:
+            msg = await i18n.t(ctx, "music.playlist.playlist_not_found", name=playlist_name)
+            return await ctx.send(msg, delete_after=10)
+        if cover_url:
+            await ctx.send(f"✅ Set thumbnail for playlist **{playlist_name}** to {cover_url}")
+        else:
+            await ctx.send(f"✅ Removed custom thumbnail for playlist **{playlist_name}**")
 
     @playlist.command(name="list")
     async def playlist_list(self, ctx):
@@ -1303,7 +1318,7 @@ class Music(commands.Cog):
         if not is_imported and not tracks_list:
             msg = await i18n.t(ctx, "music.playlist.empty_playlist")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
-        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
         if not player:
             if not ctx.author.voice:
                 msg = await i18n.t(ctx, "music.commands.play.not_in_voice")
@@ -1441,7 +1456,7 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.playlist.importing")
             status_msg = await ctx.send(msg)
             try:
-                tracks = await self.node.get_tracks(url)
+                tracks = await wavelink.Playable.search(url, node=self.node)
             except Exception as e:
                 logger.error(f"Search failed during import: {e}")
                 tracks = None
@@ -1455,7 +1470,7 @@ class Music(commands.Cog):
             track_count = 0
             source_name = "Imported Playlist"
 
-            if isinstance(tracks, pomice.Playlist):
+            if isinstance(tracks, wavelink.Playlist):
                 track_count = len(tracks.tracks)
                 source_name = tracks.name
             elif isinstance(tracks, list):
@@ -1519,15 +1534,15 @@ class Music(commands.Cog):
     @app_commands.describe(playlist_name="Playlist to add to", url="URL of the song")
     async def server_add(self, ctx, playlist_name: str, url: str = None):
         """Add a song to a server playlist"""
-        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
 
         if url:
             try:
-                tracks = await self.node.get_tracks(url)
+                tracks = await wavelink.Playable.search(url, node=self.node)
                 if not tracks:
                     msg = await i18n.t(ctx, "music.playlist.track_not_found")
                     return await ctx.send(msg, delete_after=10)
-                track = tracks[0] if not isinstance(tracks, pomice.Playlist) else tracks.tracks[0]
+                track = tracks[0] if not isinstance(tracks, wavelink.Playlist) else tracks.tracks[0]
                 track_info = {'title': track.title, 'url': track.uri, 'author': track.author}
             except Exception as e:
                 msg = await i18n.t(ctx, "music.playlist.error", error=str(e))
@@ -1553,7 +1568,7 @@ class Music(commands.Cog):
         success, result = await self.guild_model.remove_track_from_playlist(ctx.guild.id, playlist_name, index - 1)
 
         if success:
-            track_title = result.get('title', 'Unknown')
+            track_title = result.get('title') or await i18n.t(ctx, "general.unknown")
             msg = await i18n.t(ctx, "music.playlist.track_removed_title", title=track_title, playlist=playlist_name)
         else:
             error = result.get('error', 'unknown') if result else 'unknown'
@@ -1582,12 +1597,12 @@ class Music(commands.Cog):
         is_imported = playlist.get('type') == 'imported'
 
         embed = discord.Embed(
-            title=f"📁 {playlist.get('name', name)} (Server)",
+            title=await i18n.t(ctx, "music.playlist.server_view_title", name=playlist.get('name', name)),
             color=discord.Color.gold()
         )
 
         if is_imported:
-            source_url = playlist.get('source_url', 'Unknown')
+            source_url = playlist.get('source_url') or await i18n.t(ctx, "general.unknown")
             track_count = playlist.get('source_track_count', 0)
             created_at = playlist.get('created_at', datetime.now()).strftime("%Y-%m-%d")
 
@@ -1612,8 +1627,8 @@ class Music(commands.Cog):
             if tracks:
                 track_lines = []
                 for i, track in enumerate(tracks[:25], 1):
-                    title = track.get('title', 'Unknown')
-                    author = track.get('author', 'Unknown')
+                    title = track.get('title') or await i18n.t(ctx, "general.unknown")
+                    author = track.get('author') or await i18n.t(ctx, "general.unknown")
                     track_lines.append(f"**{i}.** {title} — {author}")
                 embed.description = "\n".join(track_lines)
                 if len(tracks) > 25:
@@ -1622,8 +1637,26 @@ class Music(commands.Cog):
             else:
                 embed.description = await i18n.t(ctx, "music.playlist.view_empty_server")
 
+        if playlist.get('cover'):
+            embed.set_thumbnail(url=playlist.get('cover'))
+        elif not is_imported and playlist.get('tracks') and playlist.get('tracks')[0].get('artwork'):
+            embed.set_thumbnail(url=playlist.get('tracks')[0].get('artwork'))
 
         await ctx.send(embed=embed)
+
+    @serverplaylist.command(name="setcover", aliases=["cover", "thumbnail"])
+    @app_commands.describe(playlist_name="Server playlist to set thumbnail for", url="Image URL for the cover (leave empty to remove)")
+    async def server_setcover(self, ctx, playlist_name: str, url: str = None):
+        """Set or remove a custom thumbnail for a server playlist"""
+        cover_url = url.strip() if url else ""
+        success = await self.guild_model.set_playlist_cover(ctx.guild.id, playlist_name, cover_url)
+        if not success:
+            msg = await i18n.t(ctx, "music.playlist.playlist_not_found", name=playlist_name)
+            return await ctx.send(msg, delete_after=10)
+        if cover_url:
+            await ctx.send(f"✅ Set thumbnail for server playlist **{playlist_name}** to {cover_url}")
+        else:
+            await ctx.send(f"✅ Removed custom thumbnail for server playlist **{playlist_name}**")
 
     @serverplaylist.command(name="list")
     async def server_list(self, ctx):
@@ -1688,7 +1721,7 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.playlist.empty_playlist")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=10)
 
-        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
         if not player:
             if not ctx.author.voice:
                 msg = await i18n.t(ctx, "music.commands.play.not_in_voice")
@@ -1822,7 +1855,7 @@ class Music(commands.Cog):
             status_msg = await ctx.send(msg)
 
             try:
-                tracks = await self.node.get_tracks(url)
+                tracks = await wavelink.Playable.search(url, node=self.node)
             except Exception as e:
                 logger.error(f"Search failed during server import: {e}")
                 tracks = None
@@ -1836,7 +1869,7 @@ class Music(commands.Cog):
             track_count = 0
             source_name = "Imported Playlist"
 
-            if isinstance(tracks, pomice.Playlist):
+            if isinstance(tracks, wavelink.Playlist):
                 track_count = len(tracks.tracks)
                 source_name = tracks.name
             elif isinstance(tracks, list):
@@ -1887,7 +1920,7 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx):
             return
 
-        player: pomice.Player | None = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer | None = cast(CustomPlayer, ctx.voice_client)
 
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
@@ -1924,7 +1957,7 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx, response_channel, redirected):
             return
 
-        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -2003,7 +2036,7 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx, response_channel, redirected):
             return
 
-        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -2059,7 +2092,7 @@ class Music(commands.Cog):
         if not await self.check_voice_channel(ctx):
             return
 
-        player: pomice.Player = cast(pomice.Player, ctx.voice_client)
+        player: CustomPlayer = cast(CustomPlayer, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -2082,7 +2115,7 @@ class Music(commands.Cog):
         response_channel = await self.get_response_channel(ctx)
         redirected = await self.acknowledge_static_redirect(ctx)
 
-        player = cast(pomice.Player, ctx.voice_client)
+        player = cast(CustomPlayer, ctx.voice_client)
         if not player:
             msg = await i18n.t(ctx, "music.commands.disconnect.not_connected")
             return await self.send_response(ctx, response_channel, redirected, content=msg, delete_after=5)
@@ -2344,7 +2377,8 @@ class Music(commands.Cog):
             msg = await i18n.t(ctx, "music.lastfm.not_configured")
             return await ctx.send(msg, delete_after=10)
 
-        view = LastFMAuthView(ctx.author.id, url, token, self.user_model)
+        locale = await i18n.get_locale(ctx)
+        view = LastFMAuthView(ctx.author.id, url, token, self.user_model, locale=locale)
         msg = await i18n.t(ctx, "music.lastfm.authorize_prompt")
         await ctx.send(msg, view=view)
 
@@ -2357,7 +2391,7 @@ class Music(commands.Cog):
             return await ctx.send(msg, delete_after=10)
 
         lfm = user_data['lastfm']
-        username = lfm.get('username', 'Unknown')
+        username = lfm.get('username') or await i18n.t(ctx, "general.unknown")
         scrobbling = lfm.get('scrobbling', True)
 
         status_text = await i18n.t(ctx, "music.lastfm.scrobbling_enabled") if scrobbling else await i18n.t(ctx, "music.lastfm.scrobbling_disabled")
@@ -2406,15 +2440,15 @@ class IdlePlaylistView(discord.ui.View):
         self.user_playlist_button.label = i18n.get_text("music.ui.my_playlists_button", locale)
         self.server_playlist_button.label = i18n.get_text("music.ui.server_playlists_button", locale)
 
-        self.add_item(discord.ui.Button(label="Web Player", style=discord.ButtonStyle.link, url=Config.WEB_URL, emoji="🌐", row=1))
+        self.add_item(discord.ui.Button(label=i18n.get_text("music.ui.web_player", locale), style=discord.ButtonStyle.link, url=Config.WEB_URL, emoji="🌐", row=1))
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
         logger.error(f"IdlePlaylistView error: {error}", exc_info=True)
         try:
             if interaction.response.is_done():
-                await interaction.followup.send(f"❌ An error occurred: {str(error)}", ephemeral=True)
+                await interaction.followup.send(await i18n.t(interaction, "music.errors.command_error", error=str(error)), ephemeral=True)
             else:
-                await interaction.response.send_message(f"❌ An error occurred: {str(error)}", ephemeral=True)
+                await interaction.response.send_message(await i18n.t(interaction, "music.errors.command_error", error=str(error)), ephemeral=True)
         except Exception:
             pass
 
@@ -2437,9 +2471,9 @@ class IdlePlaylistView(discord.ui.View):
             logger.error(f"Error in user_playlist_button: {e}", exc_info=True)
             try:
                 if interaction.response.is_done():
-                    await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+                    await interaction.followup.send(await i18n.t(interaction, "music.errors.command_error", error=str(e)), ephemeral=True)
                 else:
-                    await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+                    await interaction.response.send_message(await i18n.t(interaction, "music.errors.command_error", error=str(e)), ephemeral=True)
             except Exception:
                 pass
 
@@ -2462,9 +2496,9 @@ class IdlePlaylistView(discord.ui.View):
             logger.error(f"Error in server_playlist_button: {e}", exc_info=True)
             try:
                 if interaction.response.is_done():
-                    await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+                    await interaction.followup.send(await i18n.t(interaction, "music.errors.command_error", error=str(e)), ephemeral=True)
                 else:
-                    await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+                    await interaction.response.send_message(await i18n.t(interaction, "music.errors.command_error", error=str(e)), ephemeral=True)
             except Exception:
                 pass
 
@@ -2706,19 +2740,20 @@ class PlaylistSaveSelect(discord.ui.Select):
             success = await self.guild_model.add_track_to_playlist(self.owner_id, playlist_name, self.track_info)
 
         if success:
-            track_title = self.track_info.get('title', 'Unknown')
+            track_title = self.track_info.get('title') or await i18n.t(interaction, "general.unknown")
             if self.is_user_playlist:
                 msg = await i18n.t(interaction, "music.ui.settings_saved_user", title=track_title, name=playlist_name)
             else:
                 msg = await i18n.t(interaction, "music.ui.settings_saved_server", title=track_title, name=playlist_name)
             await interaction.response.send_message(msg, ephemeral=True)
         else:
-            msg = await i18n.t(interaction, "music.playlist.error", error="Failed to save")
+            error = await i18n.t(interaction, "music.ui.save_failed")
+            msg = await i18n.t(interaction, "music.playlist.error", error=error)
             await interaction.response.send_message(msg, ephemeral=True)
 
 
 class PlayerSettingsSelect(discord.ui.Select):
-    def __init__(self, player: pomice.Player, user_model, guild_model, locale: str = "en"):
+    def __init__(self, player: CustomPlayer, user_model, guild_model, locale: str = "en"):
         self.player = player
         self.user_model = user_model
         self.guild_model = guild_model
@@ -2825,10 +2860,12 @@ class PlayerSettingsSelect(discord.ui.Select):
 
                 success = await self.user_model.add_track_to_playlist(interaction.user.id, playlist_name, track_info)
                 if success:
-                    msg = await i18n.t(interaction, "music.ui.settings_saved_user", title=track.title, name=playlist_name)
+                    display_name = await i18n.t(interaction, "music.ui.favorites_name")
+                    msg = await i18n.t(interaction, "music.ui.settings_saved_user", title=track.title, name=display_name)
                     await interaction.response.send_message(msg, ephemeral=True)
                 else:
-                    msg = await i18n.t(interaction, "music.playlist.error", error="Failed to save")
+                    error = await i18n.t(interaction, "music.ui.save_failed")
+                    msg = await i18n.t(interaction, "music.playlist.error", error=error)
                     await interaction.response.send_message(msg, ephemeral=True)
 
         elif value == "save_server":
@@ -2861,15 +2898,17 @@ class PlayerSettingsSelect(discord.ui.Select):
 
                 success = await self.guild_model.add_track_to_playlist(interaction.guild_id, playlist_name, track_info)
                 if success:
-                    msg = await i18n.t(interaction, "music.ui.settings_saved_server", title=track.title, name=playlist_name)
+                    display_name = await i18n.t(interaction, "music.ui.server_favorites_name")
+                    msg = await i18n.t(interaction, "music.ui.settings_saved_server", title=track.title, name=display_name)
                     await interaction.response.send_message(msg, ephemeral=True)
                 else:
-                    msg = await i18n.t(interaction, "music.playlist.error", error="Failed to save")
+                    error = await i18n.t(interaction, "music.ui.save_failed")
+                    msg = await i18n.t(interaction, "music.playlist.error", error=error)
                     await interaction.response.send_message(msg, ephemeral=True)
 
 
 class NowPlayingView(discord.ui.View):
-    def __init__(self, player: pomice.Player, user_model=None, guild_model=None, locale: str = "en"):
+    def __init__(self, player: CustomPlayer, user_model=None, guild_model=None, locale: str = "en"):
         super().__init__(timeout=None)
         self.player = player
         self.user_model = user_model
@@ -2879,7 +2918,13 @@ class NowPlayingView(discord.ui.View):
         if user_model and guild_model:
             self.add_item(PlayerSettingsSelect(player, user_model, guild_model, locale=locale))
 
-        self.add_item(discord.ui.Button(label="Web Player", style=discord.ButtonStyle.link, url=Config.WEB_URL, emoji="🌐", row=2))
+        self.add_item(discord.ui.Button(
+            label=i18n.get_text("music.ui.web_player", locale),
+            style=discord.ButtonStyle.link,
+            url=Config.WEB_URL,
+            emoji="🌐",
+            row=2
+        ))
 
     async def async_init(self):
         await self.update_buttons()
@@ -3069,13 +3114,14 @@ class QueuePaginationView(discord.ui.View):
 
 
 class LastFMAuthView(discord.ui.View):
-    def __init__(self, user_id, url, token, user_model):
+    def __init__(self, user_id, url, token, user_model, locale: str = "en"):
         super().__init__(timeout=300)
         self.user_id = user_id
         self.token = token
         self.url = url
         self.user_model = user_model
-        self.add_item(discord.ui.Button(label="🔗 Authorize on Last.fm", url=url))
+        self.verify.label = i18n.get_text("music.ui.verify", locale)
+        self.add_item(discord.ui.Button(label=i18n.get_text("music.ui.authorize", locale), url=url))
 
     async def on_timeout(self):
         for child in self.children:

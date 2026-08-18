@@ -1,13 +1,13 @@
 import logging
 import asyncio
 from typing import Dict, List, Any, Optional, Callable
-import pomice
+import wavelink
 
 logger = logging.getLogger(__name__)
 
 class PlaylistLoader:
     @staticmethod
-    async def load_playlist(playlist_data: Dict[str, Any], player: pomice.Player) -> List[pomice.Track]:
+    async def load_playlist(playlist_data: Dict[str, Any], player: wavelink.Player) -> List[wavelink.Playable]:
         """
         Load an imported playlist:
         1. Fetch tracks from source URL
@@ -28,7 +28,7 @@ class PlaylistLoader:
             raise e
 
         # Convert to list if it's a Playlist container
-        if isinstance(tracks, pomice.Playlist):
+        if isinstance(tracks, wavelink.Playlist):
             source_tracks = list(tracks.tracks)
         elif isinstance(tracks, list):
             source_tracks = tracks
@@ -71,7 +71,7 @@ class PlaylistLoader:
     @staticmethod
     async def load_additions_background(
         additions: List[Dict[str, Any]], 
-        player: pomice.Player, 
+        player: wavelink.Player, 
         progress_callback: Optional[Callable[[int, int], Any]] = None,
         check_cancel: Optional[Callable[[], bool]] = None
     ):
@@ -100,7 +100,7 @@ class PlaylistLoader:
                     logger.warning(f"No tracks found for addition URL: {url}")
                     continue
 
-                if isinstance(tracks, pomice.Playlist):
+                if isinstance(tracks, wavelink.Playlist):
                     track = tracks.tracks[0]
                 elif isinstance(tracks, list):
                     track = tracks[0]
