@@ -6,7 +6,7 @@ import logging
 import random
 import time
 
-from database.models import LevelingModel
+from database.models import LevelingModel, GuildModel
 from utils.i18n import i18n
 
 logger = logging.getLogger(__name__)
@@ -92,6 +92,7 @@ class Leveling(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.level_model = LevelingModel()
+        self.guild_model = GuildModel()
         # Cooldown map: (guild_id, user_id) -> timestamp of last awarded XP
         self.cooldowns = {}
         self.cooldown_seconds = 60
@@ -107,6 +108,9 @@ class Leveling(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot or not message.guild:
+            return
+
+        if not await self.guild_model.is_leveling_enabled(message.guild.id):
             return
 
         # Check prefix if any, but standard XP triggers on normal messages
@@ -139,23 +143,103 @@ class Leveling(commands.Cog):
         if result.get('leveled_up'):
             new_lvl = result['new_level']
             locale = await i18n.get_guild_locale(message.guild.id) or i18n.default_locale
-            embed = discord.Embed(
-                title=i18n.get_text("commands.level_up.title", locale),
-                description=i18n.get_text(
+            config = await self.guild_model.get_level_alert_config(message.guild.id)
+
+            if not config.get('enabled', False):
+                return
+
+            server_icon_url = str(message.guild.icon.url) if message.guild.icon else ""
+            total_xp_str = f"{result['xp']:,}"
+
+            def replace_placeholders(text: str) -> str:
+                if not text:
+                    return ""
+                return (
+                    text.replace('{user}', message.author.display_name)
+                    .replace('{username}', message.author.name)
+                    .replace('{mention}', message.author.mention)
+                    .replace('{member}', message.author.mention)
+                    .replace('{level}', str(new_lvl))
+                    .replace('{xp}', total_xp_str)
+                    .replace('{server}', message.guild.name)
+                    .replace('{guild}', message.guild.name)
+                    .replace('{channel}', message.channel.name)
+                    .replace('{avatar}', avatar_url)
+                    .replace('{server_icon}', server_icon_url)
+                )
+
+            custom_title = config.get('title')
+            title = replace_placeholders(custom_title) if custom_title else i18n.get_text("commands.level_up.title", locale)
+
+            custom_desc = config.get('description')
+            if custom_desc:
+                description = replace_placeholders(custom_desc)
+            else:
+                description = i18n.get_text(
                     "commands.level_up.description", locale,
                     member=message.author.mention, level=new_lvl
-                ),
-                color=discord.Color.gold()
-            )
-            embed.set_thumbnail(url=avatar_url)
-            embed.add_field(name=i18n.get_text("commands.level_up.total_xp", locale), value=f"{result['xp']:,} XP", inline=True)
-            embed.set_footer(
-                text=i18n.get_text("commands.level_up.footer", locale, server=message.guild.name),
-                icon_url=message.guild.icon.url if message.guild.icon else None
+                )
+
+            raw_color = config.get('color') or '#f1c40f'
+            color_int = 0xF1C40F
+            if isinstance(raw_color, str):
+                cleaned_color = raw_color.lstrip('#')
+                try:
+                    color_int = int(cleaned_color, 16)
+                except ValueError:
+                    color_int = 0xF1C40F
+            elif isinstance(raw_color, int):
+                color_int = raw_color
+            embed_color = discord.Color(color_int)
+
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=embed_color
             )
 
+            thumb = config.get('thumbnail_url')
+            if thumb:
+                thumb_url = replace_placeholders(thumb)
+                if thumb_url:
+                    embed.set_thumbnail(url=thumb_url)
+            elif thumb is None:
+                embed.set_thumbnail(url=avatar_url)
+
+            img = config.get('image_url')
+            if img:
+                img_url = replace_placeholders(img)
+                if img_url:
+                    embed.set_image(url=img_url)
+
+            if config.get('show_xp_field', True):
+                embed.add_field(
+                    name=i18n.get_text("commands.level_up.total_xp", locale),
+                    value=f"{total_xp_str} XP",
+                    inline=True
+                )
+
+            footer_text = config.get('footer_text')
+            footer_url = config.get('footer_url')
+            f_text = replace_placeholders(footer_text) if footer_text else i18n.get_text("commands.level_up.footer", locale, server=message.guild.name)
+            f_icon = replace_placeholders(footer_url) if footer_url else (server_icon_url or None)
+            if f_text:
+                embed.set_footer(text=f_text, icon_url=f_icon or None)
+
+            target_channel = message.channel
+            bound_channel_id = config.get('channel_id') or await self.guild_model.get_level_channel(message.guild.id)
+            if bound_channel_id:
+                bound_channel = message.guild.get_channel(bound_channel_id)
+                if not bound_channel:
+                    try:
+                        bound_channel = await self.bot.fetch_channel(bound_channel_id)
+                    except Exception:
+                        bound_channel = None
+                if bound_channel and hasattr(bound_channel, 'send'):
+                    target_channel = bound_channel
+
             try:
-                await message.channel.send(embed=embed)
+                await target_channel.send(embed=embed)
             except discord.Forbidden:
                 pass
             except Exception as e:
@@ -362,6 +446,223 @@ class Leveling(commands.Cog):
         ) or f"✅ Added **{amount:,}** XP to {member.mention}. Total: **{result['xp']:,}** XP (Level {result['new_level']})."
 
         await ctx.send(msg)
+
+    @commands.hybrid_group(name='leveling', aliases=['levelsystem', 'levels'], fallback='info')
+    @commands.has_permissions(manage_guild=True)
+    async def leveling(self, ctx: commands.Context):
+        """View current leveling system settings"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        is_enabled = await self.guild_model.is_leveling_enabled(ctx.guild.id)
+        alert_cfg = await self.guild_model.get_level_alert_config(ctx.guild.id)
+
+        title = await i18n.t(ctx, 'commands.leveling.info_title')
+        embed = discord.Embed(title=title, color=discord.Color.blue())
+
+        status_label = await i18n.t(ctx, 'commands.leveling.status_label')
+        status_val = await i18n.t(ctx, 'commands.leveling.status_enabled') if is_enabled else await i18n.t(ctx, 'commands.leveling.status_disabled')
+        embed.add_field(name=status_label, value=status_val, inline=False)
+
+        alerts_label = await i18n.t(ctx, 'commands.leveling.alerts_label')
+        alerts_val = await i18n.t(ctx, 'commands.levelchannel.status_enabled') if alert_cfg.get('enabled') else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
+        embed.add_field(name=alerts_label, value=alerts_val, inline=False)
+
+        usage_label = await i18n.t(ctx, 'commands.leveling.usage_label')
+        usage_text = await i18n.t(ctx, 'commands.leveling.usage_text', prefix=ctx.prefix)
+        embed.add_field(name=usage_label, value=usage_text, inline=False)
+
+        await ctx.send(embed=embed)
+
+    @leveling.command(name='enable')
+    @commands.has_permissions(manage_guild=True)
+    async def leveling_enable(self, ctx: commands.Context):
+        """Enable leveling and XP tracking for this server"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        await self.guild_model.set_leveling_enabled(ctx.guild.id, True)
+        title = await i18n.t(ctx, 'commands.leveling.enable_success_title')
+        desc = await i18n.t(ctx, 'commands.leveling.enable_success_desc')
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.green())
+        await ctx.send(embed=embed)
+
+    @leveling.command(name='disable')
+    @commands.has_permissions(manage_guild=True)
+    async def leveling_disable(self, ctx: commands.Context):
+        """Disable leveling and XP tracking for this server"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        await self.guild_model.set_leveling_enabled(ctx.guild.id, False)
+        title = await i18n.t(ctx, 'commands.leveling.disable_success_title')
+        desc = await i18n.t(ctx, 'commands.leveling.disable_success_desc')
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.orange())
+        await ctx.send(embed=embed)
+
+    @leveling.command(name='toggle')
+    @commands.has_permissions(manage_guild=True)
+    async def leveling_toggle(self, ctx: commands.Context):
+        """Toggle leveling system on/off for this server"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        current = await self.guild_model.is_leveling_enabled(ctx.guild.id)
+        new_state = not current
+        await self.guild_model.set_leveling_enabled(ctx.guild.id, new_state)
+        if new_state:
+            title = await i18n.t(ctx, 'commands.leveling.enable_success_title')
+            desc = await i18n.t(ctx, 'commands.leveling.enable_success_desc')
+            color = discord.Color.green()
+        else:
+            title = await i18n.t(ctx, 'commands.leveling.disable_success_title')
+            desc = await i18n.t(ctx, 'commands.leveling.disable_success_desc')
+            color = discord.Color.orange()
+        embed = discord.Embed(title=title, description=desc, color=color)
+        await ctx.send(embed=embed)
+
+    @commands.hybrid_group(name='levelchannel', aliases=['levelalert', 'levelingchannel'], fallback='info')
+    @commands.has_permissions(manage_guild=True)
+    async def levelchannel(self, ctx: commands.Context):
+        """View current leveling alert settings"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        config = await self.guild_model.get_level_alert_config(ctx.guild.id)
+        is_enabled = config.get('enabled', False)
+        channel_id = config.get('channel_id')
+
+        title = await i18n.t(ctx, 'commands.levelchannel.info_title')
+        embed = discord.Embed(title=title, color=discord.Color.blue())
+
+        status_label = await i18n.t(ctx, 'commands.levelchannel.status_label')
+        status_val = await i18n.t(ctx, 'commands.levelchannel.status_enabled') if is_enabled else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
+        embed.add_field(name=status_label, value=status_val, inline=False)
+
+        current_label = await i18n.t(ctx, 'commands.levelchannel.current_channel')
+        if channel_id:
+            channel = ctx.guild.get_channel(channel_id)
+            if channel:
+                embed.add_field(name=current_label, value=channel.mention, inline=False)
+            else:
+                not_found_text = await i18n.t(ctx, 'commands.levelchannel.channel_not_found')
+                embed.add_field(name=current_label, value=not_found_text, inline=False)
+        else:
+            not_set_text = await i18n.t(ctx, 'commands.levelchannel.not_set')
+            embed.add_field(name=current_label, value=not_set_text, inline=False)
+
+        usage_label = await i18n.t(ctx, 'commands.levelchannel.usage_label')
+        usage_text = await i18n.t(ctx, 'commands.levelchannel.usage_text', prefix=ctx.prefix)
+        embed.add_field(name=usage_label, value=usage_text, inline=False)
+
+        await ctx.send(embed=embed)
+
+    @levelchannel.command(name='enable')
+    @commands.has_permissions(manage_guild=True)
+    async def levelchannel_enable(self, ctx: commands.Context):
+        """Enable level-up alert announcements"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        await self.guild_model.set_level_alert_config(ctx.guild.id, {'enabled': True})
+        title = await i18n.t(ctx, 'commands.levelchannel.enable_success_title')
+        desc = await i18n.t(ctx, 'commands.levelchannel.enable_success_desc')
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.green())
+        await ctx.send(embed=embed)
+
+    @levelchannel.command(name='disable')
+    @commands.has_permissions(manage_guild=True)
+    async def levelchannel_disable(self, ctx: commands.Context):
+        """Disable level-up alert announcements"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        await self.guild_model.set_level_alert_config(ctx.guild.id, {'enabled': False})
+        title = await i18n.t(ctx, 'commands.levelchannel.disable_success_title')
+        desc = await i18n.t(ctx, 'commands.levelchannel.disable_success_desc')
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.orange())
+        await ctx.send(embed=embed)
+
+    @levelchannel.command(name='toggle')
+    @commands.has_permissions(manage_guild=True)
+    async def levelchannel_toggle(self, ctx: commands.Context):
+        """Toggle level-up alert announcements on/off"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        config = await self.guild_model.get_level_alert_config(ctx.guild.id)
+        new_state = not config.get('enabled', False)
+        await self.guild_model.set_level_alert_config(ctx.guild.id, {'enabled': new_state})
+        if new_state:
+            title = await i18n.t(ctx, 'commands.levelchannel.enable_success_title')
+            desc = await i18n.t(ctx, 'commands.levelchannel.enable_success_desc')
+            color = discord.Color.green()
+        else:
+            title = await i18n.t(ctx, 'commands.levelchannel.disable_success_title')
+            desc = await i18n.t(ctx, 'commands.levelchannel.disable_success_desc')
+            color = discord.Color.orange()
+        embed = discord.Embed(title=title, description=desc, color=color)
+        await ctx.send(embed=embed)
+
+    @levelchannel.command(name='set')
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.describe(channel="The text channel to send leveling alerts in")
+    async def levelchannel_set(self, ctx: commands.Context, channel: discord.TextChannel):
+        """Bind leveling alerts to a specific text channel and enable them"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        await self.guild_model.set_level_alert_config(ctx.guild.id, {'channel_id': channel.id, 'enabled': True})
+
+        title = await i18n.t(ctx, 'commands.levelchannel.set_success_title')
+        desc = await i18n.t(ctx, 'commands.levelchannel.set_success_desc', channel=channel.mention)
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.green())
+
+        perms = channel.permissions_for(ctx.guild.me)
+        if not perms.send_messages or not perms.embed_links:
+            warning = await i18n.t(ctx, 'commands.levelchannel.bot_no_permission', channel=channel.mention)
+            embed.set_footer(text=warning)
+
+        await ctx.send(embed=embed)
+
+    @levelchannel.command(name='remove', aliases=['reset', 'delete', 'unset'])
+    @commands.has_permissions(manage_guild=True)
+    async def levelchannel_remove(self, ctx: commands.Context):
+        """Remove the bound leveling alert channel"""
+        if not ctx.guild:
+            await ctx.send(await i18n.t(ctx, 'general.server_only'))
+            return
+
+        current = await self.guild_model.get_level_channel(ctx.guild.id)
+        if not current:
+            not_set_msg = await i18n.t(ctx, 'commands.levelchannel.remove_not_set')
+            await ctx.send(not_set_msg)
+            return
+
+        await self.guild_model.remove_level_channel(ctx.guild.id)
+
+        title = await i18n.t(ctx, 'commands.levelchannel.remove_success_title')
+        desc = await i18n.t(ctx, 'commands.levelchannel.remove_success_desc')
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.green())
+        await ctx.send(embed=embed)
+
+    @levelchannel.error
+    async def levelchannel_error(self, ctx: commands.Context, error):
+        if isinstance(error, commands.MissingPermissions):
+            msg = await i18n.t(ctx, 'commands.levelchannel.no_permission')
+            await ctx.send(msg)
+        else:
+            logger.error(f"Levelchannel command error: {error}")
+            await ctx.send(f"❌ An error occurred: {error}")
 
 
 async def setup(bot):

@@ -393,6 +393,147 @@ class GuildModel(BaseModel):
         )
         return result.modified_count > 0
 
+    async def get_level_channel(self, guild_id: int) -> Optional[int]:
+        """Get the bound leveling alert text channel ID for a guild."""
+        guild = await self.get_guild(int(guild_id))
+        if guild:
+            chan_id = guild.get('level_channel_id')
+            if chan_id is None and 'settings' in guild:
+                chan_id = guild['settings'].get('level_channel_id')
+            if chan_id is not None:
+                try:
+                    return int(chan_id)
+                except (ValueError, TypeError):
+                    pass
+        return None
+
+    async def set_level_channel(self, guild_id: int, channel_id: int) -> bool:
+        """Set the bound leveling alert text channel ID for a guild."""
+        cid = int(channel_id)
+        return await self._upsert(
+            {'guild_id': int(guild_id)},
+            {'level_channel_id': cid, 'settings.level_channel_id': cid}
+        )
+
+    async def remove_level_channel(self, guild_id: int) -> bool:
+        """Remove the bound leveling alert text channel ID for a guild."""
+        result = await self.collection.update_one(
+            {'guild_id': int(guild_id)},
+            {
+                '$unset': {
+                    'level_channel_id': '',
+                    'settings.level_channel_id': '',
+                    'level_alert_config.channel_id': '',
+                    'settings.level_alert_config.channel_id': ''
+                }
+            }
+        )
+        return result.modified_count > 0
+
+    async def is_leveling_enabled(self, guild_id: int) -> bool:
+        """Check if the leveling system is enabled for a guild (default: False)."""
+        guild = await self.get_guild(int(guild_id))
+        if not guild:
+            return False
+        enabled = guild.get('leveling_enabled')
+        if enabled is None and 'settings' in guild:
+            enabled = guild['settings'].get('leveling_enabled')
+        return bool(enabled) if enabled is not None else False
+
+    async def set_leveling_enabled(self, guild_id: int, enabled: bool) -> bool:
+        """Enable or disable the leveling system for a guild."""
+        is_on = bool(enabled)
+        return await self._upsert(
+            {'guild_id': int(guild_id)},
+            {'leveling_enabled': is_on, 'settings.leveling_enabled': is_on}
+        )
+
+    async def get_level_alert_config(self, guild_id: int) -> Dict[str, Any]:
+        """Get the customizable level-up alert configuration for a guild."""
+        defaults: Dict[str, Any] = {
+            'leveling_enabled': False,
+            'enabled': False,
+            'channel_id': None,
+            'title': '',
+            'description': '',
+            'color': '#f1c40f',
+            'image_url': '',
+            'thumbnail_url': '{avatar}',
+            'footer_text': '{server}',
+            'footer_url': '{server_icon}',
+            'show_xp_field': True,
+        }
+        guild = await self.get_guild(int(guild_id))
+        if not guild:
+            return defaults
+
+        raw_cfg = guild.get('level_alert_config')
+        if raw_cfg is None and 'settings' in guild:
+            raw_cfg = guild['settings'].get('level_alert_config')
+
+        cfg = dict(defaults)
+        if isinstance(raw_cfg, dict):
+            cfg.update(raw_cfg)
+
+        cfg['leveling_enabled'] = await self.is_leveling_enabled(guild_id)
+
+        if cfg.get('channel_id') is None:
+            top_chan = guild.get('level_channel_id')
+            if top_chan is None and 'settings' in guild:
+                top_chan = guild['settings'].get('level_channel_id')
+            if top_chan is not None:
+                try:
+                    cfg['channel_id'] = int(top_chan)
+                except (ValueError, TypeError):
+                    pass
+
+        return cfg
+
+    async def set_level_alert_config(self, guild_id: int, config: Dict[str, Any]) -> bool:
+        """Set the customizable level-up alert configuration for a guild."""
+        gid = int(guild_id)
+        current = await self.get_level_alert_config(gid)
+        current.update(config)
+
+        if 'leveling_enabled' in config:
+            await self.set_leveling_enabled(gid, bool(config['leveling_enabled']))
+            current['leveling_enabled'] = bool(config['leveling_enabled'])
+
+        chan_id = current.get('channel_id')
+        if chan_id is not None and chan_id != "" and str(chan_id).lower() not in ("null", "none"):
+            try:
+                chan_id = int(chan_id)
+            except (ValueError, TypeError):
+                chan_id = None
+        else:
+            chan_id = None
+        current['channel_id'] = chan_id
+
+        current['enabled'] = bool(current.get('enabled', False))
+        current['show_xp_field'] = bool(current.get('show_xp_field', True))
+
+        for str_key in ('title', 'description', 'color', 'image_url', 'thumbnail_url', 'footer_text', 'footer_url'):
+            current[str_key] = str(current.get(str_key) or '').strip()
+
+        if not current['color']:
+            current['color'] = '#f1c40f'
+
+        updates: Dict[str, Any] = {
+            'level_alert_config': current,
+            'settings.level_alert_config': current,
+        }
+        if chan_id is not None:
+            updates['level_channel_id'] = chan_id
+            updates['settings.level_channel_id'] = chan_id
+
+        res = await self._upsert({'guild_id': gid}, updates)
+        if chan_id is None:
+            await self.collection.update_one(
+                {'guild_id': gid},
+                {'$unset': {'level_channel_id': '', 'settings.level_channel_id': ''}}
+            )
+        return res
+
     async def get_music_message(self, guild_id: int) -> Optional[int]:
         """Get the active now-playing / control message ID for a guild."""
         guild = await self.get_guild(int(guild_id))
@@ -678,7 +819,7 @@ class CustomCommandModel(BaseModel):
             'updated_at': now,
         }
 
-        result = await self.collection.update_one(
+        await self.collection.update_one(
             {'guild_id': guild_id, 'name': name_clean},
             {
                 '$set': doc_data,

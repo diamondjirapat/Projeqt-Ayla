@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from typing import Optional, cast
 from html import escape
 import mimetypes
@@ -16,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from config import Config
-from database.models import UserModel, GuildModel, LevelingModel
+from database.models import UserModel, GuildModel, LevelingModel, CustomCommandModel
 from utils.queue import CustomPlayer, LoopMode
 from utils.lastfm import lastfm_handler
 from utils.artwork import artwork_resolver, DEFAULT_ARTWORK
@@ -69,6 +70,7 @@ signer: Optional[TimestampSigner] = None
 user_model = UserModel()
 guild_model = GuildModel()
 leveling_model = LevelingModel()
+custom_command_model = CustomCommandModel()
 
 
 def get_track_artwork(track):
@@ -1125,7 +1127,7 @@ async def player_control(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/player/search")
-async def player_search(request: Request, q: str = Query(..., min_length=1), mode: str = "track"):
+async def player_search(request: Request, q: str = Query(..., min_length=1), mode: str = "youtube"):
     user = get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -1148,10 +1150,16 @@ async def player_search(request: Request, q: str = Query(..., min_length=1), mod
         except Exception:
             node = None
 
-        if q.lower().startswith(explicit_search_prefixes):
+        url_pattern = re.compile(r'https?://(?:www\.)?.+')
+        is_url = bool(url_pattern.match(q))
+
+        if is_url or q.lower().startswith(explicit_search_prefixes):
             tracks = await wavelink.Pool.fetch_tracks(q, node=node)
+        elif mode in ("youtubemusic", "ytm"):
+            tracks = await wavelink.Pool.fetch_tracks(f"ytmsearch:{q}", node=node)
         else:
-            tracks = await wavelink.Playable.search(q, node=node)
+            # Default to regular YouTube search
+            tracks = await wavelink.Pool.fetch_tracks(f"ytsearch:{q}", node=node)
 
         results = []
         if isinstance(tracks, wavelink.Playlist):
@@ -1379,6 +1387,7 @@ async def get_guild_settings(request: Request, guild_id: int):
     
     default_vol = await guild_model.get_default_volume(guild_id)
     music_chan = await guild_model.get_music_channel(guild_id)
+    level_chan = await guild_model.get_level_channel(guild_id)
     
     from utils.prefix_manager import prefix_manager
     prefix = await prefix_manager.get_guild_prefix(guild_id) or prefix_manager.default_prefix
@@ -1505,6 +1514,14 @@ async def get_guild_settings(request: Request, guild_id: int):
                 stored_embed.setdefault(key, value)
             reaction_role_titles[msg_id] = stored_embed.get("title") or "Reaction Roles"
         
+    leveling_on = await guild_model.is_leveling_enabled(guild_id)
+    level_alert_cfg = await guild_model.get_level_alert_config(guild_id)
+    if level_alert_cfg.get("channel_id"):
+        level_alert_cfg["channel_id"] = str(level_alert_cfg["channel_id"])
+    else:
+        level_alert_cfg["channel_id"] = str(level_chan) if level_chan else None
+    level_alert_cfg["leveling_enabled"] = leveling_on
+
     return {
         "guild_id": str(guild_id),
         "guild_name": guild.name,
@@ -1512,6 +1529,9 @@ async def get_guild_settings(request: Request, guild_id: int):
         "prefix": prefix,
         "default_volume": default_vol,
         "music_channel_id": str(music_chan) if music_chan else None,
+        "level_channel_id": str(level_chan) if level_chan else None,
+        "leveling_enabled": leveling_on,
+        "level_alert_config": level_alert_cfg,
         "locale": locale,
         "auto_role_id": str(auto_role_id) if auto_role_id else None,
         "text_channels": channels,
@@ -1574,8 +1594,36 @@ async def save_guild_settings(request: Request):
             await guild_model.set_music_channel(guild_id, channel_id)
         else:
             await guild_model.remove_music_channel(guild_id)
+
+    # 4. Leveling Master & Alert Config / Level Channel
+    if "leveling_enabled" in data:
+        await guild_model.set_leveling_enabled(guild_id, bool(data["leveling_enabled"]))
+
+    if "level_alert_config" in data:
+        cfg = data.get("level_alert_config")
+        if isinstance(cfg, dict):
+            raw_c = cfg.get("channel_id")
+            if raw_c is not None and str(raw_c).lower() not in ("null", "none", ""):
+                c_id = _parse_integer(raw_c, "level_alert_config.channel_id", minimum=1)
+                ch = guild.get_channel(c_id)
+                if ch is None or not isinstance(ch, discord.TextChannel):
+                    raise HTTPException(status_code=400, detail="level_alert_config.channel_id must identify a text channel in this server.")
+                cfg["channel_id"] = c_id
+            else:
+                cfg["channel_id"] = None
+            await guild_model.set_level_alert_config(guild_id, cfg)
+    elif "level_channel_id" in data:
+        level_chan_id = data.get("level_channel_id")
+        if level_chan_id is not None and level_chan_id != "" and str(level_chan_id).lower() not in ("null", "none"):
+            channel_id = _parse_integer(level_chan_id, "level_channel_id", minimum=1)
+            channel = guild.get_channel(channel_id)
+            if channel is None or not isinstance(channel, discord.TextChannel):
+                raise HTTPException(status_code=400, detail="level_channel_id must identify a text channel in this server.")
+            await guild_model.set_level_channel(guild_id, channel_id)
+        else:
+            await guild_model.remove_level_channel(guild_id)
         
-    # 4. Locale
+    # 5. Locale
     if "locale" in data:
         locale = data.get("locale")
         if locale:
@@ -1818,6 +1866,260 @@ async def get_server_leaderboard_endpoint(request: Request, guild_id: int, page:
         data["guild_name"] = guild.name
         data["guild_icon"] = str(guild.icon.url) if guild.icon else ""
     return data
+
+
+# --- Custom Commands Endpoints ---
+def serialize_custom_command(cmd: Optional[dict]) -> dict:
+    if not cmd:
+        return {}
+    res = dict(cmd)
+    if "_id" in res:
+        res["_id"] = str(res["_id"])
+    if hasattr(res.get("created_at"), "isoformat"):
+        res["created_at"] = res["created_at"].isoformat()
+    if hasattr(res.get("updated_at"), "isoformat"):
+        res["updated_at"] = res["updated_at"].isoformat()
+    return res
+
+
+@app.get("/api/guild/custom-commands")
+async def get_custom_commands(request: Request, guild_id: int):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    can_edit = await check_user_guild_permission(user_id, guild_id)
+    if not can_edit:
+        raise HTTPException(status_code=403, detail="You do not have permission to view custom commands for this server.")
+
+    commands_list = await custom_command_model.get_guild_commands(guild_id)
+    return {"commands": [serialize_custom_command(cmd) for cmd in commands_list]}
+
+
+@app.post("/api/guild/custom-commands/preview")
+async def preview_custom_command(request: Request):
+    user = get_user_from_request(request)
+    data = await request.json()
+
+    author_name = user.get("username", "User") if user else "User"
+    user_id_str = str(user.get("id", "123456789")) if user else "123456789"
+    args_text = str(data.get("args_text", "sample argument"))
+
+    def parse_preview_str(template: str) -> str:
+        if not template:
+            return ""
+        args_list = args_text.split() if args_text else []
+        from datetime import datetime, UTC
+        placeholders = {
+            "{user}": author_name,
+            "{author}": author_name,
+            "{username}": author_name,
+            "{author_mention}": f"@{author_name}",
+            "{user_mention}": f"@{author_name}",
+            "{mention}": f"@{author_name}",
+            "{author_id}": user_id_str,
+            "{user_id}": user_id_str,
+            "{server}": "Ayla Community",
+            "{guild}": "Ayla Community",
+            "{server_id}": "100000000000000000",
+            "{guild_id}": "100000000000000000",
+            "{channel}": "general",
+            "{channel_mention}": "#general",
+            "{channel_id}": "200000000000000000",
+            "{member_count}": "150",
+            "{date}": datetime.now(UTC).strftime('%Y-%m-%d'),
+            "{time}": datetime.now(UTC).strftime('%H:%M:%S UTC'),
+            "{args}": args_text,
+        }
+        for i in range(1, 10):
+            placeholders[f"{{arg{i}}}"] = args_list[i - 1] if i - 1 < len(args_list) else ""
+        res = template
+        for k, v in placeholders.items():
+            res = res.replace(k, v)
+        return res
+
+    raw_response = data.get("response", "")
+    parsed_text = parse_preview_str(raw_response) if raw_response else ""
+
+    is_embed = bool(data.get("is_embed", False))
+    raw_embed = data.get("embed_config") or {}
+
+    parsed_embed = None
+    if is_embed:
+        parsed_embed = {
+            "title": parse_preview_str(raw_embed.get("title", "")),
+            "description": parse_preview_str(raw_embed.get("description", "")),
+            "color": raw_embed.get("color", "#5865F2"),
+            "image_url": parse_preview_str(raw_embed.get("image_url", "")),
+            "thumbnail_url": parse_preview_str(raw_embed.get("thumbnail_url", "")),
+            "footer_text": parse_preview_str(raw_embed.get("footer_text", "")),
+            "footer_icon": parse_preview_str(raw_embed.get("footer_icon", ""))
+        }
+
+    return {
+        "parsed_text": parsed_text,
+        "parsed_embed": parsed_embed
+    }
+
+
+@app.post("/api/guild/custom-commands")
+async def create_custom_command_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    raw_guild_id = data.get("guild_id")
+    if raw_guild_id is None:
+        raise HTTPException(status_code=400, detail="Missing guild_id.")
+    try:
+        guild_id = int(raw_guild_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid guild_id.")
+
+    can_edit = await check_user_guild_permission(user_id, guild_id)
+    if not can_edit:
+        raise HTTPException(status_code=403, detail="You do not have permission to create custom commands for this server.")
+
+    name = str(data.get("name", "")).strip().lower()
+    if not name or not re.match(r'^[a-z0-9_-]+$', name):
+        raise HTTPException(status_code=400, detail="Invalid command trigger name. Only alphanumeric characters, dashes, and underscores are allowed.")
+
+    if bot_instance and bot_instance.get_command(name):
+        raise HTTPException(status_code=400, detail=f"Command '{name}' conflicts with a built-in bot command.")
+
+    existing = await custom_command_model.get_command(guild_id, name)
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Custom command '{name}' already exists.")
+
+    max_commands = await guild_model.get_max_custom_commands(guild_id)
+    guild_cmds = await custom_command_model.get_guild_commands(guild_id)
+    if len(guild_cmds) >= max_commands:
+        raise HTTPException(status_code=400, detail=f"Maximum custom commands limit ({max_commands}) reached for this server.")
+
+    created = await custom_command_model.create_command(
+        guild_id=guild_id,
+        name=name,
+        response=str(data.get("response", "")),
+        description=str(data.get("description", "")),
+        is_embed=bool(data.get("is_embed", False)),
+        embed_config=data.get("embed_config") or {},
+        created_by=int(user_id),
+        created_by_name=user.get("username", "Unknown"),
+        enabled=bool(data.get("enabled", True))
+    )
+    if not created:
+        raise HTTPException(status_code=500, detail="Failed to create custom command.")
+
+    return {"success": True, "command": serialize_custom_command(created)}
+
+
+@app.post("/api/guild/custom-commands/update")
+async def update_custom_command_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    raw_guild_id = data.get("guild_id")
+    if raw_guild_id is None:
+        raise HTTPException(status_code=400, detail="Missing guild_id.")
+    try:
+        guild_id = int(raw_guild_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid guild_id.")
+
+    can_edit = await check_user_guild_permission(user_id, guild_id)
+    if not can_edit:
+        raise HTTPException(status_code=403, detail="You do not have permission to update custom commands for this server.")
+
+    name = str(data.get("name", "")).strip().lower()
+    if not name:
+        raise HTTPException(status_code=400, detail="Command name is required.")
+
+    existing = await custom_command_model.get_command(guild_id, name)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Custom command '{name}' not found.")
+
+    update_data = {
+        "response": str(data.get("response", "")),
+        "description": str(data.get("description", "")),
+        "is_embed": bool(data.get("is_embed", False)),
+        "embed_config": data.get("embed_config") or {},
+        "enabled": bool(data.get("enabled", True))
+    }
+
+    await custom_command_model.update_command(guild_id, name, update_data)
+    updated = await custom_command_model.get_command(guild_id, name)
+    return {"success": True, "command": serialize_custom_command(updated)}
+
+
+@app.post("/api/guild/custom-commands/delete")
+async def delete_custom_command_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    raw_guild_id = data.get("guild_id")
+    if raw_guild_id is None:
+        raise HTTPException(status_code=400, detail="Missing guild_id.")
+    try:
+        guild_id = int(raw_guild_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid guild_id.")
+
+    can_edit = await check_user_guild_permission(user_id, guild_id)
+    if not can_edit:
+        raise HTTPException(status_code=403, detail="You do not have permission to delete custom commands for this server.")
+
+    name = str(data.get("name", "")).strip().lower()
+    if not name:
+        raise HTTPException(status_code=400, detail="Command name is required.")
+
+    existing = await custom_command_model.get_command(guild_id, name)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Custom command '{name}' not found.")
+
+    success = await custom_command_model.delete_command(guild_id, name)
+    return {"success": success}
+
+
+@app.post("/api/guild/custom-commands/toggle")
+async def toggle_custom_command_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    raw_guild_id = data.get("guild_id")
+    if raw_guild_id is None:
+        raise HTTPException(status_code=400, detail="Missing guild_id.")
+    try:
+        guild_id = int(raw_guild_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid guild_id.")
+
+    can_edit = await check_user_guild_permission(user_id, guild_id)
+    if not can_edit:
+        raise HTTPException(status_code=403, detail="You do not have permission to toggle custom commands for this server.")
+
+    name = str(data.get("name", "")).strip().lower()
+    if not name:
+        raise HTTPException(status_code=400, detail="Command name is required.")
+
+    existing = await custom_command_model.get_command(guild_id, name)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Custom command '{name}' not found.")
+
+    new_status = bool(data.get("enabled", not existing.get("enabled", True)))
+    success = await custom_command_model.update_command(guild_id, name, {"enabled": new_status})
+    return {"success": success, "enabled": new_status}
 
 
 # Serves Frontend SPA
