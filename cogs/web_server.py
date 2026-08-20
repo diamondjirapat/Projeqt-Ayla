@@ -782,6 +782,12 @@ async def player_state(request: Request, guild_id: Optional[int] = None):
                     "channel_name": voice_state.channel.name
                 }
                 break
+        default_vol = 25
+        if user_voice_channel:
+            default_vol = await guild_model.get_default_volume(int(user_voice_channel["guild_id"]))
+        elif guild_id:
+            default_vol = await guild_model.get_default_volume(guild_id)
+
         return {
             "connected": False,
             "guild_id": None,
@@ -791,7 +797,7 @@ async def player_state(request: Request, guild_id: Optional[int] = None):
             "bitrate": None,
             "is_playing": False,
             "is_paused": False,
-            "volume": 50,
+            "volume": default_vol,
             "position": 0,
             "loop_mode": "OFF",
             "autoplay": False,
@@ -957,7 +963,8 @@ async def player_control(request: Request):
                 active_player.queue.put(track)
                 
             if not active_player.is_playing:
-                await active_player.set_volume(50)
+                vol = await guild_model.get_default_volume(active_player.guild.id)
+                await active_player.set_volume(vol)
                 await active_player.play(active_player.queue.get())
                 
         elif action == "pause":
