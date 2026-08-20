@@ -126,6 +126,41 @@
       "fail_description": "Failed to pull latest changes from GitHub.\n\n```\n{error}\n```",
       "no_url_title": "❌ No GitHub URL",
       "no_url_description": "No GitHub URL configured. Set `GITHUB_URL` in your `.env` file."
+    },
+    "leveling": {
+      "info_title": "⭐ Leveling System Settings",
+      "status_label": "Leveling Status",
+      "status_enabled": "✅ Enabled (XP tracking & ranks active)",
+      "status_disabled": "❌ Disabled (Default - no XP earned)",
+      "alerts_label": "Level-Up Alerts",
+      "usage_label": "Usage",
+      "usage_text": "`{prefix}leveling enable` - Enable leveling & XP tracking\n`{prefix}leveling disable` - Disable leveling system\n`{prefix}leveling toggle` - Toggle leveling on/off\n`{prefix}levelchannel` - Configure level-up alerts",
+      "enable_success_title": "✅ Leveling System Enabled",
+      "enable_success_desc": "Members can now earn XP by chatting in this server!",
+      "disable_success_title": "⏹️ Leveling System Disabled",
+      "disable_success_desc": "XP tracking and leveling progression are now disabled for this server."
+    },
+    "levelchannel": {
+      "info_title": "📢 Level-Up Alert Settings",
+      "status_label": "Alert Status",
+      "status_enabled": "✅ Enabled",
+      "status_disabled": "❌ Disabled (Default)",
+      "current_channel": "Current Alert Channel",
+      "not_set": "No specific channel is bound. When enabled, alerts are sent in active chat.",
+      "channel_not_found": "⚠️ The configured alert channel no longer exists.",
+      "usage_label": "Usage",
+      "usage_text": "`{prefix}levelchannel enable` - Enable level-up alerts\n`{prefix}levelchannel disable` - Disable level-up alerts\n`{prefix}levelchannel toggle` - Toggle alerts on/off\n`{prefix}levelchannel set <channel>` - Bind alerts to a channel\n`{prefix}levelchannel remove` - Unbind alert channel\n`{prefix}levelchannel` - View current settings",
+      "enable_success_title": "✅ Level-Up Alerts Enabled",
+      "enable_success_desc": "Level-up alert announcements are now enabled for this server!",
+      "disable_success_title": "⏹️ Level-Up Alerts Disabled",
+      "disable_success_desc": "Level-up alert announcements are now disabled for this server.",
+      "set_success_title": "✅ Level-Up Channel Set",
+      "set_success_desc": "Level-up alert notifications will now be sent in {channel}!",
+      "remove_success_title": "✅ Level-Up Channel Removed",
+      "remove_success_desc": "Level-up alerts will now be sent in the active chat channel where the user levels up.",
+      "remove_not_set": "❌ No leveling alert channel is currently configured.",
+      "no_permission": "❌ You need 'Manage Server' permissions to use this command.",
+      "bot_no_permission": "⚠️ Warning: I might not have permission to send messages or embed links in {channel}."
     }
   },
   "errors": {
@@ -147,7 +182,7 @@
     "server_only": "❌ This command can only be used in a server."
   },
   "languages": {
-    "info_title": "\uD83C\uDF10 Language Settings",
+    "info_title": "🌐 Language Settings",
     "info_description": "Language priority system explained",
     "priority_text": "**Priority Order:**\n1. Your personal language (highest)\n2. Server language\n3. Default language (English)\n\n**Static embeds** (music player, etc.) always use server language.",
     "en": "English",
@@ -709,7 +744,8 @@
     "lastfm_unlink": "Unlink your Last.fm account",
     "reaction_role_update": "Update a reaction role message to show configured roles",
     "custom_info": "View detailed information about a custom command.",
-    "server_playlist_info": "View info about a server playlist"
+    "server_playlist_info": "View info about a server playlist",
+    "levelchannel_channel": "The text channel to send leveling alerts in"
   },
   "custom_commands": {
     "menu_title": "✨ Custom Commands",
@@ -829,5 +865,15 @@
     "serverprefix set": "Set server default prefix",
     "serverprefix remove": "Remove server default prefix",
     "serverprefix reset": "Reset server default prefix"
-  }
+  },
+  "leveling": "View current leveling system settings",
+  "leveling enable": "Enable leveling and XP tracking for this server",
+  "leveling disable": "Disable leveling and XP tracking for this server",
+  "leveling toggle": "Toggle leveling system on/off for this server",
+  "levelchannel": "View current leveling alert settings",
+  "levelchannel enable": "Enable level-up alert announcements",
+  "levelchannel disable": "Disable level-up alert announcements",
+  "levelchannel toggle": "Toggle level-up alert announcements on/off",
+  "levelchannel set": "Bind leveling alerts to a specific text channel and enable them",
+  "levelchannel remove": "Remove the bound leveling alert channel"
 }

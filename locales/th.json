@@ -126,6 +126,41 @@
       "fail_description": "ดึงข้อมูลจาก GitHub ไม่ได้เลย ลองดูสิว่าติดอะไร\n\n```\n{error}\n```",
       "no_url_title": "❌ หา URL ของ GitHub ไม่เจอ",
       "no_url_description": "ยังไม่ได้ตั้งค่าลิงก์ GitHub โปรดเพิ่ม `GITHUB_URL` ในไฟล์ `.env`"
+    },
+    "leveling": {
+      "info_title": "⭐ การตั้งค่าระบบเลเวล",
+      "status_label": "สถานะระบบเลเวล",
+      "status_enabled": "✅ เปิดใช้งาน (ระบบสะสม XP และยศทำงาน)",
+      "status_disabled": "❌ ปิดใช้งาน (ค่าเริ่มต้น - ไม่มีการสะสม XP)",
+      "alerts_label": "การแจ้งเตือนเลเวลอัป",
+      "usage_label": "วิธีใช้งาน",
+      "usage_text": "`{prefix}leveling enable` - เปิดระบบเลเวลและสะสม XP\n`{prefix}leveling disable` - ปิดระบบเลเวล\n`{prefix}leveling toggle` - สลับเปิด/ปิดระบบเลเวล\n`{prefix}levelchannel` - ตั้งค่าการแจ้งเตือนเลเวล",
+      "enable_success_title": "✅ เปิดระบบเลเวลเรียบร้อย",
+      "enable_success_desc": "สมาชิกสามารถสะสม XP จากการพูดคุยในเซิร์ฟเวอร์นี้ได้แล้ว!",
+      "disable_success_title": "⏹️ ปิดระบบเลเวลเรียบร้อย",
+      "disable_success_desc": "ปิดการสะสม XP และระบบเลเวลสำหรับเซิร์ฟเวอร์นี้แล้ว"
+    },
+    "levelchannel": {
+      "info_title": "📢 การตั้งค่าการแจ้งเตือนเลเวล",
+      "status_label": "สถานะการแจ้งเตือน",
+      "status_enabled": "✅ เปิดใช้งาน",
+      "status_disabled": "❌ ปิดใช้งาน (ค่าเริ่มต้น)",
+      "current_channel": "ห้องแจ้งเตือนปัจจุบัน",
+      "not_set": "ยังไม่ได้ผูกห้องเฉพาะ หากเปิดใช้งาน การแจ้งเตือนจะส่งในห้องที่พิมพ์",
+      "channel_not_found": "⚠️ ไม่พบห้องที่ตั้งค่าไว้ (อาจถูกลบไปแล้ว)",
+      "usage_label": "วิธีใช้งาน",
+      "usage_text": "`{prefix}levelchannel enable` - เปิดการแจ้งเตือนเลเวล\n`{prefix}levelchannel disable` - ปิดการแจ้งเตือนเลเวล\n`{prefix}levelchannel toggle` - สลับเปิด/ปิดการแจ้งเตือน\n`{prefix}levelchannel set <ห้อง>` - ตั้งค่าห้องแจ้งเตือนเลเวล\n`{prefix}levelchannel remove` - ยกเลิกห้องแจ้งเตือนเลเวล\n`{prefix}levelchannel` - ดูการตั้งค่าปัจจุบัน",
+      "enable_success_title": "✅ เปิดการแจ้งเตือนเลเวลเรียบร้อย",
+      "enable_success_desc": "เปิดการแจ้งเตือนเลเวลอัปสำหรับเซิร์ฟเวอร์นี้แล้ว!",
+      "disable_success_title": "⏹️ ปิดการแจ้งเตือนเลเวลเรียบร้อย",
+      "disable_success_desc": "ปิดการแจ้งเตือนเลเวลอัปสำหรับเซิร์ฟเวอร์นี้แล้ว",
+      "set_success_title": "✅ ตั้งค่าห้องแจ้งเตือนเลเวลเรียบร้อย",
+      "set_success_desc": "การแจ้งเตือนเลเวลอัปจะถูกส่งไปที่ห้อง {channel}!",
+      "remove_success_title": "✅ ยกเลิกห้องแจ้งเตือนเลเวลเรียบร้อย",
+      "remove_success_desc": "การแจ้งเตือนเลเวลอัปจะกลับไปส่งในห้องที่ผู้ใช้พิมพ์ตามปกติ",
+      "remove_not_set": "❌ ไม่มีการตั้งค่าห้องแจ้งเตือนเลเวลไว้",
+      "no_permission": "❌ คุณต้องมีสิทธิ์ 'จัดการเซิร์ฟเวอร์ (Manage Server)' เพื่อใช้คำสั่งนี้",
+      "bot_no_permission": "⚠️ คำเตือน: บอทอาจไม่มีสิทธิ์ส่งข้อความหรือแนบ Embed ในห้อง {channel}"
     }
   },
   "errors": {
@@ -709,7 +744,8 @@
     "lastfm_unlink": "ยกเลิกการเชื่อมต่อบัญชี Last.fm ของคุณ",
     "reaction_role_update": "อัปเดตข้อความรับยศให้แสดงยศที่ตั้งค่าไว้",
     "custom_info": "ดูรายละเอียดของคำสั่งกำหนดเอง",
-    "server_playlist_info": "ดูข้อมูลเพลย์ลิสต์ของเซิร์ฟเวอร์"
+    "server_playlist_info": "ดูข้อมูลเพลย์ลิสต์ของเซิร์ฟเวอร์",
+    "levelchannel_channel": "ห้องข้อความที่จะส่งการแจ้งเตือนเลเวล"
   },
   "custom_commands": {
     "menu_title": "✨ คำสั่งกำหนดเอง",
@@ -829,5 +865,15 @@
     "serverprefix set": "ตั้งค่า Prefix เซิร์ฟเวอร์",
     "serverprefix remove": "ยกเลิกการตั้งค่า Prefix เซิร์ฟเวอร์",
     "serverprefix reset": "รีเซ็ต Prefix เซิร์ฟเวอร์"
-  }
+  },
+  "leveling": "ดูการตั้งค่าระบบเลเวล",
+  "leveling enable": "เปิดระบบเลเวลและสะสม XP สำหรับเซิร์ฟเวอร์นี้",
+  "leveling disable": "ปิดระบบเลเวลและสะสม XP สำหรับเซิร์ฟเวอร์นี้",
+  "leveling toggle": "สลับเปิด/ปิดระบบเลเวลสำหรับเซิร์ฟเวอร์นี้",
+  "levelchannel": "ดูการตั้งค่าการแจ้งเตือนเลเวล",
+  "levelchannel enable": "เปิดการแจ้งเตือนเลเวลอัป",
+  "levelchannel disable": "ปิดการแจ้งเตือนเลเวลอัป",
+  "levelchannel toggle": "สลับเปิด/ปิดการแจ้งเตือนเลเวลอัป",
+  "levelchannel set": "ผูกห้องแจ้งเตือนเลเวลไปยังห้องข้อความที่กำหนดและเปิดใช้งาน",
+  "levelchannel remove": "ยกเลิกการผูกห้องแจ้งเตือนเลเวล"
 }
