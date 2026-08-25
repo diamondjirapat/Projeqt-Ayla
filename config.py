@@ -1,9 +1,13 @@
+import logging
 import os
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 def _csv(name: str) -> list[str]:
@@ -61,6 +65,33 @@ class Config:
     DISCORD_REDIRECT_URI = os.getenv('DISCORD_REDIRECT_URI', 'http://localhost:8000/api/auth/callback')
     WEB_PORT = _integer('WEB_PORT', 8000)
     SESSION_SECRET_KEY = os.getenv('SESSION_SECRET_KEY', '')
+
+    @classmethod
+    def resolve_session_secret(cls) -> str:
+        """Return a safe signing key, never an empty/guessable one.
+
+        A missing or too-short SESSION_SECRET_KEY would let anyone forge
+        session cookies (itsdangerous accepts an empty HMAC key). Instead of
+        refusing to boot the whole bot, fall back to a random per-boot key:
+        sessions simply do not survive restarts until a persistent key is
+        configured.
+        """
+        if len(cls.SESSION_SECRET_KEY) >= 32:
+            return cls.SESSION_SECRET_KEY
+        if cls.SESSION_SECRET_KEY:
+            logger.warning(
+                '[CONFIG] SESSION_SECRET_KEY is shorter than 32 characters; '
+                'using a random per-boot key instead. Set a persistent key with: '
+                'python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+        else:
+            logger.warning(
+                '[CONFIG] SESSION_SECRET_KEY is not set; using a random per-boot key. '
+                'Web sessions will be invalidated on every restart. Set one with: '
+                'python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+        return secrets.token_hex(32)
+
     WEB_URL = os.getenv('WEB_URL', 'http://localhost:8000')
     WEB_ALLOWED_ORIGINS = list(dict.fromkeys([
         WEB_URL.rstrip('/'),

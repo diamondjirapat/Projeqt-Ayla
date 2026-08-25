@@ -67,6 +67,7 @@
       "reason": "Reason",
       "moderator": "Moderator",
       "no_permission": "❌ I don't have permission to kick this member.",
+      "hierarchy": "🚫 You can't kick {member} — their highest role is equal to or above yours.",
       "error": "❌ An error occurred: {error}"
     },
     "ban": {
@@ -77,6 +78,7 @@
       "reason": "Reason",
       "moderator": "Moderator",
       "no_permission": "❌ I don't have permission to ban this member.",
+      "hierarchy": "🚫 You can't ban {member} — their highest role is equal to or above yours.",
       "error": "❌ An error occurred: {error}"
     },
     "purge": {
@@ -745,7 +747,40 @@
     "reaction_role_update": "Update a reaction role message to show configured roles",
     "custom_info": "View detailed information about a custom command.",
     "server_playlist_info": "View info about a server playlist",
-    "levelchannel_channel": "The text channel to send leveling alerts in"
+    "levelchannel_channel": "The text channel to send leveling alerts in",
+    "giveaway_duration": "Duration of the giveaway (e.g., 10m, 1h, 1d, 30s)",
+    "giveaway_winners": "Number of winners to pick (default: 1)",
+    "giveaway_prize": "The prize or item being given away",
+    "giveaway_message_id": "Message ID of the giveaway to manage",
+    "giveaway_title": "Optional custom title for the giveaway"
+  },
+  "giveaway": {
+    "title": "🎉 GIVEAWAY 🎉",
+    "prize_label": "Prize",
+    "ends_at": "Ends",
+    "hosted_by": "Hosted by",
+    "winners_label": "Winners",
+    "entries_label": "Entries",
+    "button_enter": "🎉 Enter Giveaway",
+    "button_entered": "🎉 Entered ({count})",
+    "button_leave": "Leave",
+    "entered_success": "✅ You entered the giveaway for **{prize}**! Good luck! 🍀",
+    "left_success": "👋 You left the giveaway for **{prize}**.",
+    "already_ended": "❌ This giveaway has already ended.",
+    "ended_title": "🎉 GIVEAWAY ENDED 🎉",
+    "ended_winners": "🏆 Congratulations {winners}! You won **{prize}**! 🎉",
+    "no_entries": "😭 Giveaway ended, but nobody joined.",
+    "reroll_success": "🎉 New winner(s): {winners}! Congratulations on winning **{prize}**! 🥳",
+    "reroll_no_entries": "❌ Not enough entries to pick new winners.",
+    "not_found": "❌ Giveaway message not found.",
+    "invalid_duration": "❌ Invalid duration format. Use e.g. `10m`, `1h`, `1d`, `30s`.",
+    "end_success": "✅ Successfully ended giveaway `{message_id}`.",
+    "delete_success": "✅ Successfully deleted giveaway `{message_id}`.",
+    "list_title": "🎉 Active Giveaways for {server}",
+    "list_empty": "No active giveaways in this server.",
+    "list_item": "• **{prize}** ({winners} winner(s)) — Ends: <t:{end_timestamp}:R> [Jump to message]({jump_url})",
+    "no_permission": "❌ You need 'Manage Server' permission to manage giveaways.",
+    "error": "❌ An error occurred: {error}"
   },
   "custom_commands": {
     "menu_title": "✨ Custom Commands",
@@ -864,7 +899,13 @@
     "serverprefix": "Manage server default prefix",
     "serverprefix set": "Set server default prefix",
     "serverprefix remove": "Remove server default prefix",
-    "serverprefix reset": "Reset server default prefix"
+    "serverprefix reset": "Reset server default prefix",
+    "giveaway": "Manage server giveaways",
+    "giveaway start": "Start a new giveaway in this channel",
+    "giveaway end": "End a giveaway immediately and pick winners",
+    "giveaway reroll": "Reroll winners for an ended giveaway",
+    "giveaway list": "List all active giveaways in this server",
+    "giveaway delete": "Delete a giveaway and remove its message"
   },
   "leveling": "View current leveling system settings",
   "leveling enable": "Enable leveling and XP tracking for this server",

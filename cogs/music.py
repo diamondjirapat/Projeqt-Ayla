@@ -1520,6 +1520,9 @@ class Music(commands.Cog):
             await self.server_list(ctx)
 
     @serverplaylist.command(name="create")
+    # Hybrid groups force invoke_without_command=True, so group-level checks
+    # never execute for subcommands - mutating ones repeat manage_guild here.
+    @commands.has_permissions(manage_guild=True)
     @app_commands.describe(name="Name for the new server playlist")
     async def server_create(self, ctx, *, name: str):
         """Create a new empty server playlist"""
@@ -1531,6 +1534,7 @@ class Music(commands.Cog):
         await ctx.send(msg, delete_after=10)
 
     @serverplaylist.command(name="add")
+    @commands.has_permissions(manage_guild=True)
     @app_commands.describe(playlist_name="Playlist to add to", url="URL of the song")
     async def server_add(self, ctx, playlist_name: str, url: str = None):
         """Add a song to a server playlist"""
@@ -1562,6 +1566,7 @@ class Music(commands.Cog):
         await ctx.send(msg, delete_after=10)
 
     @serverplaylist.command(name="remove")
+    @commands.has_permissions(manage_guild=True)
     @app_commands.describe(playlist_name="Playlist to remove from", index="Track number to remove")
     async def server_remove(self, ctx, playlist_name: str, index: int):
         """Remove a track from a server playlist"""
@@ -1645,6 +1650,7 @@ class Music(commands.Cog):
         await ctx.send(embed=embed)
 
     @serverplaylist.command(name="setcover", aliases=["cover", "thumbnail"])
+    @commands.has_permissions(manage_guild=True)
     @app_commands.describe(playlist_name="Server playlist to set thumbnail for", url="Image URL for the cover (leave empty to remove)")
     async def server_setcover(self, ctx, playlist_name: str, url: str = None):
         """Set or remove a custom thumbnail for a server playlist"""
@@ -1692,6 +1698,7 @@ class Music(commands.Cog):
         await ctx.send(embed=embed)
 
     @serverplaylist.command(name="delete")
+    @commands.has_permissions(manage_guild=True)
     @app_commands.describe(name="Server playlist to delete")
     async def server_delete(self, ctx, *, name: str):
         """Delete an entire server playlist"""
@@ -1845,6 +1852,7 @@ class Music(commands.Cog):
 
 
     @serverplaylist.command(name="import")
+    @commands.has_permissions(manage_guild=True)
     @app_commands.describe(url="YouTube/Spotify playlist URL", name="Custom name for the playlist (optional, uses source name if not provided)")
     async def server_import(self, ctx, url: str, name: Optional[str] = None):
         """Import a YouTube/Spotify playlist to server playlists"""
@@ -2300,7 +2308,10 @@ class Music(commands.Cog):
         """Manage static music channel"""
         pass
 
+    # Hybrid groups force invoke_without_command=True, so group-level checks
+    # never execute for subcommands - repeat them on each mutating subcommand.
     @musicchannel.command(name="set")
+    @commands.has_permissions(manage_channels=True)
     async def musicchannel_set(self, ctx, channel: discord.TextChannel):
         """Set the static music channel"""
         await self.guild_model.set_music_channel(ctx.guild.id, channel.id)
@@ -2309,6 +2320,7 @@ class Music(commands.Cog):
         await self.update_static_embed(ctx.guild.id)
 
     @musicchannel.command(name="remove")
+    @commands.has_permissions(manage_channels=True)
     async def musicchannel_remove(self, ctx):
         """Remove the static music channel"""
         await self.guild_model.remove_music_channel(ctx.guild.id)

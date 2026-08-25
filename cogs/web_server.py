@@ -1,7 +1,10 @@
 import asyncio
+import ipaddress
 import json
 import logging
 import re
+import secrets
+import socket
 from typing import Optional, cast
 from html import escape
 import mimetypes
@@ -17,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from config import Config
-from database.models import UserModel, GuildModel, LevelingModel, CustomCommandModel
+from database.models import UserModel, GuildModel, LevelingModel, CustomCommandModel, GiveawayModel
 from utils.queue import CustomPlayer, LoopMode
 from utils.lastfm import lastfm_handler
 from utils.artwork import artwork_resolver, DEFAULT_ARTWORK
@@ -71,6 +74,7 @@ user_model = UserModel()
 guild_model = GuildModel()
 leveling_model = LevelingModel()
 custom_command_model = CustomCommandModel()
+giveaway_model = GiveawayModel()
 
 
 def get_track_artwork(track):
@@ -114,6 +118,54 @@ def _parse_integer(value, field: str, *, minimum: int = 0, maximum: Optional[int
 
 def _find_guild(guild_id: int):
     return next((guild for guild in get_all_guilds() if guild.id == guild_id), None)
+
+
+def _get_guild_member(guild_id: int, user_id: int) -> Optional[discord.Member]:
+    """Cached membership lookup for a user across all bot instances."""
+    if not bot_instance:
+        return None
+    for b in getattr(bot_instance, "all_bots", [bot_instance]):
+        guild = b.get_guild(guild_id)
+        if guild:
+            member = guild.get_member(user_id)
+            if member:
+                return member
+    return None
+
+
+def _split_url(value: str) -> Optional[urllib.parse.SplitResult]:
+    """Return the parsed URL if value is a bare http(s) URL, else None."""
+    parts = urllib.parse.urlsplit(value.strip())
+    if parts.scheme in ("http", "https") and parts.hostname:
+        return parts
+    return None
+
+
+async def assert_public_url_host(value: str) -> None:
+    """Reject track URLs aimed at private/loopback/link-local hosts (SSRF).
+
+    Lavalink fetches these URLs from the bot host's own network position, so
+    an attacker-supplied URL must never be allowed to target internal
+    addresses. Non-URL values (search queries, provider prefixes) pass
+    through untouched.
+    """
+    parts = _split_url(value)
+    if parts is None:
+        return
+    hostname = parts.hostname.lower().strip('.')
+    if hostname == 'localhost' or hostname.endswith('.local'):
+        raise HTTPException(status_code=400, detail="URLs pointing at private hosts are not allowed.")
+    try:
+        addr_infos = await asyncio.get_running_loop().getaddrinfo(hostname, None)
+    except socket.gaierror as exc:
+        raise HTTPException(status_code=400, detail="Could not resolve the URL host.") from exc
+    for info in addr_infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (
+            ip.is_private or ip.is_loopback or ip.is_link_local
+            or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+        ):
+            raise HTTPException(status_code=400, detail="URLs pointing at private network addresses are not allowed.")
 
 
 def get_all_voice_clients():
@@ -165,20 +217,38 @@ async def login():
             status_code=400,
             content={"error": "Discord OAuth is not configured in .env file. Please check configuration."}
         )
-    
+
+    # CSRF protection: bind the authorization response to this browser via a
+    # single-use state value that must round-trip through Discord and back.
+    state = secrets.token_urlsafe(32)
     url = (
         "https://discord.com/api/oauth2/authorize"
         f"?client_id={Config.DISCORD_CLIENT_ID}"
         f"&redirect_uri={httpx.URL(Config.DISCORD_REDIRECT_URI)}"
         "&response_type=code"
         "&scope=identify"
+        f"&state={urllib.parse.quote(state, safe='')}"
     )
-    return RedirectResponse(url=url)
+    response = RedirectResponse(url=url)
+    response.set_cookie(
+        key="ayla_oauth_state",
+        value=state,
+        httponly=True,
+        max_age=600,
+        samesite="lax",
+        secure=Config.SESSION_COOKIE_SECURE,
+    )
+    return response
 
 @app.get("/api/auth/callback")
-async def auth_callback(code: str):
+async def auth_callback(request: Request, code: str, state: Optional[str] = None):
     if not Config.DISCORD_CLIENT_ID or not Config.DISCORD_CLIENT_SECRET or not Config.DISCORD_REDIRECT_URI:
         raise HTTPException(status_code=500, detail="OAuth client credentials missing")
+
+    # Reject callbacks that were not initiated by this browser (login CSRF).
+    expected_state = request.cookies.get("ayla_oauth_state")
+    if not expected_state or not state or not secrets.compare_digest(state.encode(), expected_state.encode()):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state. Please start the login again.")
 
     async with httpx.AsyncClient() as client:
         # Exchange code for access token
@@ -235,6 +305,7 @@ async def auth_callback(code: str):
             samesite="lax",
             secure=Config.SESSION_COOKIE_SECURE,
         )
+        response.delete_cookie("ayla_oauth_state")
         return response
 
 @app.get("/api/auth/me")
@@ -295,6 +366,9 @@ async def lastfm_auth_url(request: Request, cb: Optional[str] = None):
     # Put a short-lived, signed user id in the callback path. This lets the
     # callback finish linking the account even when Last.fm/browser security
     # severs window.opener during the cross-origin authorization round trip.
+    # A matching HttpOnly cookie binds the flow to the browser that started
+    # it, so one user's signed state can never be paired with another user's
+    # authorization token.
     state = signer.sign(str(user["id"]).encode()).decode()
     callback_base = cb or f"{str(request.base_url).rstrip('/')}/api/lastfm/callback"
     callback_url = f"{callback_base.rstrip('/')}/{urllib.parse.quote(state, safe='')}"
@@ -308,7 +382,16 @@ async def lastfm_auth_url(request: Request, cb: Optional[str] = None):
 
     logger.info("[WEB] Created Last.fm web authorization for user_id=%s", user["id"])
 
-    return {"enabled": True, "url": url}
+    response = JSONResponse({"enabled": True, "url": url})
+    response.set_cookie(
+        key="ayla_lastfm_state",
+        value=state,
+        httponly=True,
+        max_age=LASTFM_AUTH_STATE_MAX_AGE,
+        samesite="lax",
+        secure=Config.SESSION_COOKIE_SECURE,
+    )
+    return response
 
 @app.get("/api/lastfm/callback/{state}", response_class=HTMLResponse)
 @app.get("/api/lastfm/callback", response_class=HTMLResponse)
@@ -331,7 +414,14 @@ async def lastfm_callback(
             error_text = "Web authentication is not ready."
         else:
             try:
-                user_id = int(signer.unsign(state, max_age=LASTFM_AUTH_STATE_MAX_AGE).decode())
+                unsigned_user_id = int(signer.unsign(state, max_age=LASTFM_AUTH_STATE_MAX_AGE).decode())
+                # The state must have been issued to this browser, otherwise a
+                # victim's token could be bound to an attacker's account.
+                expected_state = request.cookies.get("ayla_lastfm_state")
+                if not expected_state or not secrets.compare_digest(state.encode(), expected_state.encode()):
+                    error_text = "This Last.fm authorization request does not match this browser session."
+                else:
+                    user_id = unsigned_user_id
             except (BadSignature, SignatureExpired, TypeError, ValueError):
                 error_text = "This Last.fm authorization request is invalid or expired."
     elif not error_text:
@@ -949,6 +1039,9 @@ async def player_control(request: Request):
                 if db_user and db_user.get("settings", {}).get("autoplay") is not None:
                     active_player.autoplay_enabled = bool(db_user["settings"]["autoplay"])
                 
+            if _split_url(query_str):
+                await assert_public_url_host(query_str)
+
             tracks = await active_player.get_tracks(query_str)
             if not tracks:
                 raise HTTPException(status_code=404, detail="No results found for query")
@@ -1131,7 +1224,8 @@ async def player_control(request: Request):
         raise
     except Exception as e:
         logger.error(f"[WEB] Control error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Do not echo raw exception text to API callers (information leak).
+        raise HTTPException(status_code=500, detail="Internal error while controlling playback.")
 
 @app.get("/api/player/search")
 async def player_search(request: Request, q: str = Query(..., min_length=1), mode: str = "youtube"):
@@ -1160,6 +1254,9 @@ async def player_search(request: Request, q: str = Query(..., min_length=1), mod
         url_pattern = re.compile(r'https?://(?:www\.)?.+')
         is_url = bool(url_pattern.match(q))
 
+        if is_url:
+            await assert_public_url_host(q)
+
         if is_url or q.lower().startswith(explicit_search_prefixes):
             tracks = await wavelink.Pool.fetch_tracks(q, node=node)
         elif mode in ("youtubemusic", "ytm"):
@@ -1185,6 +1282,8 @@ async def player_search(request: Request, q: str = Query(..., min_length=1), mod
             for t in tracks[:15]:
                 results.append(serialize_track(t))
         return {"mode": mode, "is_playlist": False, "playlist_name": None, "tracks": results, "playlists": []}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[WEB] Search error: {e}")
         return {"mode": mode, "is_playlist": False, "playlist_name": None, "tracks": [], "playlists": []}
@@ -1333,6 +1432,22 @@ async def check_user_guild_permission(user_id: int, guild_id: int) -> bool:
                 if perms.administrator or perms.manage_guild:
                     return True
     return False
+
+
+def validate_assignable_role(role: discord.Role, invoker: Optional[discord.Member]) -> Optional[str]:
+    """Mirror the Discord-side guards for role bindings set via the web panel.
+
+    Returns an error string when the role must be rejected, or None when the
+    bot could safely assign it. Keeps Manage-Guild-only dashboard users from
+    granting roles above their own station or roles the bot cannot manage.
+    """
+    if role >= role.guild.me.top_role:
+        return "that role is at or above my highest role."
+    if role.managed:
+        return "that role is managed by an integration and cannot be assigned."
+    if invoker is not None and not invoker.guild_permissions.administrator and role >= invoker.top_role:
+        return "you cannot bind roles at or above your own highest role."
+    return None
 
 @app.get("/api/guilds/manageable")
 async def get_manageable_guilds(request: Request):
@@ -1571,7 +1686,14 @@ async def save_guild_settings(request: Request):
     guild = _find_guild(guild_id)
     if guild is None:
         raise HTTPException(status_code=404, detail="Server not found.")
-    
+
+    invoker_member = guild.get_member(int(user_id))
+    if invoker_member is None:
+        try:
+            invoker_member = await guild.fetch_member(int(user_id))
+        except discord.HTTPException:
+            invoker_member = None
+
     # 1. Prefix
     if "prefix" in data:
         prefix_val = data.get("prefix")
@@ -1644,8 +1766,12 @@ async def save_guild_settings(request: Request):
         auto_role_id = None
         if auto_role_id_raw and str(auto_role_id_raw).lower() not in ("none", "null", ""):
             auto_role_id = _parse_integer(auto_role_id_raw, "auto_role_id", minimum=1)
-            if guild.get_role(auto_role_id) is None:
+            role = guild.get_role(auto_role_id)
+            if role is None:
                 raise HTTPException(status_code=400, detail="auto_role_id must identify a role in this server.")
+            problem = validate_assignable_role(role, invoker_member)
+            if problem:
+                raise HTTPException(status_code=400, detail=f"auto_role_id rejected: {problem}")
         await guild_model.update_guild(guild_id, {"auto_role_id": auto_role_id})
         
         # Update AutoRole cog cache if it exists
@@ -1700,6 +1826,14 @@ async def save_guild_settings(request: Request):
                     role = guild.get_role(int(role_id))
                 except (TypeError, ValueError):
                     role = None
+                # Enforce the same guards as the Discord-side /reactionrole add
+                # command: no roles above the bot (or the editor), no managed
+                # integration roles.
+                if role is None:
+                    raise HTTPException(status_code=400, detail=f"reaction role ID {role_id} does not identify a role in this server.")
+                problem = validate_assignable_role(role, invoker_member)
+                if problem:
+                    raise HTTPException(status_code=400, detail=f"reaction role {role.name} rejected: {problem}")
                 role_name = role.name if role else provided_role_names.get(role_id) or stored_role_names.get(role_id)
                 if role_name:
                     reaction_role_names[role_id] = str(role_name)
@@ -1835,20 +1969,31 @@ async def generate_reaction_role_message(request: Request):
 # --- Leveling & Leaderboard Endpoints ---
 @app.get("/api/leveling/guilds")
 async def list_leveling_guilds(request: Request):
-    """List all Discord servers the bot is currently in for the leaderboard selector."""
+    """List the Discord servers the requesting user shares with the bot."""
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+    is_admin = int(user_id) in Config.OWNER_IDS
+
+    # Only expose tenants the user can legitimately see: their own guilds,
+    # or everything for bot owners. Never enumerate the full tenant list.
     guilds_list = []
     seen_ids = set()
     if bot_instance:
         for b in getattr(bot_instance, "all_bots", [bot_instance]):
             for g in getattr(b, "guilds", []):
-                if g.id not in seen_ids:
-                    seen_ids.add(g.id)
-                    icon_url = str(g.icon.url) if g.icon else ""
-                    guilds_list.append({
-                        "id": str(g.id),
-                        "name": g.name,
-                        "icon": icon_url
-                    })
+                if g.id in seen_ids:
+                    continue
+                if not is_admin and g.get_member(user_id) is None:
+                    continue
+                seen_ids.add(g.id)
+                icon_url = str(g.icon.url) if g.icon else ""
+                guilds_list.append({
+                    "id": str(g.id),
+                    "name": g.name,
+                    "icon": icon_url
+                })
     guilds_list.sort(key=lambda x: x["name"].lower())
     return guilds_list
 
@@ -1856,12 +2001,23 @@ async def list_leveling_guilds(request: Request):
 @app.get("/api/leveling/leaderboard/global")
 async def get_global_leaderboard_endpoint(request: Request, page: int = Query(1, ge=1), limit: int = Query(10, ge=1, le=50)):
     """Get paginated global XP leaderboard across all servers."""
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     return await leveling_model.get_global_leaderboard(page=page, limit=limit)
 
 
 @app.get("/api/leveling/leaderboard/server/{guild_id}")
 async def get_server_leaderboard_endpoint(request: Request, guild_id: int, page: int = Query(1, ge=1), limit: int = Query(10, ge=1, le=50)):
     """Get paginated server XP leaderboard for a specific guild."""
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Member activity data stays inside the community that produced it.
+    if int(user["id"]) not in Config.OWNER_IDS and _get_guild_member(guild_id, int(user["id"])) is None:
+        raise HTTPException(status_code=403, detail="You are not a member of this server.")
+
     data = await leveling_model.get_guild_leaderboard(guild_id=guild_id, page=page, limit=limit)
     guild = None
     if bot_instance:
@@ -2129,6 +2285,298 @@ async def toggle_custom_command_endpoint(request: Request):
     return {"success": success, "enabled": new_status}
 
 
+def serialize_giveaway(g: dict) -> dict:
+    if not g:
+        return {}
+    res = dict(g)
+    if "_id" in res:
+        res["_id"] = str(res["_id"])
+    for dt_key in ("end_time", "created_at", "updated_at", "ended_at"):
+        if hasattr(res.get(dt_key), "isoformat"):
+            res[dt_key] = res[dt_key].isoformat()
+    return res
+
+
+@app.get("/api/guild/giveaways")
+async def get_guild_giveaways_endpoint(request: Request, guild_id: int, include_ended: bool = True):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    can_manage = await check_user_guild_permission(user_id, guild_id)
+    # Guild-scoped data stays inside the guild: outsiders get nothing.
+    if not can_manage and _get_guild_member(guild_id, int(user_id)) is None:
+        raise HTTPException(status_code=403, detail="You are not a member of this server.")
+
+    giveaways = await giveaway_model.get_guild_giveaways(guild_id, include_ended=include_ended)
+
+    # Calculate user entered status for each giveaway. The raw entrant ID list
+    # is only exposed to users who can manage giveaways.
+    serialized = []
+    for g in giveaways:
+        item = serialize_giveaway(g)
+        item["user_entered"] = int(user_id) in g.get("entries", [])
+        item["entries_count"] = len(g.get("entries", []))
+        if not can_manage:
+            item.pop("entries", None)
+        serialized.append(item)
+
+    return {
+        "giveaways": serialized,
+        "can_manage": can_manage
+    }
+
+
+@app.post("/api/guild/giveaways/enter")
+async def enter_giveaway_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    message_id = _parse_integer(data.get("message_id"), "message_id")
+    giveaway = await giveaway_model.get_giveaway(message_id)
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found.")
+    if giveaway.get("ended", False):
+        raise HTTPException(status_code=400, detail="Giveaway has already ended.")
+
+    # Only members of the giveaway's own community may enter or leave it.
+    giveaway_guild_id = giveaway.get("guild_id")
+    if int(user_id) not in Config.OWNER_IDS:
+        member = _get_guild_member(int(giveaway_guild_id), int(user_id)) if giveaway_guild_id else None
+        if member is None:
+            raise HTTPException(status_code=403, detail="You are not a member of this server.")
+
+    entries = giveaway.get("entries", [])
+    if int(user_id) in entries:
+        await giveaway_model.remove_entry(message_id, int(user_id))
+        entered = False
+    else:
+        await giveaway_model.add_entry(message_id, int(user_id))
+        entered = True
+
+    # Update Discord message embed if bot available
+    if bot_instance:
+        cog = bot_instance.get_cog("Giveaway")
+        if cog:
+            channel_id = giveaway.get("channel_id")
+            channel = bot_instance.get_channel(channel_id)
+            if channel:
+                try:
+                    msg = await channel.fetch_message(message_id)
+                    updated = await giveaway_model.get_giveaway(message_id)
+                    if updated and not updated.get("ended", False):
+                        embed = await cog.build_giveaway_embed(updated, channel)
+                        await msg.edit(embed=embed)
+                except Exception as e:
+                    logger.debug(f"Failed to update giveaway embed: {e}")
+
+    updated = await giveaway_model.get_giveaway(message_id)
+    return {
+        "success": True,
+        "entered": entered,
+        "entries_count": len(updated.get("entries", [])) if updated else 0
+    }
+
+
+@app.post("/api/guild/giveaways")
+async def create_giveaway_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    guild_id = _parse_integer(data.get("guild_id"), "guild_id")
+    can_manage = await check_user_guild_permission(user_id, guild_id)
+    if not can_manage:
+        raise HTTPException(status_code=403, detail="Permission denied to manage giveaways in this server.")
+
+    channel_id = _parse_integer(data.get("channel_id"), "channel_id")
+    prize = str(data.get("prize", "")).strip()
+    if not prize:
+        raise HTTPException(status_code=400, detail="Prize description is required.")
+
+    winners_count = _parse_integer(data.get("winners_count", 1), "winners_count", minimum=1, maximum=50)
+    duration_str = str(data.get("duration", "1h")).strip()
+    title = str(data.get("title", "")).strip() or None
+
+    from cogs.giveaway import parse_duration, GiveawayView
+    from datetime import datetime, UTC
+
+    td = parse_duration(duration_str)
+    if not td:
+        raise HTTPException(status_code=400, detail="Invalid duration format. Example: 30m, 2h, 1d")
+
+    end_time = datetime.now(UTC) + td
+    extra_data = {}
+    if title:
+        extra_data["title"] = title
+
+    if not bot_instance:
+        raise HTTPException(status_code=503, detail="Bot is not ready.")
+
+    channel = bot_instance.get_channel(channel_id)
+    if not channel:
+        try:
+            channel = await bot_instance.fetch_channel(channel_id)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Discord channel not found.")
+
+    # Tenant scoping: the permission check above only covered the caller's
+    # guild_id; make sure the channel actually belongs to that same guild so
+    # giveaways cannot be projected into other servers' channels.
+    if getattr(channel, "guild", None) is None or channel.guild.id != guild_id:
+        raise HTTPException(status_code=400, detail="channel_id does not belong to the specified server.")
+
+    cog = bot_instance.get_cog("Giveaway")
+    if not cog:
+        raise HTTPException(status_code=500, detail="Giveaway system cog not loaded.")
+
+    dummy_giveaway = {
+        "prize": prize,
+        "host_id": int(user_id),
+        "winners_count": winners_count,
+        "end_time": end_time,
+        "entries": [],
+        "extra_data": extra_data,
+    }
+
+    embed = await cog.build_giveaway_embed(dummy_giveaway, channel)
+    view = GiveawayView()
+
+    try:
+        msg = await channel.send(embed=embed, view=view)
+    except Exception as e:
+        logger.error(f"Failed to post giveaway message: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send giveaway message to channel: {e}")
+
+    giveaway_doc = await giveaway_model.create_giveaway(
+        message_id=msg.id,
+        guild_id=guild_id,
+        channel_id=channel_id,
+        host_id=int(user_id),
+        prize=prize,
+        winners_count=winners_count,
+        end_time=end_time,
+        extra_data=extra_data,
+    )
+
+    return {"success": True, "giveaway": serialize_giveaway(giveaway_doc)}
+
+
+@app.post("/api/guild/giveaways/end")
+async def end_giveaway_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    message_id = _parse_integer(data.get("message_id"), "message_id")
+    giveaway = await giveaway_model.get_giveaway(message_id)
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found.")
+
+    can_manage = await check_user_guild_permission(user_id, giveaway["guild_id"])
+    if not can_manage:
+        raise HTTPException(status_code=403, detail="Permission denied to manage giveaways.")
+
+    if giveaway.get("ended", False):
+        raise HTTPException(status_code=400, detail="Giveaway is already ended.")
+
+    if not bot_instance:
+        raise HTTPException(status_code=503, detail="Bot is not ready.")
+
+    cog = bot_instance.get_cog("Giveaway")
+    if cog:
+        await cog.finalize_giveaway(giveaway)
+    else:
+        entries = giveaway.get("entries", [])
+        winners_count = giveaway.get("winners_count", 1)
+        import random
+        unique_entries = list(set(entries))
+        winners = random.sample(unique_entries, min(winners_count, len(unique_entries))) if unique_entries else []
+        await giveaway_model.end_giveaway(message_id, winners)
+
+    return {"success": True}
+
+
+@app.post("/api/guild/giveaways/reroll")
+async def reroll_giveaway_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    message_id = _parse_integer(data.get("message_id"), "message_id")
+    winners_count = _parse_integer(data.get("winners_count", 1), "winners_count", minimum=1, maximum=50)
+    giveaway = await giveaway_model.get_giveaway(message_id)
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found.")
+
+    can_manage = await check_user_guild_permission(user_id, giveaway["guild_id"])
+    if not can_manage:
+        raise HTTPException(status_code=403, detail="Permission denied to reroll giveaways.")
+
+    entries = giveaway.get("entries", [])
+    if not entries:
+        raise HTTPException(status_code=400, detail="No entries in this giveaway to pick winners from.")
+
+    import random
+    unique_entries = list(set(entries))
+    new_winners = random.sample(unique_entries, min(winners_count, len(unique_entries)))
+    await giveaway_model.set_winners(message_id, new_winners)
+
+    # Update discord message
+    if bot_instance:
+        cog = bot_instance.get_cog("Giveaway")
+        channel_id = giveaway.get("channel_id")
+        channel = bot_instance.get_channel(channel_id)
+        if channel and cog:
+            try:
+                orig_msg = await channel.fetch_message(message_id)
+                if orig_msg:
+                    ended_embed = await cog.build_giveaway_embed(
+                        giveaway, channel, ended=True, winners=new_winners
+                    )
+                    await orig_msg.edit(embed=ended_embed)
+                    winner_mentions = ", ".join(f"<@{w}>" for w in new_winners)
+                    await channel.send(
+                        f"🎉 **Giveaway Rerolled!** New winner(s): {winner_mentions} for **{giveaway.get('prize', 'Prize')}**!",
+                        reference=orig_msg.to_reference(fail_if_not_exists=False)
+                    )
+            except Exception as e:
+                logger.debug(f"Failed to update message on reroll: {e}")
+
+    return {"success": True, "winners": new_winners}
+
+
+@app.post("/api/guild/giveaways/delete")
+async def delete_giveaway_endpoint(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user["id"]
+
+    data = await request.json()
+    message_id = _parse_integer(data.get("message_id"), "message_id")
+    giveaway = await giveaway_model.get_giveaway(message_id)
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found.")
+
+    can_manage = await check_user_guild_permission(user_id, giveaway["guild_id"])
+    if not can_manage:
+        raise HTTPException(status_code=403, detail="Permission denied to delete giveaways.")
+
+    success = await giveaway_model.delete_giveaway(message_id)
+    return {"success": success}
+
+
 # Serves Frontend SPA
 @app.get("/{path:path}")
 async def serve_frontend(request: Request, path: str):
@@ -2169,7 +2617,9 @@ class WebServer(commands.Cog):
             return
 
         bot_instance = self.bot
-        signer = TimestampSigner(Config.SESSION_SECRET_KEY)
+        # Never sign cookies with a missing/short key: itsdangerous happily
+        # accepts an empty HMAC key, which would make sessions forgeable.
+        signer = TimestampSigner(Config.resolve_session_secret())
         
         # Start uvicorn server in asyncio loop
         config = uvicorn.Config(

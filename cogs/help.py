@@ -140,7 +140,12 @@ class CogButton(discord.ui.Button):
             'Music': '🎵',
             'Moderation': '🛡️',
             'Language': '🌐',
-            'Prefix': '⚙️'
+            'Prefix': '⚙️',
+            'Giveaway': '🎉',
+            'Leveling': '📊',
+            'CustomCommands': '✨',
+            'AutoRole': '🎭',
+            'ReactionRolesCog': '📋',
         }
 
         super().__init__(

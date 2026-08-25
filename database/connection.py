@@ -84,6 +84,10 @@ class DatabaseManager:
             # Custom commands: unique command name per guild
             ('custom_commands', [('guild_id', 1), ('name', 1)], True),
             ('custom_commands', [('guild_id', 1)], False),
+            # Giveaways: message_id unique, guild queries, expiration queries
+            ('giveaways', [('message_id', 1)], True),
+            ('giveaways', [('guild_id', 1), ('ended', 1)], False),
+            ('giveaways', [('ended', 1), ('end_time', 1)], False),
         ]
         for collection_name, keys, unique in index_specs:
             collection = self.db[collection_name]

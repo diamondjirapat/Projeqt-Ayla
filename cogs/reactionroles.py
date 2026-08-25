@@ -344,6 +344,10 @@ class ReactionRolesCog(commands.Cog):
             await ctx.send(await i18n.t(ctx, "reactionrole.help"))
 
     @reactionrole.command(name='add')
+    # Hybrid groups force invoke_without_command=True in discord.py, so the
+    # group-level check never runs for subcommands - every subcommand that
+    # mutates state must repeat the permission requirement itself.
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         message_id="ID of the message to add reaction role to",
         emoji="Emoji to react with",
@@ -360,6 +364,17 @@ class ReactionRolesCog(commands.Cog):
         # Check if bot can manage this role
         if role >= ctx.guild.me.top_role:
             await ctx.send(await i18n.t(ctx, "reactionrole.add.role_too_high"))
+            return
+
+        # Managed integration roles cannot be handed out by the bot.
+        if role.managed:
+            await ctx.send(await i18n.t(ctx, "reactionrole.add.role_managed"))
+            return
+
+        # Invoker hierarchy: a Manage Roles holder must not map roles above
+        # their own position (administrators are exempt).
+        if not ctx.author.guild_permissions.administrator and role >= ctx.author.top_role:
+            await ctx.send(await i18n.t(ctx, "reactionrole.add.role_too_high_for_you"))
             return
 
         message = None
@@ -397,6 +412,7 @@ class ReactionRolesCog(commands.Cog):
                                     emoji=emoji, role=role.mention, message_id=msg_id))
 
     @reactionrole.command(name='remove')
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         message_id="ID of the message",
         emoji="Emoji to remove (optional - removes all if not specified)"
@@ -478,6 +494,7 @@ class ReactionRolesCog(commands.Cog):
         await ctx.send(embed=embed)
 
     @reactionrole.command(name='create')
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         channel="Channel to send the message in",
         title="Title of the reaction role message",
@@ -503,6 +520,7 @@ class ReactionRolesCog(commands.Cog):
             await ctx.send(await i18n.t(ctx, "reactionrole.create.failed", error=str(e)))
 
     @reactionrole.command(name='update')
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         message_id="ID of the message to update"
     )
@@ -537,6 +555,7 @@ class ReactionRolesCog(commands.Cog):
                                     message_id=msg_id, count=len(self.reaction_roles[ctx.guild.id][msg_id])))
 
     @reactionrole.command(name='edit')
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         message_id="ID of the message to edit",
         title="New title for the embed",

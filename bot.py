@@ -52,8 +52,10 @@ class DiscordBot(commands.Bot):
         await self.tree.set_translator(I18nTranslator())
 
         from cogs.music import IdlePlaylistView
+        from cogs.giveaway import GiveawayView
         from database.models import UserModel, GuildModel
         self.add_view(IdlePlaylistView(0, UserModel(), GuildModel(), self))
+        self.add_view(GiveawayView())
 
         self.tree.on_error = self.on_app_command_error
 
