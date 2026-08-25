@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import datetime, UTC
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 import discord
 from discord import app_commands

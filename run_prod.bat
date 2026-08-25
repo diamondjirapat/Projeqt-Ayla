@@ -1,9 +1,9 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Projeqt-Ayla Discord Bot
+title Projeqt-Ayla Discord Bot (Production)
 
 echo ========================================
-echo       Projeqt-Ayla Discord Bot
+echo   Projeqt-Ayla Discord Bot [PROD MODE]
 echo ========================================
 echo.
 
@@ -64,7 +64,7 @@ python -m pip install --upgrade pip setuptools wheel >nul
 
 REM ---------- Dependencies ----------
 if exist "requirements.txt" (
-    echo [INFO] Installing/checking dependencies...
+    echo [INFO] Installing/checking backend dependencies...
     python -m pip install -r requirements.txt
     if errorlevel 1 (
         echo [ERROR] Dependency installation failed
@@ -86,11 +86,11 @@ if not exist ".env" (
 
 REM ---------- Frontend build ----------
 if exist "frontend\package.json" (
-    echo [INFO] Building frontend...
-    where npm >nul 2>&1
+    echo [INFO] Building frontend bundle...
+    where bun >nul 2>&1
     if errorlevel 1 (
-        echo [ERROR] npm is not installed or not in PATH
-        echo Please install Node.js from https://nodejs.org/
+        echo [ERROR] bun is not installed or not in PATH
+        echo Please install Bun from https://bun.sh
         pause
         exit /b 1
     )
@@ -100,7 +100,7 @@ if exist "frontend\package.json" (
     ) else (
         echo [INFO] Checking frontend dependencies...
     )
-    call npm install
+    call bun install
     if errorlevel 1 (
         echo [ERROR] Frontend dependency installation failed
         popd
@@ -108,7 +108,7 @@ if exist "frontend\package.json" (
         exit /b 1
     )
     echo [INFO] Building frontend production bundle...
-    call npm run build
+    call bun run build
     if errorlevel 1 (
         echo [ERROR] Frontend build failed
         popd
@@ -120,7 +120,7 @@ if exist "frontend\package.json" (
 
 REM ---------- Run bot ----------
 echo.
-echo [INFO] Starting bot...
+echo [INFO] Starting bot in production mode...
 echo ========================================
 echo.
 

@@ -9,12 +9,18 @@ NC='\033[0m'
 
 # ---------- Banner ----------
 echo "========================================"
-echo "      Projeqt-Ayla Discord Bot"
+echo "  Projeqt-Ayla Discord Bot [DEV MODE]"
 echo "========================================"
 echo ""
 
+FRONTEND_PID=""
+
 # ---------- Cleanup ----------
 cleanup() {
+    if [[ -n "$FRONTEND_PID" ]] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        echo -e "${YELLOW}[INFO] Stopping frontend dev server (PID: $FRONTEND_PID)...${NC}"
+        kill "$FRONTEND_PID" 2>/dev/null || true
+    fi
     if [[ -n "${VIRTUAL_ENV:-}" ]]; then
         deactivate
     fi
@@ -96,33 +102,28 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-# ---------- Frontend build ----------
+# ---------- Frontend dev server ----------
 if [ -f "frontend/package.json" ]; then
-    echo -e "${GREEN}[INFO] Building frontend...${NC}"
-    if ! command -v npm >/dev/null 2>&1; then
-        echo -e "${RED}[ERROR] npm is not installed or not in PATH${NC}"
-        echo "Please install Node.js from https://nodejs.org/"
+    if ! command -v bun >/dev/null 2>&1; then
+        echo -e "${RED}[ERROR] bun is not installed or not in PATH${NC}"
+        echo "Please install Bun from https://bun.sh"
         exit 1
     fi
     (
         cd frontend
         if [ ! -d "node_modules" ]; then
             echo -e "${YELLOW}[INFO] Installing frontend dependencies...${NC}"
-        else
-            echo -e "${GREEN}[INFO] Checking frontend dependencies...${NC}"
+            bun install
         fi
-        npm install
-        echo -e "${GREEN}[INFO] Building frontend production bundle...${NC}"
-        npm run build
-    ) || {
-        echo -e "${RED}[ERROR] Frontend build failed${NC}"
-        exit 1
-    }
+    )
+    echo -e "${GREEN}[INFO] Starting Vite frontend dev server in background...${NC}"
+    (cd frontend && bun run dev) &
+    FRONTEND_PID=$!
 fi
 
 # ---------- Run bot ----------
 echo ""
-echo -e "${GREEN}[INFO] Starting bot...${NC}"
+echo -e "${GREEN}[INFO] Starting bot in development mode...${NC}"
 echo "========================================"
 echo ""
 
