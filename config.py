@@ -1,11 +1,41 @@
+import logging
 import os
+import secrets
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
+
+def _csv(name: str) -> list[str]:
+    return [value.strip() for value in os.getenv(name, '').split(',') if value.strip()]
+
+
+def _integer(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        return int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {raw_value!r}") from exc
+
+
+def _integer_set(name: str) -> set[int]:
+    try:
+        return {int(value) for value in _csv(name)}
+    except ValueError as exc:
+        raise ValueError(f"{name} must contain comma-separated integer IDs") from exc
+
 
 class Config:
-    DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+    PROJECT_ROOT = Path(__file__).resolve().parent
+
+    DISCORD_TOKENS = _csv('DISCORD_TOKEN')
+    DISCORD_TOKEN = DISCORD_TOKENS[0] if DISCORD_TOKENS else None
     MONGODB_URI = os.getenv('MONGODB_URI')
 
     COMMAND_PREFIX = os.getenv('PREFIX', '!')
@@ -18,7 +48,7 @@ class Config:
     # Last.fm
     LASTFM_API_KEY = os.getenv('LASTFM_API_KEY', '')
     LASTFM_API_SECRET = os.getenv('LASTFM_API_SECRET', '')
-    
+
     # GitHub
     GITHUB_URL = os.getenv('GITHUB_URL', '')
 
@@ -27,11 +57,59 @@ class Config:
     BAR_URL = os.getenv('BAR_URL', '')
 
     # Owner ID
-    _owner_ids_raw = os.getenv('OWNER_IDS', '368581475660201984')
-    OWNER_IDS = set(int(id.strip()) for id in _owner_ids_raw.split(',') if id.strip())
-    
+    OWNER_IDS = _integer_set('OWNER_IDS')
+
+    # Discord OAuth & Web Server
+    DISCORD_CLIENT_ID = os.getenv('DISCORD_CLIENT_ID', '')
+    DISCORD_CLIENT_SECRET = os.getenv('DISCORD_CLIENT_SECRET', '')
+    DISCORD_REDIRECT_URI = os.getenv('DISCORD_REDIRECT_URI', 'http://localhost:8000/api/auth/callback')
+    WEB_PORT = _integer('WEB_PORT', 8000)
+    SESSION_SECRET_KEY = os.getenv('SESSION_SECRET_KEY', '')
+
+    @classmethod
+    def resolve_session_secret(cls) -> str:
+        """Return a safe signing key, never an empty/guessable one.
+
+        A missing or too-short SESSION_SECRET_KEY would let anyone forge
+        session cookies (itsdangerous accepts an empty HMAC key). Instead of
+        refusing to boot the whole bot, fall back to a random per-boot key:
+        sessions simply do not survive restarts until a persistent key is
+        configured.
+        """
+        if len(cls.SESSION_SECRET_KEY) >= 32:
+            return cls.SESSION_SECRET_KEY
+        if cls.SESSION_SECRET_KEY:
+            logger.warning(
+                '[CONFIG] SESSION_SECRET_KEY is shorter than 32 characters; '
+                'using a random per-boot key instead. Set a persistent key with: '
+                'python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+        else:
+            logger.warning(
+                '[CONFIG] SESSION_SECRET_KEY is not set; using a random per-boot key. '
+                'Web sessions will be invalidated on every restart. Set one with: '
+                'python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+        return secrets.token_hex(32)
+
+    WEB_URL = os.getenv('WEB_URL', 'http://localhost:8000')
+    WEB_ALLOWED_ORIGINS = list(dict.fromkeys([
+        WEB_URL.rstrip('/'),
+        *_csv('WEB_ALLOWED_ORIGINS'),
+    ]))
+    SESSION_COOKIE_SECURE = WEB_URL.lower().startswith('https://')
+
     @classmethod
     def validate(cls):
-        if not cls.DISCORD_TOKEN:
-            raise ValueError("DISCORD_TOKEN is missing. Check .env file.")
+        missing = []
+        if not cls.DISCORD_TOKENS:
+            missing.append('DISCORD_TOKEN')
+        if not cls.MONGODB_URI:
+            missing.append('MONGODB_URI')
+        if missing:
+            raise ValueError(f"Missing required configuration: {', '.join(missing)}")
+        if cls.DISCORD_CLIENT_ID and not cls.DISCORD_CLIENT_SECRET:
+            raise ValueError("DISCORD_CLIENT_SECRET is required when Discord OAuth is enabled")
+        if cls.DISCORD_CLIENT_ID and len(cls.SESSION_SECRET_KEY) < 32:
+            raise ValueError("SESSION_SECRET_KEY must be at least 32 characters when Discord OAuth is enabled")
         return True

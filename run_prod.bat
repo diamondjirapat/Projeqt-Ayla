@@ -1,9 +1,9 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Projeqt-Ayla Discord Bot
+title Projeqt-Ayla Discord Bot (Production)
 
 echo ========================================
-echo       Projeqt-Ayla Discord Bot
+echo   Projeqt-Ayla Discord Bot [PROD MODE]
 echo ========================================
 echo.
 
@@ -24,13 +24,13 @@ for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
 )
 
 if %MAJOR% LSS 3 (
-    echo [ERROR] Python 3.13+ required (found %PYVER%)
+    echo [ERROR] Python 3.13+ required. Found %PYVER%
     pause
     exit /b 1
 )
 
 if %MAJOR% EQU 3 if %MINOR% LSS 13 (
-    echo [ERROR] Python 3.13+ required (found %PYVER%)
+    echo [ERROR] Python 3.13+ required. Found %PYVER%
     pause
     exit /b 1
 )
@@ -38,6 +38,14 @@ if %MAJOR% EQU 3 if %MINOR% LSS 13 (
 echo [INFO] Using Python %PYVER%
 
 REM ---------- Virtual environment ----------
+if exist ".venv\Scripts\python.exe" (
+    ".venv\Scripts\python.exe" -c "import sys" >nul 2>&1
+    if errorlevel 1 (
+        echo [WARNING] Existing virtual environment is invalid or broken. Recreating...
+        rmdir /s /q .venv
+    )
+)
+
 if not exist ".venv\Scripts\activate.bat" (
     echo [INFO] Creating virtual environment...
     python -m venv .venv
@@ -56,8 +64,8 @@ python -m pip install --upgrade pip setuptools wheel >nul
 
 REM ---------- Dependencies ----------
 if exist "requirements.txt" (
-    echo [INFO] Installing/checking dependencies...
-    pip install -r requirements.txt
+    echo [INFO] Installing/checking backend dependencies...
+    python -m pip install -r requirements.txt
     if errorlevel 1 (
         echo [ERROR] Dependency installation failed
         pause
@@ -76,9 +84,43 @@ if not exist ".env" (
     exit /b 1
 )
 
+REM ---------- Frontend build ----------
+if exist "frontend\package.json" (
+    echo [INFO] Building frontend bundle...
+    where bun >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] bun is not installed or not in PATH
+        echo Please install Bun from https://bun.sh
+        pause
+        exit /b 1
+    )
+    pushd frontend
+    if not exist "node_modules" (
+        echo [INFO] Installing frontend dependencies...
+    ) else (
+        echo [INFO] Checking frontend dependencies...
+    )
+    call bun install
+    if errorlevel 1 (
+        echo [ERROR] Frontend dependency installation failed
+        popd
+        pause
+        exit /b 1
+    )
+    echo [INFO] Building frontend production bundle...
+    call bun run build
+    if errorlevel 1 (
+        echo [ERROR] Frontend build failed
+        popd
+        pause
+        exit /b 1
+    )
+    popd
+)
+
 REM ---------- Run bot ----------
 echo.
-echo [INFO] Starting bot...
+echo [INFO] Starting bot in production mode...
 echo ========================================
 echo.
 

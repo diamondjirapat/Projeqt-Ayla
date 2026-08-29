@@ -1,14 +1,13 @@
 import logging
 import asyncio
 from typing import Dict, List, Any, Optional, Callable
-import pomice
-from datetime import datetime
+import wavelink
 
 logger = logging.getLogger(__name__)
 
 class PlaylistLoader:
     @staticmethod
-    async def load_playlist(playlist_data: Dict[str, Any], player: pomice.Player) -> List[pomice.Track]:
+    async def load_playlist(playlist_data: Dict[str, Any], player: wavelink.Player) -> List[wavelink.Playable]:
         """
         Load an imported playlist:
         1. Fetch tracks from source URL
@@ -29,7 +28,7 @@ class PlaylistLoader:
             raise e
 
         # Convert to list if it's a Playlist container
-        if isinstance(tracks, pomice.Playlist):
+        if isinstance(tracks, wavelink.Playlist):
             source_tracks = list(tracks.tracks)
         elif isinstance(tracks, list):
             source_tracks = tracks
@@ -51,19 +50,19 @@ class PlaylistLoader:
 
         reorder_ids = modifications.get('reorder', [])
         if reorder_ids:
-            uri_to_track = {t.uri: t for t in source_tracks}
+            from collections import defaultdict
+            uri_to_tracks = defaultdict(list)
+            for t in source_tracks:
+                uri_to_tracks[t.uri].append(t)
             
             reordered_tracks = []
-            seen_uris = set()
             
             for uri in reorder_ids:
-                if uri in uri_to_track:
-                    reordered_tracks.append(uri_to_track[uri])
-                    seen_uris.add(uri)
+                if uri_to_tracks[uri]:
+                    reordered_tracks.append(uri_to_tracks[uri].pop(0))
 
-            for t in source_tracks:
-                if t.uri not in seen_uris:
-                    reordered_tracks.append(t)
+            for uri, tracks in uri_to_tracks.items():
+                reordered_tracks.extend(tracks)
             
             source_tracks = reordered_tracks
 
@@ -72,7 +71,7 @@ class PlaylistLoader:
     @staticmethod
     async def load_additions_background(
         additions: List[Dict[str, Any]], 
-        player: pomice.Player, 
+        player: wavelink.Player, 
         progress_callback: Optional[Callable[[int, int], Any]] = None,
         check_cancel: Optional[Callable[[], bool]] = None
     ):
@@ -101,7 +100,7 @@ class PlaylistLoader:
                     logger.warning(f"No tracks found for addition URL: {url}")
                     continue
 
-                if isinstance(tracks, pomice.Playlist):
+                if isinstance(tracks, wavelink.Playlist):
                     track = tracks.tracks[0]
                 elif isinstance(tracks, list):
                     track = tracks[0]

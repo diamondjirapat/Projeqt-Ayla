@@ -2,9 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
-from typing import Optional, Dict, List
+from typing import Dict
 from datetime import datetime, timezone
-import json
 
 from utils.i18n import i18n
 from config import Config
@@ -72,8 +71,23 @@ class ReactionRolesCog(commands.Cog):
 
             emoji_roles = self.reaction_roles[guild_id][message_id]
 
+            guild_data = await self.guild_model.get_guild(guild_id)
+            embed_settings = {}
+            inline_settings = {}
+            if guild_data:
+                stored_embeds = guild_data.get('reaction_role_embeds', {})
+                stored_inline = guild_data.get('reaction_role_inline', {})
+                if isinstance(stored_embeds, dict):
+                    embed_settings = stored_embeds.get(str(message_id), {}) or {}
+                if isinstance(stored_inline, dict):
+                    inline_settings = stored_inline.get(str(message_id), {}) or {}
+
             title = "Reaction Roles"
             custom_description = None
+            image_url = None
+            thumbnail_url = None
+            footer_text = ""
+            footer_url = ""
 
             if message.embeds:
                 old_embed = message.embeds[0]
@@ -81,6 +95,27 @@ class ReactionRolesCog(commands.Cog):
                     title = old_embed.title
                 if getattr(old_embed, "description", None) is not None:
                     custom_description = old_embed.description
+                if old_embed.image:
+                    image_url = old_embed.image.url
+                if old_embed.thumbnail:
+                    thumbnail_url = old_embed.thumbnail.url
+                if old_embed.footer:
+                    footer_text = old_embed.footer.text or ""
+                    footer_url = old_embed.footer.icon_url or ""
+
+            if isinstance(embed_settings, dict):
+                if "title" in embed_settings:
+                    title = embed_settings.get("title") or ""
+                if "description" in embed_settings:
+                    custom_description = embed_settings.get("description") or None
+                if "image_url" in embed_settings:
+                    image_url = embed_settings.get("image_url") or None
+                if "thumbnail_url" in embed_settings:
+                    thumbnail_url = embed_settings.get("thumbnail_url") or None
+                if "footer_text" in embed_settings:
+                    footer_text = embed_settings.get("footer_text") or ""
+                if "footer_url" in embed_settings:
+                    footer_url = embed_settings.get("footer_url") or ""
 
             color = discord.Color.blue()
             if message.embeds and message.embeds[0].color:
@@ -98,19 +133,23 @@ class ReactionRolesCog(commands.Cog):
                     embed.add_field(
                         name=emoji,
                         value=role.mention,
-                        inline=True
+                        inline=bool(inline_settings.get(emoji, True))
                     )
                 else:
                     embed.add_field(
                         name=emoji,
-                        value="(Deleted)",
-                        inline=True
+                        value=await i18n.t(ctx, "reactionrole.deleted_role"),
+                        inline=bool(inline_settings.get(emoji, True))
                     )
 
-            if message.embeds and message.embeds[0].image:
-                embed.set_image(url=message.embeds[0].image.url)
-            else:
+            if image_url:
+                embed.set_image(url=image_url)
+            elif not embed_settings:
                 embed.set_image(url=Config.BAR_URL)
+            if thumbnail_url:
+                embed.set_thumbnail(url=thumbnail_url)
+            if footer_text or footer_url:
+                embed.set_footer(text=footer_text, icon_url=footer_url or None)
 
             await message.edit(embed=embed)
             logger.debug(f"Updated embed for message {message_id}")
@@ -205,10 +244,12 @@ class ReactionRolesCog(commands.Cog):
 
         role_id = self.reaction_roles[guild_id][message_id][emoji_str]
         guild = self.bot.get_guild(guild_id)
-        if not guild: return
+        if not guild:
+            return
 
         role = guild.get_role(role_id)
-        if not role: return
+        if not role:
+            return
 
         member = payload.member
         if not member:
@@ -303,6 +344,10 @@ class ReactionRolesCog(commands.Cog):
             await ctx.send(await i18n.t(ctx, "reactionrole.help"))
 
     @reactionrole.command(name='add')
+    # Hybrid groups force invoke_without_command=True in discord.py, so the
+    # group-level check never runs for subcommands - every subcommand that
+    # mutates state must repeat the permission requirement itself.
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         message_id="ID of the message to add reaction role to",
         emoji="Emoji to react with",
@@ -319,6 +364,17 @@ class ReactionRolesCog(commands.Cog):
         # Check if bot can manage this role
         if role >= ctx.guild.me.top_role:
             await ctx.send(await i18n.t(ctx, "reactionrole.add.role_too_high"))
+            return
+
+        # Managed integration roles cannot be handed out by the bot.
+        if role.managed:
+            await ctx.send(await i18n.t(ctx, "reactionrole.add.role_managed"))
+            return
+
+        # Invoker hierarchy: a Manage Roles holder must not map roles above
+        # their own position (administrators are exempt).
+        if not ctx.author.guild_permissions.administrator and role >= ctx.author.top_role:
+            await ctx.send(await i18n.t(ctx, "reactionrole.add.role_too_high_for_you"))
             return
 
         message = None
@@ -356,6 +412,7 @@ class ReactionRolesCog(commands.Cog):
                                     emoji=emoji, role=role.mention, message_id=msg_id))
 
     @reactionrole.command(name='remove')
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         message_id="ID of the message",
         emoji="Emoji to remove (optional - removes all if not specified)"
@@ -426,17 +483,18 @@ class ReactionRolesCog(commands.Cog):
                 if role:
                     role_list.append(f"{emoji} → {role.mention}")
                 else:
-                    role_list.append(f"{emoji} → (Deleted Role)")
+                    role_list.append(f"{emoji} → {await i18n.t(ctx, 'reactionrole.deleted_role')}")
 
             embed.add_field(
-                name=f"Message ID: {message_id}",
-                value="\n".join(role_list) if role_list else "No roles",
+                name=await i18n.t(ctx, "reactionrole.message_id", message_id=message_id),
+                value="\n".join(role_list) if role_list else await i18n.t(ctx, "reactionrole.no_roles"),
                 inline=False
             )
 
         await ctx.send(embed=embed)
 
     @reactionrole.command(name='create')
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         channel="Channel to send the message in",
         title="Title of the reaction role message",
@@ -462,6 +520,7 @@ class ReactionRolesCog(commands.Cog):
             await ctx.send(await i18n.t(ctx, "reactionrole.create.failed", error=str(e)))
 
     @reactionrole.command(name='update')
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         message_id="ID of the message to update"
     )
@@ -496,6 +555,7 @@ class ReactionRolesCog(commands.Cog):
                                     message_id=msg_id, count=len(self.reaction_roles[ctx.guild.id][msg_id])))
 
     @reactionrole.command(name='edit')
+    @commands.has_permissions(manage_roles=True)
     @app_commands.describe(
         message_id="ID of the message to edit",
         title="New title for the embed",

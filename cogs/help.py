@@ -79,10 +79,10 @@ class Help(commands.Cog):
             color=discord.Color.blue()
         )
 
-        for cog_name, commands in cogs.items():
-            if commands:
+        for cog_name, cog_commands in cogs.items():
+            if cog_commands:
                 category_name = await i18n.t(ctx, "help.category_format", name=cog_name)
-                commands_text = await i18n.t(ctx, "help.commands_available", count=len(commands))
+                commands_text = await i18n.t(ctx, "help.commands_available", count=len(cog_commands))
                 embed.add_field(
                     name=category_name,
                     value=commands_text,
@@ -140,7 +140,12 @@ class CogButton(discord.ui.Button):
             'Music': '🎵',
             'Moderation': '🛡️',
             'Language': '🌐',
-            'Prefix': '⚙️'
+            'Prefix': '⚙️',
+            'Giveaway': '🎉',
+            'Leveling': '📊',
+            'CustomCommands': '✨',
+            'AutoRole': '🎭',
+            'ReactionRolesCog': '📋',
         }
 
         super().__init__(
@@ -224,10 +229,10 @@ class BackButton(discord.ui.Button):
             color=discord.Color.blue()
         )
 
-        for cog_name, commands in self.view.cogs.items():
-            if commands:
+        for cog_name, cog_commands in self.view.cogs.items():
+            if cog_commands:
                 category_name = await i18n.t(interaction, "help.category_format", name=cog_name)
-                commands_text = await i18n.t(interaction, "help.commands_available", count=len(commands))
+                commands_text = await i18n.t(interaction, "help.commands_available", count=len(cog_commands))
                 embed.add_field(
                     name=category_name,
                     value=commands_text,

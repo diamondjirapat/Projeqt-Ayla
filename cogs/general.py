@@ -34,7 +34,7 @@ class General(commands.Cog):
         websocket_latency = round(self.bot.latency * 1000)
 
         start_time = time.perf_counter()
-        temp_message = await ctx.send("Pinging...")
+        temp_message = await ctx.send(await i18n.t(ctx, 'commands.ping.loading'))
         api_latency = round((time.perf_counter() - start_time) * 1000)
 
         process_start = time.perf_counter()
@@ -48,10 +48,10 @@ class General(commands.Cog):
             color=discord.Color.blue()
         )
 
-        embed.add_field(name="Websocket Latency 📡", value=f"{websocket_latency}ms")
-        embed.add_field(name="API Latency 📝", value=f"{api_latency}ms")
-        embed.add_field(name="Internal Processing Time ⚙️", value=f"{process_time}ms")
-        embed.add_field(name="Total Time 📊", value=f"{total_time}ms")
+        embed.add_field(name=await i18n.t(ctx, 'commands.ping.websocket_latency'), value=f"{websocket_latency}ms")
+        embed.add_field(name=await i18n.t(ctx, 'commands.ping.api_latency'), value=f"{api_latency}ms")
+        embed.add_field(name=await i18n.t(ctx, 'commands.ping.processing_time'), value=f"{process_time}ms")
+        embed.add_field(name=await i18n.t(ctx, 'commands.ping.total_time'), value=f"{total_time}ms")
 
         await temp_message.edit(content=None, embed=embed)
     
@@ -132,21 +132,21 @@ class General(commands.Cog):
                     logger.error(f"Failed to reload {extension}: {e}")
             
             embed = discord.Embed(
-                title="🔄 Reload Complete",
+                title=await i18n.t(ctx, 'commands.reload.title'),
                 color=discord.Color.green() if not failed else discord.Color.orange()
             )
             
             if reloaded:
                 embed.add_field(
-                    name=f"✅ Reloaded ({len(reloaded)})",
-                    value="\n".join([f"`{ext}`" for ext in reloaded]) or "None",
+                    name=await i18n.t(ctx, 'commands.reload.reloaded_count', count=len(reloaded)),
+                    value="\n".join([f"`{ext}`" for ext in reloaded]) or await i18n.t(ctx, 'general.unknown'),
                     inline=False
                 )
             
             if failed:
                 embed.add_field(
-                    name=f"❌ Failed ({len(failed)})",
-                    value="\n".join([f"`{fail}`" for fail in failed[:5]]) or "None",
+                    name=await i18n.t(ctx, 'commands.reload.failed_count', count=len(failed)),
+                    value="\n".join([f"`{fail}`" for fail in failed[:5]]) or await i18n.t(ctx, 'general.unknown'),
                     inline=False
                 )
             
@@ -156,14 +156,14 @@ class General(commands.Cog):
             
             try:
                 await self.bot.reload_extension(extension_name)
-                await ctx.send(f"✅ Reloaded: `{extension_name}`")
+                await ctx.send(await i18n.t(ctx, 'commands.reload.success', extension=extension_name))
                 logger.info(f"Reloaded: {extension_name}")
             except commands.ExtensionNotLoaded:
-                await ctx.send(f"❌ Extension `{extension_name}` is not loaded.")
+                await ctx.send(await i18n.t(ctx, 'commands.reload.not_loaded', extension=extension_name))
             except commands.ExtensionNotFound:
-                await ctx.send(f"❌ Extension `{extension_name}` not found.")
+                await ctx.send(await i18n.t(ctx, 'commands.reload.not_found', extension=extension_name))
             except Exception as e:
-                await ctx.send(f"❌ Failed to reload `{extension_name}`: {str(e)}")
+                await ctx.send(await i18n.t(ctx, 'commands.reload.failed', extension=extension_name, error=str(e)))
                 logger.error(f"Failed to reload {extension_name}: {e}")
 
     @commands.command(name='restart', hidden=True)
@@ -171,8 +171,8 @@ class General(commands.Cog):
     async def restart_command(self, ctx: commands.Context):
         """Restart the entire bot (Owner only)"""
         embed = discord.Embed(
-            title="🔄 Restarting Bot...",
-            description="The bot is shutting down and will restart momentarily.",
+            title=await i18n.t(ctx, 'commands.restart.title'),
+            description=await i18n.t(ctx, 'commands.restart.description'),
             color=discord.Color.orange()
         )
         await ctx.send(embed=embed)

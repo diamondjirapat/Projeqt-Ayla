@@ -31,6 +31,7 @@ Before running the bot, ensure you have the following installed:
 - [Python 3.13+](https://www.python.org/)
 - [MongoDB](https://www.mongodb.com/) (For data persistence)
 - [Lavalink Server](https://github.com/lavalink-devs/Lavalink/releases) (Required for music playback)
+- [Bun](https://bun.sh/) (Required for building the web player frontend)
 
 ### 🛠️ Installation & Setup
 
@@ -50,13 +51,17 @@ Open `.env` and fill in your credentials (Discord Token, MongoDB URI, Lavalink d
 #### 3. Run the Bot
 Choose the method that best suits your environment:
 
-**A. Windows (Easiest)**
-Simply run the provided batch file:
-```cmd
-run.bat
-```
+**A. Development Mode (Bot + Frontend Vite Dev Server)**
+Runs the bot and launches the frontend dev server with hot reload:
+- Windows: `run_dev.bat`
+- Linux/macOS: `./run_dev.sh`
 
-** 🐍 Python (Manual Setup)**
+**B. Production Mode (Builds Frontend + Runs Bot)**
+Installs dependencies, builds the production frontend bundle, and runs the bot:
+- Windows: `run_prod.bat`
+- Linux/macOS: `./run_prod.sh`
+
+**C. Python (Manual Setup)**
 For both Windows and Linux/macOS:
 ```bash
 # Create and activate a virtual environment (Recommended)
@@ -97,10 +102,29 @@ docker run -d --name projeqt-ayla --env-file .env projeqt-ayla
 | `LAVALINK_PASSWORD` | ✅ | Lavalink server password |
 | `LASTFM_API_KEY` | ❌ | Last.fm API key for scrobbling |
 | `LASTFM_API_SECRET` | ❌ | Last.fm API secret |
+| `SESSION_SECRET_KEY` | ✅ with OAuth | Random secret of at least 32 characters used to sign web sessions |
+| `WEB_ALLOWED_ORIGINS` | ❌ | Comma-separated development frontend origins allowed by CORS |
 
 ---
 
 ## 🧑‍💻 For Developers
+
+### Quality Checks
+
+Install the development tools and run the backend checks from the repository root:
+
+```bash
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python -m ruff check .
+python -m compileall -q bot.py config.py cogs database utils tests
+```
+
+Build the Vue frontend with:
+
+```bash
+bun --cwd frontend build
+```
 
 ### 🧩 Adding New Features (Cogs)
 The bot uses a modular "Cog" system. To add a new feature:

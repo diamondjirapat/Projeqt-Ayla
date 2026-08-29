@@ -1,5 +1,3 @@
-import discord
-from typing import Optional, Union
 import logging
 
 logger = logging.getLogger(__name__)

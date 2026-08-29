@@ -4,7 +4,6 @@ from discord.ext import commands
 from database.models import UserModel, GuildModel
 from utils.i18n import i18n
 import logging
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,19 @@ class Moderation(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         logger.info(f'{self.__class__.__name__} cog loaded')
-    
+
+    def _target_above_invoker(self, ctx: commands.Context, member: discord.Member) -> bool:
+        """True when Discord's hierarchy rules should stop this moderator.
+
+        The bot performs kick/ban, which would otherwise bypass the native
+        'cannot act on members with equal/higher top role' restriction.
+        """
+        if ctx.author.id == ctx.guild.owner_id or ctx.author.guild_permissions.administrator:
+            return False
+        if member.id == ctx.guild.owner_id:
+            return True
+        return member.top_role >= ctx.author.top_role
+
     @commands.hybrid_command(name='kick')
     @commands.has_permissions(kick_members=True)
     @app_commands.describe(
@@ -35,7 +46,12 @@ class Moderation(commands.Cog):
         """Kick a member from the server"""
         if reason is None:
             reason = await i18n.t(ctx, 'general.no_reason')
-        
+
+        if self._target_above_invoker(ctx, member):
+            error_msg = await i18n.t(ctx, 'commands.kick.hierarchy', member=member.display_name)
+            await ctx.send(error_msg)
+            return
+
         try:
             await member.kick(reason=reason)
             
@@ -72,7 +88,12 @@ class Moderation(commands.Cog):
         """Ban a member from the server"""
         if reason is None:
             reason = await i18n.t(ctx, 'general.no_reason')
-        
+
+        if self._target_above_invoker(ctx, member):
+            error_msg = await i18n.t(ctx, 'commands.ban.hierarchy', member=member.display_name)
+            await ctx.send(error_msg)
+            return
+
         try:
             await member.ban(reason=reason)
             
