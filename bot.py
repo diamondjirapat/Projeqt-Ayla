@@ -9,12 +9,23 @@ from config import Config
 from database.connection import db_manager
 from utils.helpers import setup_logging
 from utils.prefix_manager import prefix_manager
+from runtime.bots import all_bots
+from database.guild_cache import guild_read_scope
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
+
 class DiscordBot(commands.Bot):
-    all_bots = []
+    all_bots = all_bots
+
+    def dispatch(self, event, /, *args, **kwargs):
+        # Discord schedules all message listeners in this context. Each event
+        # gets its own snapshot, preserving fresh reads on the next message.
+        if event == 'message':
+            with guild_read_scope():
+                return super().dispatch(event, *args, **kwargs)
+        return super().dispatch(event, *args, **kwargs)
 
     def __init__(self, is_main=True):
         self.is_main = is_main
@@ -26,95 +37,96 @@ class DiscordBot(commands.Bot):
             intents.message_content = True
             intents.guilds = True
             intents.members = True
+            intents.presences = True
 
-        logger.info(f"Bot intents: message_content={intents.message_content}, guilds={intents.guilds}, members={intents.members}")
-        logger.info(f"All intents enabled: {Config.INTENTS_ALL}")
+        logger.info(
+            f'Bot intents: message_content={intents.message_content}, '
+            f'guilds={intents.guilds}, members={intents.members}'
+        )
+        logger.info(f'All intents enabled: {Config.INTENTS_ALL}')
 
         super().__init__(
-            command_prefix=prefix_manager.get_prefix,
-            intents=intents,
-            owner_ids=Config.OWNER_IDS,
-            help_command=None
+            command_prefix=prefix_manager.get_prefix, intents=intents, owner_ids=Config.OWNER_IDS, help_command=None
         )
         DiscordBot.all_bots.append(self)
 
     async def setup_hook(self):
-        logger.info("Setting up bot...")
+        logger.info('Setting up bot...')
 
         if db_manager.client is None:
             if not await db_manager.connect():
-                logger.error("Failed to connect to database")
-                return
+                raise RuntimeError('Failed to connect to database')
 
         await self.load_cogs()
 
         from utils.i18n import I18nTranslator
+
         await self.tree.set_translator(I18nTranslator())
 
         from cogs.music import IdlePlaylistView
         from cogs.giveaway import GiveawayView
+        from cogs.tickets import TicketControlView, TicketPanelView, TicketRatingView
         from database.models import UserModel, GuildModel
+
         self.add_view(IdlePlaylistView(0, UserModel(), GuildModel(), self))
         self.add_view(GiveawayView())
+        self.add_view(TicketPanelView())
+        self.add_view(TicketControlView())
+        self.add_view(TicketRatingView())
 
         self.tree.on_error = self.on_app_command_error
 
         try:
             synced = await self.tree.sync()
-            logger.info(f"Synced {len(synced)} slash commands")
+            logger.info(f'Synced {len(synced)} slash commands')
 
         except Exception as e:
-            logger.error(f"Failed to sync slash commands: {e}")
+            logger.error(f'Failed to sync slash commands: {e}')
 
-        logger.info("Bot setup complete")
+        logger.info('Bot setup complete')
 
     async def load_cogs(self):
-        cogs_dir = Path(__file__).resolve().parent / "cogs"
+        cogs_dir = Path(__file__).resolve().parent / 'cogs'
 
-        for cog_file in cogs_dir.glob("*.py"):
-            if cog_file.name.startswith("__"):
+        for cog_file in cogs_dir.glob('*.py'):
+            if cog_file.name.startswith('_'):
                 continue
 
-            if cog_file.name.startswith("_"):
-                continue
-
-            cog_name = f"cogs.{cog_file.stem}"
+            cog_name = f'cogs.{cog_file.stem}'
             try:
                 await self.load_extension(cog_name)
-                logger.info(f"Loaded cog: {cog_name}")
+                logger.info(f'Loaded cog: {cog_name}')
 
             except Exception as e:
-                logger.error(f"Failed to load cog {cog_name}: {e}")
+                raise RuntimeError(f'Failed to load cog {cog_name}') from e
 
     async def update_status(self):
         activity = discord.Activity(
-            type=discord.ActivityType.listening,
-            name=f" {len(self.guilds)} servers | @{self.user.name} help"
+            type=discord.ActivityType.listening, name=f' {len(self.guilds)} servers | @{self.user.name} help'
         )
         await self.change_presence(activity=activity)
 
     async def on_ready(self):
-        logger.info(f"{self.user} has connected to Discord!")
-        logger.info(f"Bot is in {len(self.guilds)} guilds")
+        logger.info(f'{self.user} has connected to Discord!')
+        logger.info(f'Bot is in {len(self.guilds)} guilds')
         await self.update_status()
-        logger.info("I18n system initialized")
+        logger.info('I18n system initialized')
 
-        music_cog = self.get_cog("Music")
+        music_cog = self.get_cog('Music')
         if music_cog:
             for guild in self.guilds:
                 try:
                     await music_cog.update_static_embed(guild.id)
                 except Exception as e:
-                    logger.warning(f"Failed to refresh static embed for guild {guild.id}: {e}")
+                    logger.warning(f'Failed to refresh static embed for guild {guild.id}: {e}')
 
     async def on_guild_join(self, guild):
-        logger.info(f"Joined new guild: {guild.name} ({guild.id})")
+        logger.info(f'Joined new guild: {guild.name} ({guild.id})')
         await self.update_status()
 
     async def on_guild_remove(self, guild):
-        logger.info(f"Left guild: {guild.name} ({guild.id})")
+        logger.info(f'Left guild: {guild.name} ({guild.id})')
         await self.update_status()
-
 
     async def should_handle_message(self, message):
         """
@@ -124,7 +136,7 @@ class DiscordBot(commands.Bot):
         if not ctx.valid or not ctx.command:
             return False
 
-        is_music = ctx.command.cog_name == "Music"
+        is_music = ctx.command.cog_name == 'Music'
 
         if message.guild:
             guild_bots = [b for b in DiscordBot.all_bots if b.get_guild(message.guild.id) is not None]
@@ -135,7 +147,7 @@ class DiscordBot(commands.Bot):
             return self.is_main
 
         if not is_music:
-            main_bot = guild_bots[0] if guild_bots else self
+            main_bot = guild_bots[0]
             return self == main_bot
 
         if not message.guild:
@@ -151,7 +163,7 @@ class DiscordBot(commands.Bot):
                 break
 
         if active_bot:
-            play_cmds = {"play", "playnow", "playnext", "join", "connect", "pn", "pnx", "pl", "playlist"}
+            play_cmds = {'play', 'playnow', 'playnext', 'join', 'connect', 'pn', 'pnx', 'pl', 'playlist'}
             is_play_cmd = ctx.command.name in play_cmds or (ctx.invoked_with in play_cmds)
 
             if is_play_cmd:
@@ -220,7 +232,7 @@ class DiscordBot(commands.Bot):
                 error_msg = await i18n.t(ctx, 'errors.forbidden')
                 await ctx.send(error_msg)
             else:
-                logger.error("Unhandled error in %s", ctx.command, exc_info=error.original)
+                logger.error('Unhandled error in %s', ctx.command, exc_info=error.original)
                 error_msg = await i18n.t(ctx, 'errors.unexpected_error')
                 await ctx.send(error_msg)
 
@@ -228,7 +240,8 @@ class DiscordBot(commands.Bot):
         """Global error handler for slash commands"""
         from utils.i18n import i18n
 
-        logger.error(f"App command error: {error}")
+        logger.error(f'App command error: {error}')
+
         async def send_error(message: str):
             try:
                 if interaction.response.is_done():
@@ -243,9 +256,7 @@ class DiscordBot(commands.Bot):
             return
 
         if isinstance(error, app_commands.CommandOnCooldown):
-            await send_error(await i18n.t(
-                interaction, 'errors.command_cooldown', seconds=f"{error.retry_after:.1f}"
-            ))
+            await send_error(await i18n.t(interaction, 'errors.command_cooldown', seconds=f'{error.retry_after:.1f}'))
 
         elif isinstance(error, app_commands.MissingPermissions):
             error_msg = await i18n.t(interaction, 'errors.missing_permissions')
@@ -265,35 +276,52 @@ class DiscordBot(commands.Bot):
                 error_msg = await i18n.t(interaction, 'errors.forbidden')
                 await send_error(error_msg)
             else:
-                logger.error(f"Unhandled app command error: {error.original}", exc_info=error.original)
+                logger.error(f'Unhandled app command error: {error.original}', exc_info=error.original)
                 error_msg = await i18n.t(interaction, 'errors.unexpected_error')
                 await send_error(error_msg)
 
         else:
-            logger.error(f"Unknown app command error type: {type(error)}", exc_info=error)
+            logger.error(f'Unknown app command error type: {type(error)}', exc_info=error)
             error_msg = await i18n.t(interaction, 'errors.unexpected_error')
             await send_error(error_msg)
 
     async def close(self):
-        logger.info("Shutting down bot...")
+        logger.info('Shutting down bot...')
         if self in DiscordBot.all_bots:
             DiscordBot.all_bots.remove(self)
-        if not DiscordBot.all_bots:
-            await db_manager.disconnect()
         await super().close()
+        if not DiscordBot.all_bots:
+            try:
+                import lava_lyra
+
+                await lava_lyra.NodePool.disconnect()
+            except Exception as e:
+                logger.debug(f'Error disconnecting NodePool during shutdown: {e}')
+            try:
+                from utils.artwork import artwork_resolver
+
+                await artwork_resolver.close()
+            except Exception as e:
+                logger.debug(f'Error closing artwork_resolver during shutdown: {e}')
+            await db_manager.disconnect()
+        await asyncio.sleep(0.25)
+
 
 async def main():
     try:
         Config.validate()
     except ValueError as e:
-        logger.error(f"Configuration error: {e}")
-        return
+        logger.error(f'Configuration error: {e}')
+        raise
+
+    if not await db_manager.connect():
+        raise RuntimeError('Failed to connect to database')
 
     bots = []
     tasks = []
 
     for i, token in enumerate(Config.DISCORD_TOKENS):
-        is_main = (i == 0)
+        is_main = i == 0
         bot = DiscordBot(is_main=is_main)
         bots.append(bot)
         tasks.append(bot.start(token))
@@ -301,13 +329,16 @@ async def main():
     try:
         await asyncio.gather(*tasks)
     except discord.LoginFailure:
-        logger.error("Invalid Discord token found in list")
+        logger.error('Invalid Discord token found in list')
+        raise
     except Exception as e:
-        logger.error(f"Error running bots: {e}")
+        logger.error(f'Error running bots: {e}')
+        raise
     finally:
         for bot in bots:
             if not bot.is_closed():
                 await bot.close()
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     asyncio.run(main())
