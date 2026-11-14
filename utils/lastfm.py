@@ -125,10 +125,7 @@ class LastFMHandler:
                         if resp.status != 200:
                             content = await resp.text()
                             if resp.status in retryable_statuses and attempt < max_retries:
-                                logger.warning(
-                                    f'Last.fm Transient API Error ({method}): {resp.status} - retrying '
-                                    f'({attempt + 1}/{max_retries})'
-                                )
+                                logger.warning(f'Last.fm Transient API Error ({method}): {resp.status} - retrying ({attempt + 1}/{max_retries})')
                                 continue
                             logger.error(f'Last.fm API Error ({method}): {resp.status} - {content}')
                             return None
@@ -138,10 +135,7 @@ class LastFMHandler:
                         if resp.status != 200:
                             content = await resp.text()
                             if resp.status in retryable_statuses and attempt < max_retries:
-                                logger.warning(
-                                    f'Last.fm Transient API Error ({method}): {resp.status} - retrying '
-                                    f'({attempt + 1}/{max_retries})'
-                                )
+                                logger.warning(f'Last.fm Transient API Error ({method}): {resp.status} - retrying ({attempt + 1}/{max_retries})')
                                 continue
                             logger.error(f'Last.fm API Error ({method}): {resp.status} - {content}')
                             return None
@@ -150,10 +144,7 @@ class LastFMHandler:
                 if isinstance(data, dict) and isinstance(data.get('error'), int):
                     err_code = data['error']
                     if err_code in retryable_errors and attempt < max_retries:
-                        logger.warning(
-                            f'Last.fm Transient API Error ({method}): error {err_code} - retrying '
-                            f'({attempt + 1}/{max_retries})'
-                        )
+                        logger.warning(f'Last.fm Transient API Error ({method}): error {err_code} - retrying ({attempt + 1}/{max_retries})')
                         continue
                     logger.error(f'Last.fm API Error ({method}): {err_code} - {data.get("message", "Unknown error")}')
                     return None

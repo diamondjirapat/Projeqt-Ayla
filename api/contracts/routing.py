@@ -39,10 +39,7 @@ class ContractRoute(APIRoute):
                 raise ResponseValidationError(exc.errors(include_input=False)) from exc
 
         if contract.request:
-            parameters = [
-                parameter.replace(annotation=contract.request) if parameter.name in ('data', 'payload') else parameter
-                for parameter in original_signature.parameters.values()
-            ]
+            parameters = [parameter.replace(annotation=contract.request) if parameter.name in ('data', 'payload') else parameter for parameter in original_signature.parameters.values()]
             guarded.__signature__ = original_signature.replace(parameters=parameters)
         kwargs['response_model'] = contract.response
         kwargs['response_model_exclude_unset'] = True

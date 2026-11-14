@@ -85,9 +85,7 @@ def extract_youtube_id(item_or_url: Any) -> str:
         if track_type_val in {'youtube', 'ytmusic'}:
             source = track_type_val
     uri = str(_value(item_or_url, 'uri', '') or _value(item_or_url, 'url', '') or '')
-    if re.fullmatch(r'[0-9A-Za-z_-]{11}', identifier) and (
-        source in {'youtube', 'youtubemusic', 'ytmusic'} or 'youtu' in uri.lower() or not uri
-    ):
+    if re.fullmatch(r'[0-9A-Za-z_-]{11}', identifier) and (source in {'youtube', 'youtubemusic', 'ytmusic'} or 'youtu' in uri.lower() or not uri):
         return identifier
     if not uri and isinstance(item_or_url, str):
         uri = item_or_url
@@ -131,9 +129,7 @@ class ArtworkResolver:
     def __init__(self) -> None:
         self._session: Optional[aiohttp.ClientSession] = None
         self._cache: TTLCache[str, ArtworkResult] = TTLCache(ttl=3600, max_size=2000, name='artwork.results')
-        self._lookups: AsyncTTLCache[tuple, ArtworkResult] = AsyncTTLCache(
-            ttl=60, max_size=2000, name='artwork.lookups'
-        )
+        self._lookups: AsyncTTLCache[tuple, ArtworkResult] = AsyncTTLCache(ttl=60, max_size=2000, name='artwork.lookups')
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:

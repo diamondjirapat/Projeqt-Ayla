@@ -55,9 +55,7 @@ async def recover_creation(operation_id, operation, channel, model, creations):
             await creations.record(operation_id, 'compensated', message_id=message_id)
             return None
         reference = f'Ayla creation: {operation_id}'
-        if message.author.id != operation['bot_id'] or not any(
-            reference in str(getattr(embed.footer, 'text', '') or '') for embed in message.embeds
-        ):
+        if message.author.id != operation['bot_id'] or not any(reference in str(getattr(embed.footer, 'text', '') or '') for embed in message.embeds):
             return None
         try:
             existing = await model.create_giveaway(message_id=message_id, **operation['payload'])
@@ -128,9 +126,7 @@ async def create_giveaway_safely(channel, embed, view, model, creations, payload
                 await creations.record(operation_id, status, **({'message_id': message.id} if message else {}))
         except Exception:
             pass  # The original reservation and embed reference remain durable.
-        logger.error(
-            'giveaway_creation_failed operation_id=%s status=%s exception=%s', operation_id, status, type(exc).__name__
-        )
+        logger.error('giveaway_creation_failed operation_id=%s status=%s exception=%s', operation_id, status, type(exc).__name__)
         if isinstance(exc, asyncio.CancelledError):
             raise
         raise HTTPException(status_code=503, detail='Giveaway creation could not be completed.') from exc

@@ -101,9 +101,7 @@ class SocialAlertState(BaseModel):
 
     async def statuses(self, guild_id: int) -> dict[str, dict]:
         result = {}
-        async for item in self.collection.find(
-            {'guild_id': guild_id}, {'alert_id': 1, 'code': 1, 'checked_at': 1, 'last_sent_at': 1}
-        ):
+        async for item in self.collection.find({'guild_id': guild_id}, {'alert_id': 1, 'code': 1, 'checked_at': 1, 'last_sent_at': 1}):
             result[item['_id']] = {
                 'code': item.get('code', ''),
                 'checked_at': utc_iso(item.get('checked_at')),

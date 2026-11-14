@@ -47,9 +47,7 @@ class GuildModel(BaseModel):
         if doc_cache is None:
             doc_cache = GuildDocCache(ttl=cache_ttl, max_size=max_cache_size, clock=clock)
         self._doc_cache = doc_cache
-        self._cache_enabled = (
-            cache_enabled if cache_enabled is not None else os.getenv('GUILD_CACHE_MODE', 'fresh') == 'ttl'
-        )
+        self._cache_enabled = cache_enabled if cache_enabled is not None else os.getenv('GUILD_CACHE_MODE', 'fresh') == 'ttl'
 
     async def create_guild(self, guild_id: int, name: str, prefix: str = '!', **kwargs) -> Dict[str, Any]:
         """Create a new guild"""
@@ -350,9 +348,7 @@ class GuildModel(BaseModel):
     async def set_level_channel(self, guild_id: int, channel_id: int) -> bool:
         """Set the bound leveling alert text channel ID for a guild."""
         cid = int(channel_id)
-        return await self._upsert(
-            {'guild_id': int(guild_id)}, {'level_channel_id': cid, 'settings.level_channel_id': cid}
-        )
+        return await self._upsert({'guild_id': int(guild_id)}, {'level_channel_id': cid, 'settings.level_channel_id': cid})
 
     async def remove_level_channel(self, guild_id: int) -> bool:
         """Remove the bound leveling alert text channel ID for a guild."""
@@ -383,9 +379,7 @@ class GuildModel(BaseModel):
     async def set_leveling_enabled(self, guild_id: int, enabled: bool) -> bool:
         """Enable or disable the leveling system for a guild."""
         is_on = bool(enabled)
-        return await self._upsert(
-            {'guild_id': int(guild_id)}, {'leveling_enabled': is_on, 'settings.leveling_enabled': is_on}
-        )
+        return await self._upsert({'guild_id': int(guild_id)}, {'leveling_enabled': is_on, 'settings.leveling_enabled': is_on})
 
     async def get_level_alert_config(self, guild_id: int) -> Dict[str, Any]:
         """Get the customizable level-up alert configuration for a guild."""
@@ -483,9 +477,7 @@ class GuildModel(BaseModel):
 
         res = await self._upsert({'guild_id': gid}, updates)
         if chan_id is None:
-            await self.collection.update_one(
-                {'guild_id': gid}, {'$unset': {'level_channel_id': '', 'settings.level_channel_id': ''}}
-            )
+            await self.collection.update_one({'guild_id': gid}, {'$unset': {'level_channel_id': '', 'settings.level_channel_id': ''}})
             self.invalidate_guild(gid)
         return res
 
@@ -622,9 +614,7 @@ class GuildModel(BaseModel):
                 {'$set': {f'playlists.{key}.cover': cover_url}},
             )
         else:
-            result = await self.collection.update_one(
-                {'guild_id': gid, f'playlists.{key}': {'$exists': True}}, {'$unset': {f'playlists.{key}.cover': ''}}
-            )
+            result = await self.collection.update_one({'guild_id': gid, f'playlists.{key}': {'$exists': True}}, {'$unset': {f'playlists.{key}.cover': ''}})
         self.invalidate_guild(gid)
         return result.modified_count > 0 or result.matched_count > 0
 
@@ -643,9 +633,7 @@ class GuildModel(BaseModel):
             return await self.add_playlist_modification(gid, playlist_name, 'additions', track_data)
 
         track_data['added_at'] = datetime.now(UTC)
-        result = await self.collection.update_one(
-            {'guild_id': gid, f'playlists.{key}': {'$exists': True}}, {'$push': {f'playlists.{key}.tracks': track_data}}
-        )
+        result = await self.collection.update_one({'guild_id': gid, f'playlists.{key}': {'$exists': True}}, {'$push': {f'playlists.{key}.tracks': track_data}})
         self.invalidate_guild(gid)
         return result.modified_count > 0
 

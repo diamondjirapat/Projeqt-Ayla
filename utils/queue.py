@@ -494,16 +494,7 @@ class CustomPlayer(lava_lyra.Player):
 
     async def get_tracks(self, query: str | dict[str, Any]) -> list[lava_lyra.Track] | lava_lyra.Playlist:
         if isinstance(query, dict):
-            query = (
-                query.get('uri')
-                or query.get('url')
-                or query.get('query')
-                or (
-                    f'ytsearch:{query.get("title", "")} {query.get("author", "")}'.strip()
-                    if query.get('title') or query.get('author')
-                    else ''
-                )
-            )
+            query = query.get('uri') or query.get('url') or query.get('query') or (f'ytsearch:{query.get("title", "")} {query.get("author", "")}'.strip() if query.get('title') or query.get('author') else '')
         if not isinstance(query, str):
             query = str(query or '').strip()
         query = await assert_safe_track_query(query)

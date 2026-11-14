@@ -32,9 +32,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('reports/database-audit/latest.json'))
     parser.add_argument('--samples', type=int, choices=range(1, 101), default=10)
-    parser.add_argument(
-        '--identifiers', action='store_true', help='Audit legacy identifier precision instead of indexes'
-    )
+    parser.add_argument('--identifiers', action='store_true', help='Audit legacy identifier precision instead of indexes')
     args = parser.parse_args(argv)
     load_dotenv(Path(__file__).resolve().parents[1] / '.env')
     client = None
@@ -63,9 +61,7 @@ def main(argv=None) -> int:
     print(f'Database audit: {report["status"]}; report: {args.output}')
     if 'summary' in report:
         print(json.dumps(report['summary']))
-    return (
-        0 if report['status'] == 'clean' else 1 if report['status'] in ('needs_attention', 'needs_verification') else 2
-    )
+    return 0 if report['status'] == 'clean' else 1 if report['status'] in ('needs_attention', 'needs_verification') else 2
 
 
 if __name__ == '__main__':

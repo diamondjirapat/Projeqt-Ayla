@@ -153,15 +153,11 @@ class LevelingModel(BaseModel):
         try:
             # The pre-image is atomic: it gives the exact XP before this award and
             # reveals whether this call created the guild record.
-            before = await self.collection.find_one_and_update(
-                identity, mutation, upsert=True, return_document=ReturnDocument.BEFORE
-            )
+            before = await self.collection.find_one_and_update(identity, mutation, upsert=True, return_document=ReturnDocument.BEFORE)
             inserted = before is None
         except DuplicateKeyError:
             # A concurrent first award may have inserted the unique guild/user pair.
-            before = await self.collection.find_one_and_update(
-                identity, mutation, return_document=ReturnDocument.BEFORE
-            )
+            before = await self.collection.find_one_and_update(identity, mutation, return_document=ReturnDocument.BEFORE)
             if before is None:
                 raise RuntimeError('Leveling record disappeared during XP award.')
         old_xp = (before or {}).get('xp', 0)
@@ -197,14 +193,10 @@ class LevelingModel(BaseModel):
             '$unset': {'level': ''},
         }
         try:
-            before = await self.collection.find_one_and_update(
-                identity, mutation, upsert=True, return_document=ReturnDocument.BEFORE
-            )
+            before = await self.collection.find_one_and_update(identity, mutation, upsert=True, return_document=ReturnDocument.BEFORE)
             inserted = before is None
         except DuplicateKeyError:
-            before = await self.collection.find_one_and_update(
-                identity, mutation, return_document=ReturnDocument.BEFORE
-            )
+            before = await self.collection.find_one_and_update(identity, mutation, return_document=ReturnDocument.BEFORE)
             inserted = False
         delta = total_xp - (before or {}).get('xp', 0)
         await self._increment_global(user_id, delta, 0, 1 if inserted else 0)

@@ -12,15 +12,7 @@ MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 
 def _blocked_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    return (
-        not address.is_global
-        or address.is_private
-        or address.is_loopback
-        or address.is_link_local
-        or address.is_reserved
-        or address.is_multicast
-        or address.is_unspecified
-    )
+    return not address.is_global or address.is_private or address.is_loopback or address.is_link_local or address.is_reserved or address.is_multicast or address.is_unspecified
 
 
 async def resolve_public_url(value: str, allowed_domains: list[str]) -> tuple[str, list[str]]:
@@ -116,24 +108,12 @@ async def safe_http_request(
                         following.hostname,
                         following.port,
                     ):
-                        current_headers = {
-                            key: value
-                            for key, value in current_headers.items()
-                            if key.lower() not in {'authorization', 'cookie', 'proxy-authorization', 'host'}
-                        }
-                    if (
-                        response.status == 303
-                        and current_method != 'HEAD'
-                        or (response.status in {301, 302} and current_method == 'POST')
-                    ):
+                        current_headers = {key: value for key, value in current_headers.items() if key.lower() not in {'authorization', 'cookie', 'proxy-authorization', 'host'}}
+                    if response.status == 303 and current_method != 'HEAD' or (response.status in {301, 302} and current_method == 'POST'):
                         current_method = 'GET'
                         json_body = None
                         body = None
-                        current_headers = {
-                            key: value
-                            for key, value in current_headers.items()
-                            if key.lower() not in {'content-type', 'content-length', 'transfer-encoding'}
-                        }
+                        current_headers = {key: value for key, value in current_headers.items() if key.lower() not in {'content-type', 'content-length', 'transfer-encoding'}}
                     current = destination
                     if original_scheme == 'https' and urlsplit(current).scheme != 'https':
                         raise ValueError('HTTPS requests cannot redirect to insecure HTTP.')

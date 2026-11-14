@@ -89,7 +89,5 @@ class CustomCommandModel(BaseModel):
     async def increment_use_count(self, guild_id: int, name: str) -> bool:
         """Increment the usage counter of a custom command."""
         name_clean = name.strip().lower()
-        result = await self.collection.update_one(
-            {'guild_id': guild_id, 'name': name_clean}, {'$inc': {'use_count': 1}}
-        )
+        result = await self.collection.update_one({'guild_id': guild_id, 'name': name_clean}, {'$inc': {'use_count': 1}})
         return result.modified_count > 0

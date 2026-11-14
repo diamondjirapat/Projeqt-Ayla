@@ -41,9 +41,7 @@ def register_routes(
         services = provide()
         guild_id = _parse_integer(data.get('guild_id'), 'guild_id', minimum=1)
         if not await services.check_user_guild_permission(user_id, guild_id):
-            raise HTTPException(
-                status_code=403, detail='You do not have permission to preview commands for this server.'
-            )
+            raise HTTPException(status_code=403, detail='You do not have permission to preview commands for this server.')
         guild = services._find_guild(guild_id)
         if guild is None:
             raise HTTPException(status_code=404, detail='Server not found.')

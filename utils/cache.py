@@ -50,9 +50,7 @@ class TTLCache(Generic[KeyT, ValueT]):
         self._max_size = max_size
         self._clock = clock
         self.name = name
-        self._stats = dict.fromkeys(
-            ('hits', 'misses', 'evictions', 'expirations', 'loads', 'load_errors', 'coalesced'), 0
-        )
+        self._stats = dict.fromkeys(('hits', 'misses', 'evictions', 'expirations', 'loads', 'load_errors', 'coalesced'), 0)
         self._stats['load_seconds'] = 0.0
         self._values: OrderedDict[KeyT, tuple[ValueT, float]] = OrderedDict()
         _caches.add(self)

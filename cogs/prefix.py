@@ -33,9 +33,7 @@ class Prefix(commands.Cog):
         commands_label = await i18n.t(ctx, 'prefix.commands')
         commands_help = await i18n.t(ctx, 'prefix.commands_help')
         source = await i18n.t(ctx, f'prefix.source_{prefix_info["priority"]}')
-        effective_prefix = await i18n.t(
-            ctx, 'prefix.effective_source', prefix=f'`{prefix_info["effective_prefix"]}`', source=source
-        )
+        effective_prefix = await i18n.t(ctx, 'prefix.effective_source', prefix=f'`{prefix_info["effective_prefix"]}`', source=source)
 
         embed = discord.Embed(title=title, color=discord.Color.blue())
 
@@ -73,11 +71,7 @@ class Prefix(commands.Cog):
             embed.add_field(name=example_usage, value=f'`{prefix}help` | `{prefix}play music`', inline=False)
         else:
             title = await i18n.t(ctx, 'prefix.set_failed_title')
-            description = (
-                await i18n.t(ctx, f'prefix.validation.{reason}', max=prefix_manager.max_prefix_length, prefix=prefix)
-                if reason
-                else await i18n.t(ctx, 'prefix.set_failed')
-            )
+            description = await i18n.t(ctx, f'prefix.validation.{reason}', max=prefix_manager.max_prefix_length, prefix=prefix) if reason else await i18n.t(ctx, 'prefix.set_failed')
             embed = discord.Embed(title=title, description=description, color=discord.Color.red())
 
         await ctx.send(embed=embed)
@@ -122,11 +116,7 @@ class Prefix(commands.Cog):
             embed.add_field(name=example_usage, value=f'`{prefix}help` or `{prefix}play music`', inline=False)
         else:
             title = await i18n.t(ctx, 'prefix.server_set_failed_title')
-            description = (
-                await i18n.t(ctx, f'prefix.validation.{reason}', max=prefix_manager.max_prefix_length, prefix=prefix)
-                if reason
-                else await i18n.t(ctx, 'prefix.server_set_failed')
-            )
+            description = await i18n.t(ctx, f'prefix.validation.{reason}', max=prefix_manager.max_prefix_length, prefix=prefix) if reason else await i18n.t(ctx, 'prefix.server_set_failed')
             embed = discord.Embed(title=title, description=description, color=discord.Color.red())
 
         await ctx.send(embed=embed)
@@ -156,9 +146,7 @@ class Prefix(commands.Cog):
         title = await i18n.t(ctx, 'prefix.your_current_prefix_title', prefix=effective_prefix)
         embed = discord.Embed(title=title, color=discord.Color.blue())
         example_name = await i18n.t(ctx, 'prefix.example_usage')
-        embed.add_field(
-            name=example_name, value=f'`{effective_prefix}help` | `{effective_prefix}play music`', inline=False
-        )
+        embed.add_field(name=example_name, value=f'`{effective_prefix}help` | `{effective_prefix}play music`', inline=False)
 
         await ctx.send(embed=embed)
 
@@ -169,9 +157,7 @@ class Prefix(commands.Cog):
             return
 
         if message.content.strip() in [f'<@{self.bot.user.id}>', f'<@!{self.bot.user.id}>']:
-            effective_prefix = await prefix_manager.get_effective_prefix(
-                message.author.id, message.guild.id if message.guild else None
-            )
+            effective_prefix = await prefix_manager.get_effective_prefix(message.author.id, message.guild.id if message.guild else None)
 
             hello_title = await i18n.t(message, 'prefix.hello', username=message.author.display_name)
             my_prefix_desc = await i18n.t(message, 'prefix.my_prefix_here', prefix=effective_prefix)

@@ -55,9 +55,7 @@ def _check_alert_mention(
             can_ping_all = False
     if role in ('everyone', 'here'):
         if not can_ping_all:
-            raise HTTPException(
-                status_code=403, detail=f'{field}: Mention Everyone permission is required in that channel.'
-            )
+            raise HTTPException(status_code=403, detail=f'{field}: Mention Everyone permission is required in that channel.')
         return role
     target = guild.get_role(int(role))
     if target is None or target.is_default():
@@ -115,17 +113,9 @@ def register_routes(
         def visible_text_channels() -> list[dict[str, str]]:
             if is_global_admin or member is None:
                 return [{'id': str(ch.id), 'name': ch.name} for ch in guild.text_channels]
-            return [
-                {'id': str(ch.id), 'name': ch.name}
-                for ch in guild.text_channels
-                if ch.permissions_for(member).view_channel
-            ]
+            return [{'id': str(ch.id), 'name': ch.name} for ch in guild.text_channels if ch.permissions_for(member).view_channel]
 
-        can_view = (
-            can_edit
-            or is_global_admin
-            or await services.check_user_guild_capability(user_id, guild_id, 'view_configuration')
-        )
+        can_view = can_edit or is_global_admin or await services.check_user_guild_capability(user_id, guild_id, 'view_configuration')
         if not can_view:
             # Plain members (scheduler, giveaway and custom-command pages) only need the prefix and the
             # channels they can already see; the guild configuration itself stays with configurers.
@@ -169,16 +159,10 @@ def register_routes(
 
         guild_emojis = []
         for e in guild.emojis:
-            guild_emojis.append(
-                {'id': str(e.id), 'name': e.name, 'url': e.url, 'animated': getattr(e, 'animated', False)}
-            )
+            guild_emojis.append({'id': str(e.id), 'name': e.name, 'url': e.url, 'animated': getattr(e, 'animated', False)})
 
         raw_reaction_roles = db_guild.get('reaction_roles', {}) if db_guild else {}
-        reaction_roles = {
-            str(message_id): {str(emoji): str(role_id) for emoji, role_id in mappings.items()}
-            for message_id, mappings in raw_reaction_roles.items()
-            if isinstance(mappings, dict)
-        }
+        reaction_roles = {str(message_id): {str(emoji): str(role_id) for emoji, role_id in mappings.items()} for message_id, mappings in raw_reaction_roles.items() if isinstance(mappings, dict)}
         stored_role_names = db_guild.get('reaction_role_names', {}) if db_guild else {}
         reaction_role_names = dict(stored_role_names) if isinstance(stored_role_names, dict) else {}
         for mappings in reaction_roles.values():
@@ -187,17 +171,9 @@ def register_routes(
                 if role_id in role_names_by_id:
                     reaction_role_names[role_id] = role_names_by_id[role_id]
         stored_reaction_role_embeds = db_guild.get('reaction_role_embeds', {}) if db_guild else {}
-        reaction_role_embeds = {
-            str(message_id): dict(embed_settings)
-            for message_id, embed_settings in stored_reaction_role_embeds.items()
-            if isinstance(embed_settings, dict)
-        }
+        reaction_role_embeds = {str(message_id): dict(embed_settings) for message_id, embed_settings in stored_reaction_role_embeds.items() if isinstance(embed_settings, dict)}
         stored_reaction_role_inline = db_guild.get('reaction_role_inline', {}) if db_guild else {}
-        reaction_role_inline = {
-            str(message_id): {str(emoji): bool(is_inline) for emoji, is_inline in inline_settings.items()}
-            for message_id, inline_settings in stored_reaction_role_inline.items()
-            if isinstance(inline_settings, dict)
-        }
+        reaction_role_inline = {str(message_id): {str(emoji): bool(is_inline) for emoji, is_inline in inline_settings.items()} for message_id, inline_settings in stored_reaction_role_inline.items() if isinstance(inline_settings, dict)}
         reaction_role_titles = {}
 
         async def fetch_message_embed(guild, msg_id_str):
@@ -398,11 +374,7 @@ def register_routes(
                 await services.guild_model.set_music_message(guild_id, 0)
 
         # 4. Music Playback Settings (Autoplay)
-        active_players = [
-            player
-            for player in services.get_all_voice_clients()
-            if isinstance(player, CustomPlayer) and player.guild.id == guild_id
-        ]
+        active_players = [player for player in services.get_all_voice_clients() if isinstance(player, CustomPlayer) and player.guild.id == guild_id]
 
         if 'autoplay' in data:
             autoplay_val = bool(data['autoplay'])
@@ -427,14 +399,8 @@ def register_routes(
                 if normalized_preset not in AUTOPLAY_PRESETS:
                     raise HTTPException(status_code=400, detail='autoplay_preset must be "default" or "custom".')
                 if normalized_preset == AUTOPLAY_PRESET_CUSTOM:
-                    base = (
-                        custom
-                        if isinstance(custom, dict)
-                        else await services.guild_model.get_autoplay_custom_config(guild_id)
-                    )
-                    await services.guild_model.set_autoplay_custom_config(
-                        guild_id, base if isinstance(base, dict) else {}
-                    )
+                    base = custom if isinstance(custom, dict) else await services.guild_model.get_autoplay_custom_config(guild_id)
+                    await services.guild_model.set_autoplay_custom_config(guild_id, base if isinstance(base, dict) else {})
                 else:
                     await services.guild_model.set_autoplay_preset(guild_id, normalized_preset)
             elif isinstance(custom, dict):
@@ -461,11 +427,7 @@ def register_routes(
                 music_cog = active_player.client.get_cog('Music')
                 if music_cog:
                     music_cog.cancel_timeout(guild_id)
-                    alone = (
-                        active_player.channel is not None
-                        and len(active_player.channel.members) == 1
-                        and active_player.channel.members[0].id == active_player.client.user.id
-                    )
+                    alone = active_player.channel is not None and len(active_player.channel.members) == 1 and active_player.channel.members[0].id == active_player.client.user.id
                     if not stay_val and ((active_player.queue.is_empty and not active_player.is_playing) or alone):
                         music_cog.start_timeout(guild_id, active_player)
 
@@ -526,9 +488,7 @@ def register_routes(
                 raw_events = item.get('events', item.get('event_types', item.get('eventTypes')))
                 if raw_events is not None:
                     if not isinstance(raw_events, list) or not raw_events:
-                        raise HTTPException(
-                            status_code=400, detail=f'social_alerts[{index}].events must be a non-empty list.'
-                        )
+                        raise HTTPException(status_code=400, detail=f'social_alerts[{index}].events must be a non-empty list.')
                     allowed = SOCIAL_ALERT_EVENTS[platform]
                     for event_name in raw_events:
                         if str(event_name or '').strip().lower() not in allowed:
@@ -541,10 +501,7 @@ def register_routes(
             stored_social = (stored_guild or {}).get('social_alerts')
             if stored_social is None:
                 stored_social = _social_alerts_from_legacy((stored_guild or {}).get('stream_alerts'))
-            previous_mentions = {
-                str(item.get('id')): (str(item.get('mentionRole') or 'none'), str(item.get('channelId') or ''))
-                for item in _normalize_social_alerts(stored_social)
-            }
+            previous_mentions = {str(item.get('id')): (str(item.get('mentionRole') or 'none'), str(item.get('channelId') or '')) for item in _normalize_social_alerts(stored_social)}
             for entry in normalized_social:
                 if entry['channelId'] is not None:
                     channel_id = _parse_integer(entry['channelId'], f'social_alerts.{entry["id"]}.channelId', minimum=1)
@@ -567,9 +524,7 @@ def register_routes(
                 elif entry['mentionRole'] not in ('none', 'everyone', 'here') and not entry['mentionRole'].isdigit():
                     raise HTTPException(status_code=400, detail=f'social_alerts.{entry["id"]}.mentionRole is invalid.')
             legacy_alerts = _legacy_stream_alerts_from_social(normalized_social)
-            await services.guild_model.update_guild(
-                guild_id, {'social_alerts': normalized_social, 'stream_alerts': legacy_alerts}
-            )
+            await services.guild_model.update_guild(guild_id, {'social_alerts': normalized_social, 'stream_alerts': legacy_alerts})
         elif 'stream_alerts' in data:
             alerts = data.get('stream_alerts')
             if not isinstance(alerts, dict):
@@ -594,9 +549,7 @@ def register_routes(
                         invoker_member,
                         cfg['mentionRole'],
                         f'stream_alerts.{platform}',
-                        (str(before.get('mentionRole') or 'none'), str(before.get('channelId') or ''))
-                        if before
-                        else None,
+                        (str(before.get('mentionRole') or 'none'), str(before.get('channelId') or '')) if before else None,
                         cfg['channelId'],
                     )
             await services.guild_model.update_guild(guild_id, {'stream_alerts': normalized_alerts})
@@ -657,9 +610,7 @@ def register_routes(
 
                 message = await resolve_reaction_role_message(services.bot_instance, guild, message_id, invoker_member)
                 if message is None:
-                    raise HTTPException(
-                        status_code=403, detail='Reaction-role message is not accessible in this server.'
-                    )
+                    raise HTTPException(status_code=403, detail='Reaction-role message is not accessible in this server.')
                 if not isinstance(emoji_roles, dict):
                     continue
                 normalized_emoji_roles = {}
@@ -705,12 +656,7 @@ def register_routes(
                     provided_inline = {}
                 if not isinstance(stored_inline, dict):
                     stored_inline = {}
-                reaction_role_inline[message_key] = {
-                    emoji: bool(provided_inline[emoji])
-                    if emoji in provided_inline
-                    else bool(stored_inline.get(emoji, True))
-                    for emoji in normalized_emoji_roles
-                }
+                reaction_role_inline[message_key] = {emoji: bool(provided_inline[emoji]) if emoji in provided_inline else bool(stored_inline.get(emoji, True)) for emoji in normalized_emoji_roles}
 
             if skipped_reaction_roles:
                 logger.warning(

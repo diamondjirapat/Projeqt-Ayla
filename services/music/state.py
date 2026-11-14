@@ -17,8 +17,6 @@ def timeline_revision(player) -> str:
         digest.update(len(tracks).to_bytes(8, 'big'))
         for track in tracks:
             digest.update(id(track).to_bytes(8, 'big'))
-            metadata = tuple(
-                getattr(track, field, None) for field in ('title', 'author', 'uri', 'length', 'requester', 'artwork')
-            )
+            metadata = tuple(getattr(track, field, None) for field in ('title', 'author', 'uri', 'length', 'requester', 'artwork'))
             digest.update(repr(metadata).encode())
     return digest.hexdigest()

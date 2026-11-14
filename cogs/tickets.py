@@ -64,10 +64,7 @@ class TicketFormModal(discord.ui.Modal):
         if not isinstance(cog, Tickets):
             await interaction.response.send_message('The ticket service is unavailable.', ephemeral=True)
             return
-        answers = [
-            {'question_id': question['id'], 'question': question['label'], 'answer': field.value.strip()}
-            for question, field in self.inputs
-        ]
+        answers = [{'question_id': question['id'], 'question': question['label'], 'answer': field.value.strip()} for question, field in self.inputs]
         evidence = [
             {
                 'filename': attachment.filename[:260],
@@ -191,11 +188,7 @@ class Tickets(commands.Cog):
 
     async def _staff_allowed(self, interaction: discord.Interaction, ticket: dict[str, Any]) -> bool:
         panel = await self._panel_for_ticket(ticket)
-        return (
-            isinstance(interaction.user, discord.Member)
-            and bool(panel)
-            and await self._is_staff_member(interaction.user, panel)
-        )
+        return isinstance(interaction.user, discord.Member) and bool(panel) and await self._is_staff_member(interaction.user, panel)
 
     async def _is_staff_member(self, member: discord.Member, panel: dict[str, Any]) -> bool:
         if _staff_member(member, panel):
@@ -292,9 +285,7 @@ class Tickets(commands.Cog):
         )
         embed = discord.Embed(
             title=f'Ticket #{ticket["ticket_id"]} · {panel.get("category_name", "Support")}',
-            description=(
-                'A staff member will respond here.' if not panel.get('anonymous') else 'Anonymous report received.'
-            ),
+            description=('A staff member will respond here.' if not panel.get('anonymous') else 'Anonymous report received.'),
             color=discord.Color.blurple(),
         )
         if not panel.get('anonymous'):
@@ -463,11 +454,7 @@ class Tickets(commands.Cog):
         if not ticket or ticket.get('status') != 'open':
             return
         panel = await self._panel_for_ticket(ticket)
-        is_staff = (
-            isinstance(message.author, discord.Member)
-            and bool(panel)
-            and await self._is_staff_member(message.author, panel)
-        )
+        is_staff = isinstance(message.author, discord.Member) and bool(panel) and await self._is_staff_member(message.author, panel)
         evidence = [
             {
                 'filename': item.filename[:260],
@@ -664,11 +651,7 @@ class Tickets(commands.Cog):
             if close_hours and last_activity <= now - timedelta(hours=close_hours):
                 if guild:
                     await self.close_ticket(guild, ticket, self.bot.user.id)
-            elif (
-                reminder_hours
-                and not ticket.get('reminder_sent_at')
-                and last_activity <= now - timedelta(hours=reminder_hours)
-            ):
+            elif reminder_hours and not ticket.get('reminder_sent_at') and last_activity <= now - timedelta(hours=reminder_hours):
                 claimed = await self.ticket_model.collection.update_one(
                     {'_id': ticket['_id'], 'status': 'open', 'reminder_sent_at': None},
                     {'$set': {'reminder_sent_at': now}},

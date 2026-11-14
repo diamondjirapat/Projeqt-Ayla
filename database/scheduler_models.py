@@ -301,9 +301,7 @@ class ScheduledItemModel(BaseModel):
         cursor = self.collection.find(query).sort('next_run_at', 1).limit(limit)
         return await cursor.to_list(length=limit)
 
-    async def update_item(
-        self, item_id: Any, guild_id: int, changes: Dict[str, Any], *, editor_id: Optional[int] = None
-    ) -> Optional[Dict[str, Any]]:
+    async def update_item(self, item_id: Any, guild_id: int, changes: Dict[str, Any], *, editor_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """Apply validated changes to a scheduled item; returns the updated doc."""
         allowed = {'kind', 'title', 'content', 'embed', 'recurrence', 'channel_id', 'event_end_at', 'location'}
         values = {key: changes[key] for key in allowed if key in changes}
@@ -346,9 +344,7 @@ class ScheduledItemModel(BaseModel):
             return_document=ReturnDocument.AFTER,
         )
 
-    async def claim_due_items(
-        self, now: datetime, *, guild_ids: list[int], channel_ids: list[int], owner: str, limit: int = 1
-    ) -> List[Dict[str, Any]]:
+    async def claim_due_items(self, now: datetime, *, guild_ids: list[int], channel_ids: list[int], owner: str, limit: int = 1) -> List[Dict[str, Any]]:
         """Claim reachable jobs, including expired leases left by a crashed worker."""
         if not guild_ids or not channel_ids:
             return []

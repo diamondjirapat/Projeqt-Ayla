@@ -76,9 +76,7 @@ class TrapChannel(commands.Cog):
         except discord.NotFound:
             pass
         except discord.Forbidden:
-            logger.warning(
-                'Missing Manage Messages to clear trap channel %s in guild %s', message.channel.id, message.guild.id
-            )
+            logger.warning('Missing Manage Messages to clear trap channel %s in guild %s', message.channel.id, message.guild.id)
         except discord.HTTPException as exc:
             logger.warning('Could not delete trap channel message %s: %s', message.id, exc)
 
@@ -142,9 +140,7 @@ class TrapChannel(commands.Cog):
                 # Spam usually lands in several channels at once; clear the last hour of it too.
                 await member.ban(reason=reason, delete_message_seconds=3600)
         except discord.Forbidden:
-            logger.info(
-                'Trap channel could not %s %s in guild %s (hierarchy or permissions)', action, member.id, guild.id
-            )
+            logger.info('Trap channel could not %s %s in guild %s (hierarchy or permissions)', action, member.id, guild.id)
             return
         except discord.HTTPException as exc:
             logger.warning('Trap channel %s failed for %s in guild %s: %s', action, member.id, guild.id, exc)
@@ -395,4 +391,3 @@ class TrapChannel(commands.Cog):
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(TrapChannel(bot))
-

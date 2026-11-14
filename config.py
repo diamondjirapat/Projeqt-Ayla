@@ -97,17 +97,9 @@ class Config:
         if len(cls.SESSION_SECRET_KEY) >= 32:
             return cls.SESSION_SECRET_KEY
         if cls.SESSION_SECRET_KEY:
-            logger.warning(
-                '[CONFIG] SESSION_SECRET_KEY is shorter than 32 characters; '
-                'using a random per-boot key instead. Set a persistent key with: '
-                'python -c "import secrets; print(secrets.token_hex(32))"'
-            )
+            logger.warning('[CONFIG] SESSION_SECRET_KEY is shorter than 32 characters; using a random per-boot key instead. Set a persistent key with: python -c "import secrets; print(secrets.token_hex(32))"')
         else:
-            logger.warning(
-                '[CONFIG] SESSION_SECRET_KEY is not set; using a random per-boot key. '
-                'Web sessions will be invalidated on every restart. Set one with: '
-                'python -c "import secrets; print(secrets.token_hex(32))"'
-            )
+            logger.warning('[CONFIG] SESSION_SECRET_KEY is not set; using a random per-boot key. Web sessions will be invalidated on every restart. Set one with: python -c "import secrets; print(secrets.token_hex(32))"')
         return secrets.token_hex(32)
 
     WEB_ALLOWED_ORIGINS = list(

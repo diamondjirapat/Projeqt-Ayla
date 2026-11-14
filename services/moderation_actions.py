@@ -15,9 +15,7 @@ async def undo_case_action(guild, actor, case: dict, reason: str) -> None:
     if action not in {'ban', 'timeout'}:
         return
     permission = 'ban_members' if action == 'ban' else 'moderate_members'
-    if actor is None or not (
-        actor.guild_permissions.administrator or getattr(actor.guild_permissions, permission, False)
-    ):
+    if actor is None or not (actor.guild_permissions.administrator or getattr(actor.guild_permissions, permission, False)):
         raise PermissionError(f'The {permission} permission is required to reverse this sanction.')
     target_id = int(case['target_user_id'])
     if action == 'ban':

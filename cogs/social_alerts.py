@@ -18,11 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def guild_entries(document: dict) -> list[dict]:
-    return (
-        _normalize_social_alerts(document['social_alerts'])
-        if document.get('social_alerts') is not None
-        else _social_alerts_from_legacy(document.get('stream_alerts'))
-    )
+    return _normalize_social_alerts(document['social_alerts']) if document.get('social_alerts') is not None else _social_alerts_from_legacy(document.get('stream_alerts'))
 
 
 class SocialAlerts(commands.Cog):
@@ -84,9 +80,7 @@ class SocialAlerts(commands.Cog):
                 # Invalid handles are reported directly by the settings API.
                 continue
             except Exception as error:
-                logger.warning(
-                    'social_alert_failed guild=%s alert=%s exception=%s', guild_id, entry['id'], type(error).__name__
-                )
+                logger.warning('social_alert_failed guild=%s alert=%s exception=%s', guild_id, entry['id'], type(error).__name__)
         await self.state_model.deactivate(guild_id, active_keys)
 
     async def process_entry(self, guild_id: int, entry: dict, state: dict):
@@ -102,9 +96,7 @@ class SocialAlerts(commands.Cog):
             await self.state_model.finish(state, now, interval, 'discord_permissions')
             return
         try:
-            result = await self.providers.poll(
-                entry['platform'], entry['handle'], state.get('metadata'), live='live' in entry['events']
-            )
+            result = await self.providers.poll(entry['platform'], entry['handle'], state.get('metadata'), live='live' in entry['events'])
         except ProviderError as error:
             await self.state_model.finish(state, now, max(interval, error.retry_after), error.code)
             return
@@ -118,9 +110,7 @@ class SocialAlerts(commands.Cog):
         if not state['initialized']:
             # Observe current content once, then announce only new events. Empty feeds are valid baselines.
             seen = [event.key for event in events]
-            if not await self.state_model.update(
-                state, initialized=True, baseline_at=now, seen=seen, pending=[], metadata=result.metadata
-            ):
+            if not await self.state_model.update(state, initialized=True, baseline_at=now, seen=seen, pending=[], metadata=result.metadata):
                 return
         else:
             baseline = state['baseline_at']

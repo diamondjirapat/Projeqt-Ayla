@@ -60,9 +60,7 @@ def register_routes(
 
         serialized = []
         for g in giveaways:
-            if not can_manage and not _member_can_view_channel(
-                services.bot_instance, guild_id, g.get('channel_id'), member
-            ):
+            if not can_manage and not _member_can_view_channel(services.bot_instance, guild_id, g.get('channel_id'), member):
                 continue
             item = _serialize_giveaway(g)
             item['user_entered'] = int(user_id) in g.get('entries', [])
@@ -91,9 +89,7 @@ def register_routes(
             member = services._get_guild_member(int(giveaway_guild_id), int(user_id)) if giveaway_guild_id else None
             if member is None:
                 raise HTTPException(status_code=403, detail='You are not a member of this server.')
-            if not _member_can_view_channel(
-                services.bot_instance, int(giveaway_guild_id), giveaway.get('channel_id'), member
-            ) and not await services.check_user_guild_permission(user_id, int(giveaway_guild_id)):
+            if not _member_can_view_channel(services.bot_instance, int(giveaway_guild_id), giveaway.get('channel_id'), member) and not await services.check_user_guild_permission(user_id, int(giveaway_guild_id)):
                 raise HTTPException(status_code=403, detail='You cannot access this giveaway.')
 
         # Same toggle as the Discord button: add_entry is atomic, so only fall back to leaving
@@ -301,8 +297,7 @@ def register_routes(
                         await orig_msg.edit(embed=ended_embed)
                         winner_mentions = ', '.join(f'<@{w}>' for w in new_winners)
                         await channel.send(
-                            f'Giveaway Rerolled! New winner(s): {winner_mentions} '
-                            f'for **{giveaway.get("prize", "Prize")}**!',
+                            f'Giveaway Rerolled! New winner(s): {winner_mentions} for **{giveaway.get("prize", "Prize")}**!',
                             reference=orig_msg.to_reference(fail_if_not_exists=False),
                         )
                 except Exception as e:

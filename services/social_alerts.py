@@ -109,12 +109,7 @@ def _social_alerts_from_legacy(raw: Any) -> list[Dict[str, Any]]:
         cfg = legacy.get(platform, {})
         if not isinstance(cfg, dict):
             continue
-        if (
-            not cfg.get('streamerName')
-            and not cfg.get('enabled')
-            and not cfg.get('channelId')
-            and not cfg.get('customMessage')
-        ):
+        if not cfg.get('streamerName') and not cfg.get('enabled') and not cfg.get('channelId') and not cfg.get('customMessage'):
             continue
         entries.append(
             {

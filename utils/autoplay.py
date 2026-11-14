@@ -111,11 +111,7 @@ def is_channel_blocked(track: Any, config: Any) -> bool:
     channel_id = track_channel_id(track)
     author = getattr(track, 'author', '')
     author = author.strip().casefold() if isinstance(author, str) else ''
-    return any(
-        entry == channel_id if YOUTUBE_CHANNEL_ID.fullmatch(entry) else entry.casefold() == author
-        for entry in entries
-        if isinstance(entry, str)
-    )
+    return any(entry == channel_id if YOUTUBE_CHANNEL_ID.fullmatch(entry) else entry.casefold() == author for entry in entries if isinstance(entry, str))
 
 
 def normalize_autoplay_config(raw: Any) -> dict[str, Any]:
@@ -296,9 +292,7 @@ class AutoplayMixin:
             pass
         return config
 
-    async def _fetch_autoplay_track(
-        self, player: CustomPlayer, last_track: lava_lyra.Track, config: Optional[dict[str, Any]] = None
-    ) -> lava_lyra.Track | None:
+    async def _fetch_autoplay_track(self, player: CustomPlayer, last_track: lava_lyra.Track, config: Optional[dict[str, Any]] = None) -> lava_lyra.Track | None:
         """Fetch a recommended track based on the last played track with multi-stage fallback and anti-repetition."""
         guild_id = player.guild.id
         cfg = effective_autoplay_config(config if config is not None else getattr(player, 'autoplay_config', None))
@@ -415,16 +409,12 @@ class AutoplayMixin:
         # Stage 1: Built-in recommendations via lava-lyra (Spotify, YouTube, Deezer, etc.)
 
         try:
-            recommended = (
-                (await player.get_recommendations(track=last_track)) if cfg['enable_recommendations'] else None
-            )
+            recommended = (await player.get_recommendations(track=last_track)) if cfg['enable_recommendations'] else None
             if recommended:
                 tracks = recommended.tracks if isinstance(recommended, lava_lyra.Playlist) else recommended
                 selected = await select_best_candidate(tracks)
                 if selected:
-                    logger.info(
-                        f"[AUTOPLAY STAGE 1 - RECOMMENDATION] Selected: '{selected.title}' by {selected.author}"
-                    )
+                    logger.info(f"[AUTOPLAY STAGE 1 - RECOMMENDATION] Selected: '{selected.title}' by {selected.author}")
                     return selected
         except Exception as e:
             logger.warning(f'[AUTOPLAY STAGE 1] Recommendations failed: {e}')

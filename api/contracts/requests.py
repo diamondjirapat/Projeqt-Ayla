@@ -97,9 +97,7 @@ GiveawayRequest = request_model(
     title=Text,
     embed=dict,
 )
-RerollRequest = request_model(
-    'RerollRequest', {'message_id': Id}, winners_count=Annotated[StrictInt, Field(ge=1, le=50)]
-)
+RerollRequest = request_model('RerollRequest', {'message_id': Id}, winners_count=Annotated[StrictInt, Field(ge=1, le=50)])
 ScheduleFields = {
     'channel_id': Id,
     'kind': Literal['announcement', 'event'],
@@ -114,9 +112,7 @@ ScheduleFields = {
 ScheduleRequest = request_model(
     'ScheduleRequest',
     {'guild_id': Id, **{key: ScheduleFields[key] for key in ('channel_id', 'kind', 'content', 'starts_at')}},
-    **{
-        key: value for key, value in ScheduleFields.items() if key not in ('channel_id', 'kind', 'content', 'starts_at')
-    },
+    **{key: value for key, value in ScheduleFields.items() if key not in ('channel_id', 'kind', 'content', 'starts_at')},
 )
 SchedulePatch = request_model('SchedulePatch', {'guild_id': Id}, **ScheduleFields)
 PanelRequest = request_model('PanelRequest', {'guild_id': Id}, panel=dict)
@@ -164,9 +160,7 @@ ReviewAppealRequest = request_model(
     reason=Text,
 )
 MusicAppearanceTarget = Literal['voice', 'channel']
-MusicEmbedRequest = request_model(
-    'MusicEmbedRequest', {'guild_id': Id}, config=dict | None, target=MusicAppearanceTarget
-)
+MusicEmbedRequest = request_model('MusicEmbedRequest', {'guild_id': Id}, config=dict | None, target=MusicAppearanceTarget)
 MusicEmbedResetRequest = request_model('MusicEmbedResetRequest', {'guild_id': Id}, target=MusicAppearanceTarget)
 MusicPreviewRequest = request_model(
     'MusicPreviewRequest',
@@ -178,17 +172,9 @@ MusicPreviewRequest = request_model(
 SyncAutoplayRequest = request_model('SyncAutoplayRequest', guild_id=Id | None, autoplay=StrictBool)
 
 PlaylistNameRequest = request_model('PlaylistNameRequest', {'name': Name})
-PlaylistQueueRequest = request_model(
-    'PlaylistQueueRequest', {'name': Name, 'tracks': Annotated[list[dict], Field(min_length=1, max_length=1000)]}
-)
+PlaylistQueueRequest = request_model('PlaylistQueueRequest', {'name': Name, 'tracks': Annotated[list[dict], Field(min_length=1, max_length=1000)]})
 PlaylistTrackRequest = request_model('PlaylistTrackRequest', {'playlist_name': Name, 'track': dict})
-PlaylistRemoveRequest = request_model(
-    'PlaylistRemoveRequest', {'playlist_name': Name, 'index': Annotated[StrictInt, Field(ge=0)]}
-)
-PlaylistCoverRequest = request_model(
-    'PlaylistCoverRequest', {'playlist_name': Name}, cover_url=Annotated[StrictStr, Field(max_length=2048)]
-)
-LastfmTokenRequest = request_model(
-    'LastfmTokenRequest', {'token': Annotated[StrictStr, Field(min_length=1, max_length=256)]}
-)
+PlaylistRemoveRequest = request_model('PlaylistRemoveRequest', {'playlist_name': Name, 'index': Annotated[StrictInt, Field(ge=0)]})
+PlaylistCoverRequest = request_model('PlaylistCoverRequest', {'playlist_name': Name}, cover_url=Annotated[StrictStr, Field(max_length=2048)])
+LastfmTokenRequest = request_model('LastfmTokenRequest', {'token': Annotated[StrictStr, Field(min_length=1, max_length=256)]})
 ScrobbleRequest = request_model('ScrobbleRequest', enabled=StrictBool)

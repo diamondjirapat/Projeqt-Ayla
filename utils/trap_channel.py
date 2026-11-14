@@ -24,11 +24,7 @@ _DISCORD_TOKEN_PATTERN = re.compile(r'<(?:@!?|@&|#)[0-9]+>|<a?:[A-Za-z0-9_]+:[0-
 _DEFAULT_EMBED: Dict[str, Any] = {
     'content': '',
     'title': '⚠️ Do not send messages in this channel',
-    'description': (
-        'This channel is a trap for spam bots and compromised accounts.\n\n'
-        '**Any message sent here is deleted immediately and the sender is {penalty}.**\n\n'
-        'If you are a real member of {server}, please do not type here.'
-    ),
+    'description': ('This channel is a trap for spam bots and compromised accounts.\n\n**Any message sent here is deleted immediately and the sender is {penalty}.**\n\nIf you are a real member of {server}, please do not type here.'),
     'color': '#ef4444',
     'image_url': '',
     'thumbnail_url': '',
@@ -188,8 +184,5 @@ def render_trap_embed_parts(config: Mapping[str, Any], values: Mapping[str, str]
             'url': url(embed['author']['url']),
             'icon_url': url(embed['author']['icon_url']),
         },
-        'fields': [
-            {'name': render(item['name']), 'value': render(item['value']), 'inline': item['inline']}
-            for item in embed['fields']
-        ],
+        'fields': [{'name': render(item['name']), 'value': render(item['value']), 'inline': item['inline']} for item in embed['fields']],
     }

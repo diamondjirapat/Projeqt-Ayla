@@ -94,9 +94,7 @@ async def check(uri):
             # A Python writer cannot replace a playlist created concurrently by Bun.
             assert not await model.create_playlist_with_tracks(uid, 'Concurrent Bun', [])
             assert len((await model.get_playlist(uid, 'Concurrent Bun'))['tracks']) == 1
-            creations = await asyncio.gather(
-                *(model.create_playlist_with_tracks(uid, 'Concurrent Python', [FIXTURES['track']]) for _ in range(20))
-            )
+            creations = await asyncio.gather(*(model.create_playlist_with_tracks(uid, 'Concurrent Python', [FIXTURES['track']]) for _ in range(20)))
             assert sum(creations) == 1
         uid = 368581475660201987
         doc = await model.get_user(uid)

@@ -54,11 +54,7 @@ def register_routes(
             'preview_context': services._guild_preview_context(guild, {'id': user_id, 'username': str(user_id)}),
             'can_edit': True,
             'text_channels': [{'id': str(channel.id), 'name': channel.name} for channel in guild.text_channels],
-            'roles': [
-                {'id': str(role.id), 'name': role.name, 'color': str(role.color)}
-                for role in reversed(guild.roles)
-                if not role.is_default()
-            ],
+            'roles': [{'id': str(role.id), 'name': role.name, 'color': str(role.color)} for role in reversed(guild.roles) if not role.is_default()],
             'bot_top_role_position': bot_top_role.position if bot_top_role else 0,
             'actions': list(TRAP_ACTIONS),
             'placeholders': list(TRAP_PLACEHOLDERS),

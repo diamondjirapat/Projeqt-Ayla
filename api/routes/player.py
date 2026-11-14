@@ -53,9 +53,7 @@ def register_routes(
                         member = await fetch_missing_member(player.guild, user_id)
                 except Exception:
                     return None
-            user_has_perm = is_admin or (
-                member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
-            )
+            user_has_perm = is_admin or (member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild))
             if user_has_perm:
                 return {
                     'guild_id': str(player.guild.id),
@@ -243,14 +241,10 @@ def register_routes(
                         break
 
                 if not voice_channel:
-                    logger.warning(
-                        f'[WEB] Voice channel not found for user_id={user_id}. Searched guilds: {searched_guilds}'
-                    )
+                    logger.warning(f'[WEB] Voice channel not found for user_id={user_id}. Searched guilds: {searched_guilds}')
                     for guild in services.get_all_guilds():
                         if guild._voice_states:
-                            logger.warning(
-                                f'[WEB] Guild {guild.name} ({guild.id}) voice states: {list(guild._voice_states.keys())}'
-                            )
+                            logger.warning(f'[WEB] Guild {guild.name} ({guild.id}) voice states: {list(guild._voice_states.keys())}')
                     raise HTTPException(status_code=400, detail='You must be in a Discord voice channel to play music.')
 
                 if not active_player:
@@ -282,10 +276,7 @@ def register_routes(
                     if not bot_voice_channel:
                         raise HTTPException(status_code=400, detail='Could not connect bot to your voice channel.')
 
-                    logger.info(
-                        f'[WEB] Connecting {selected_bot.user} to voice channel '
-                        f'{bot_voice_channel.name} in guild {bot_guild.name}'
-                    )
+                    logger.info(f'[WEB] Connecting {selected_bot.user} to voice channel {bot_voice_channel.name} in guild {bot_guild.name}')
                     active_player = await bot_voice_channel.connect(cls=CustomPlayer)
                     active_player.home_channel = bot_voice_channel
 
@@ -321,9 +312,7 @@ def register_routes(
                     active_player.queue.put(track)
 
                 if not active_player.is_playing:
-                    await apply_session_volume(
-                        active_player, await services.guild_model.get_default_volume(active_player.guild.id)
-                    )
+                    await apply_session_volume(active_player, await services.guild_model.get_default_volume(active_player.guild.id))
 
                     await active_player.play(active_player.queue.get(force_next=True))
 
@@ -410,9 +399,7 @@ def register_routes(
                 # Sync back to DB settings
                 db_user = await services.user_model.get_user(user_id)
                 if db_user:
-                    await services.user_model.update_user(
-                        user_id, {'settings.autoplay': active_player.autoplay_enabled}
-                    )
+                    await services.user_model.update_user(user_id, {'settings.autoplay': active_player.autoplay_enabled})
 
             elif action == 'queue_remove':
                 active_player.queue.remove_at(int(value))

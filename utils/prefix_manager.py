@@ -96,8 +96,7 @@ class PrefixManager:
 
         final = mention_prefixes + text_prefixes
         logger.debug(
-            f'[PREFIX] Resolved for user={author_id}, guild={guild_id}: '
-            f'user={user_prefix!r}, guild={guild_prefix!r}, final={text_prefixes}',
+            f'[PREFIX] Resolved for user={author_id}, guild={guild_id}: user={user_prefix!r}, guild={guild_prefix!r}, final={text_prefixes}',
         )
         return final
 
@@ -170,14 +169,10 @@ class PrefixManager:
         return True, 'valid'
 
     async def get_user_prefix(self, user_id: int) -> Optional[str]:
-        return await self._cache.get_or_load(
-            self._get_cache_key('user', user_id), lambda: self.user_prefix_model.get_user_prefix(user_id)
-        )
+        return await self._cache.get_or_load(self._get_cache_key('user', user_id), lambda: self.user_prefix_model.get_user_prefix(user_id))
 
     async def get_guild_prefix(self, guild_id: int) -> Optional[str]:
-        return await self._cache.get_or_load(
-            self._get_cache_key('guild', guild_id), lambda: self.guild_prefix_model.get_guild_prefix(guild_id)
-        )
+        return await self._cache.get_or_load(self._get_cache_key('guild', guild_id), lambda: self.guild_prefix_model.get_guild_prefix(guild_id))
 
     async def get_effective_prefix(self, user_id: int, guild_id: int = None) -> str:
         user_prefix = await self.get_user_prefix(user_id)

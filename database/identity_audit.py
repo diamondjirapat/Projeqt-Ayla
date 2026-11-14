@@ -88,9 +88,7 @@ def audit_identifiers(db, *, samples=20):
                             examples.append({'document_id': str(document.get('_id')), **finding})
         except Exception as error:
             report['errors'].append({'collection': name, 'error': type(error).__name__})
-        report['collections'].append(
-            {'name': name, 'documents': documents, 'findings': dict(totals), 'samples': examples}
-        )
+        report['collections'].append({'name': name, 'documents': documents, 'findings': dict(totals), 'samples': examples})
     report['summary'] = {
         'collections': len(names),
         'documents': sum(item['documents'] for item in report['collections']),

@@ -122,9 +122,7 @@ _HEX_COLOR_PATTERN = re.compile(r'^#[0-9a-f]{6}$', re.IGNORECASE)
 
 def _strip_html_tags(value: str) -> str:
     # Discord mentions, custom emoji, and timestamps also use angle brackets.
-    return _HTML_TAG_PATTERN.sub(
-        lambda match: match[0] if _DISCORD_TOKEN_PATTERN.fullmatch(match[0]) else '', value
-    ).strip()
+    return _HTML_TAG_PATTERN.sub(lambda match: match[0] if _DISCORD_TOKEN_PATTERN.fullmatch(match[0]) else '', value).strip()
 
 
 def get_default_greeting_config(kind: str) -> Dict[str, Any]:

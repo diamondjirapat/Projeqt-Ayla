@@ -104,9 +104,7 @@ class GuildDocCache:
             raise ValueError('ttl must be positive')
         if max_size <= 0:
             raise ValueError('max_size must be positive')
-        self._cache: AsyncTTLCache[Any, Optional[Dict[str, Any]]] = AsyncTTLCache(
-            ttl=ttl, max_size=max_size, clock=clock, name=name
-        )
+        self._cache: AsyncTTLCache[Any, Optional[Dict[str, Any]]] = AsyncTTLCache(ttl=ttl, max_size=max_size, clock=clock, name=name)
         self.revision = 0
         _guild_caches.add(self)
 

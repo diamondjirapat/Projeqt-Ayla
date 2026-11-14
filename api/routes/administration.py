@@ -109,10 +109,7 @@ def register_routes(
         if guild is None:
             raise HTTPException(status_code=404, detail='Server not found.')
         grants = await services.guild_permission_model.get_role_grants(guild_id)
-        roles = [
-            {'id': str(role.id), 'name': role.name, 'managed': role.managed, 'position': role.position}
-            for role in sorted(guild.roles, reverse=True)
-        ]
+        roles = [{'id': str(role.id), 'name': role.name, 'managed': role.managed, 'position': role.position} for role in sorted(guild.roles, reverse=True)]
         return {
             'guild_id': str(guild_id),
             'capabilities': sorted(CAPABILITIES),
@@ -155,22 +152,14 @@ def register_routes(
             except Exception:
                 actor = None
         actor_permissions = getattr(actor, 'guild_permissions', None)
-        is_superuser = (
-            int(user_id) in Config.OWNER_IDS
-            or (actor is not None and getattr(guild, 'owner_id', None) == actor.id)
-            or bool(getattr(actor_permissions, 'administrator', False))
-        )
+        is_superuser = int(user_id) in Config.OWNER_IDS or (actor is not None and getattr(guild, 'owner_id', None) == actor.id) or bool(getattr(actor_permissions, 'administrator', False))
         if not is_superuser:
             if actor is None:
                 raise HTTPException(status_code=403, detail='You do not have permission to edit role grants.')
             if role.is_default():
-                raise HTTPException(
-                    status_code=403, detail='Only administrators can grant dashboard capabilities to @everyone.'
-                )
+                raise HTTPException(status_code=403, detail='Only administrators can grant dashboard capabilities to @everyone.')
             if role >= actor.top_role:
-                raise HTTPException(
-                    status_code=403, detail='You can only change grants for roles below your highest role.'
-                )
+                raise HTTPException(status_code=403, detail='You can only change grants for roles below your highest role.')
             current = await services.guild_permission_model.get_role_grants(guild_id)
             changed = set(normalized) ^ set(current.get(str(role_id), []))
             for capability in sorted(changed):

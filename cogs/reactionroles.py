@@ -75,9 +75,7 @@ class ReactionRolesCog(commands.Cog):
         except Exception as error:
             logger.warning(f'Could not store reaction-role channel for message {message_id}: {error}')
 
-    async def _find_message(
-        self, guild: discord.Guild, message_id: int, channel_id: int | None = None, *, remember: bool = True
-    ):
+    async def _find_message(self, guild: discord.Guild, message_id: int, channel_id: int | None = None, *, remember: bool = True):
         """Fetch a guild message via the remembered channel, scanning readable channels only as a fallback."""
         hint = channel_id or self.message_channels.get(guild.id, {}).get(message_id)
         message = await locate_message(self.bot, guild, message_id, hint=hint)
@@ -89,9 +87,7 @@ class ReactionRolesCog(commands.Cog):
         """Get reaction roles for a guild"""
         return self.reaction_roles.get(guild_id, {})
 
-    async def _update_message_embed(
-        self, message: discord.Message, guild_id: int, message_id: int, ctx: commands.Context = None
-    ):
+    async def _update_message_embed(self, message: discord.Message, guild_id: int, message_id: int, ctx: commands.Context = None):
         """Update a message's embed to show configured reaction roles"""
         try:
             if not message.guild:
@@ -320,9 +316,7 @@ class ReactionRolesCog(commands.Cog):
             # Unicode emoji
             emoji_str = str(payload.emoji)
 
-        logger.debug(
-            f'Reaction remove: guild={guild_id}, message={message_id}, emoji={emoji_str}, user={payload.user_id}'
-        )
+        logger.debug(f'Reaction remove: guild={guild_id}, message={message_id}, emoji={emoji_str}, user={payload.user_id}')
 
         if guild_id not in self.reaction_roles:
             return
@@ -432,9 +426,7 @@ class ReactionRolesCog(commands.Cog):
 
     @reactionrole.command(name='remove')
     @commands.has_guild_permissions(manage_roles=True)
-    @app_commands.describe(
-        message_id='ID of the message', emoji='Emoji to remove (optional - removes all if not specified)'
-    )
+    @app_commands.describe(message_id='ID of the message', emoji='Emoji to remove (optional - removes all if not specified)')
     async def rr_remove(self, ctx: commands.Context, message_id: str, emoji: str = None):
         """Remove a reaction role from a message"""
         try:
@@ -508,9 +500,7 @@ class ReactionRolesCog(commands.Cog):
         title='Title of the reaction role message',
         description='Description text',
     )
-    async def rr_create(
-        self, ctx: commands.Context, channel: discord.TextChannel, title: str, *, description: str = None
-    ):
+    async def rr_create(self, ctx: commands.Context, channel: discord.TextChannel, title: str, *, description: str = None):
         """Create a new reaction role message"""
         embed = discord.Embed(title=title, description=description, color=discord.Color.blurple())
         embed.set_image(url=Config.BAR_URL)
@@ -518,9 +508,7 @@ class ReactionRolesCog(commands.Cog):
         try:
             message = await channel.send(embed=embed)
             await self._remember_channel(ctx.guild.id, message.id, channel.id)
-            await ctx.send(
-                await i18n.t(ctx, 'reactionrole.create.success', channel=channel.mention, message_id=message.id)
-            )
+            await ctx.send(await i18n.t(ctx, 'reactionrole.create.success', channel=channel.mention, message_id=message.id))
         except discord.Forbidden:
             await ctx.send(await i18n.t(ctx, 'reactionrole.create.no_permission'))
         except Exception as e:
@@ -579,11 +567,7 @@ class ReactionRolesCog(commands.Cog):
             return
 
         if not message.embeds:
-            await ctx.send(
-                await i18n.t(
-                    ctx, 'reactionrole.edit.no_embed', default="❌ This message doesn't have an embed to edit."
-                )
-            )
+            await ctx.send(await i18n.t(ctx, 'reactionrole.edit.no_embed', default="❌ This message doesn't have an embed to edit."))
             return
 
         embed = message.embeds[0].copy()
@@ -616,9 +600,7 @@ class ReactionRolesCog(commands.Cog):
                 )
             )
         except Exception as e:
-            await ctx.send(
-                await i18n.t(ctx, 'reactionrole.edit.failed', error=str(e), default=f'❌ Failed to edit message: {e}')
-            )
+            await ctx.send(await i18n.t(ctx, 'reactionrole.edit.failed', error=str(e), default=f'❌ Failed to edit message: {e}'))
 
     async def cog_command_error(self, ctx, error):
         """Handle reaction role command errors"""

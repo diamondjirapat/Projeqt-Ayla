@@ -130,9 +130,7 @@ class Scheduler(commands.Cog):
             # Claim immediately before dispatch so queued work cannot outlive its lease.
             for _ in range(MAX_CLAIM_PER_TICK):
                 now = datetime.now(UTC)
-                due = await self.scheduler_model.claim_due_items(
-                    now, guild_ids=guild_ids, channel_ids=channel_ids, owner=self.worker_id
-                )
+                due = await self.scheduler_model.claim_due_items(now, guild_ids=guild_ids, channel_ids=channel_ids, owner=self.worker_id)
                 if not due:
                     break
                 item = due[0]
@@ -211,9 +209,7 @@ class Scheduler(commands.Cog):
         if item.get('kind') != 'event':
             if discord_event_id:
                 await self.delete_native_event(guild, discord_event_id)
-                await self.scheduler_model.collection.update_one(
-                    {'_id': item['_id'], 'discord_event_id': discord_event_id}, {'$set': {'discord_event_id': None}}
-                )
+                await self.scheduler_model.collection.update_one({'_id': item['_id'], 'discord_event_id': discord_event_id}, {'$set': {'discord_event_id': None}})
             return
         try:
             if not discord_event_id:
@@ -223,9 +219,7 @@ class Scheduler(commands.Cog):
                     query = {'_id': item['_id'], 'kind': 'event', 'status': 'scheduled', 'discord_event_id': None}
                     if 'updated_at' in item:
                         query['updated_at'] = item['updated_at']
-                    result = await self.scheduler_model.collection.update_one(
-                        query, {'$set': {'discord_event_id': discord_event_id}}
-                    )
+                    result = await self.scheduler_model.collection.update_one(query, {'$set': {'discord_event_id': discord_event_id}})
                     if not result.matched_count:
                         await self.delete_native_event(guild, discord_event_id)
                 except BaseException:
@@ -263,9 +257,7 @@ class Scheduler(commands.Cog):
         if payload.get('kind') == 'event':
             discord_event_id = await self.create_native_event(guild, channel, payload)
         try:
-            return await self.scheduler_model.create_item(
-                guild.id, channel.id, creator_id, payload, discord_event_id=discord_event_id
-            )
+            return await self.scheduler_model.create_item(guild.id, channel.id, creator_id, payload, discord_event_id=discord_event_id)
         except BaseException:
             if discord_event_id:
                 await self.delete_native_event(guild, discord_event_id)
@@ -300,9 +292,7 @@ class Scheduler(commands.Cog):
         marker = delivery_marker(item)
         footer = str(embed.footer.text or '')
         embed.set_footer(text=f'{footer} · {marker}' if footer else marker, icon_url=embed.footer.icon_url)
-        if not await self.scheduler_model.begin_delivery(
-            item['_id'], datetime.now(UTC), claim_token=item['claim_token'], marker=marker, bot_id=self.bot.user.id
-        ):
+        if not await self.scheduler_model.begin_delivery(item['_id'], datetime.now(UTC), claim_token=item['claim_token'], marker=marker, bot_id=self.bot.user.id):
             return
         try:
             await channel.send(content=content, embed=embed, allowed_mentions=self.mentions_for(guild, channel, item))
@@ -318,9 +308,7 @@ class Scheduler(commands.Cog):
                         'starts_at': next_run_at,
                     },
                 )
-                await self.scheduler_model.collection.update_one(
-                    {'_id': item.get('_id')}, {'$set': {'discord_event_id': discord_event_id}}
-                )
+                await self.scheduler_model.collection.update_one({'_id': item.get('_id')}, {'$set': {'discord_event_id': discord_event_id}})
             except (discord.Forbidden, discord.HTTPException) as e:
                 logger.warning(f'Scheduled event announcement posted but native event failed: {e}')
         try:

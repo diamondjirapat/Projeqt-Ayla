@@ -48,18 +48,14 @@ class LeaderboardPaginatorView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
-            await interaction.response.send_message(
-                i18n.get_text('commands.leaderboard.author_only', self.locale), ephemeral=True
-            )
+            await interaction.response.send_message(i18n.get_text('commands.leaderboard.author_only', self.locale), ephemeral=True)
             return False
         return True
 
     def update_buttons(self):
         self.prev_button.disabled = self.page <= 1
         self.next_button.disabled = self.page >= self.total_pages
-        self.page_button.label = i18n.get_text(
-            'commands.leaderboard.page', self.locale, page=self.page, pages=self.total_pages
-        )
+        self.page_button.label = i18n.get_text('commands.leaderboard.page', self.locale, page=self.page, pages=self.total_pages)
         self.scope_button.label = i18n.get_text(
             'commands.leaderboard.global_button' if self.scope == 'server' else 'commands.leaderboard.server_button',
             self.locale,
@@ -92,9 +88,7 @@ class LeaderboardPaginatorView(discord.ui.View):
         await self.refresh_embed(interaction)
 
     async def refresh_embed(self, interaction: discord.Interaction):
-        embed, total_pages = await self.cog.build_leaderboard_embed(
-            self.guild_id, self.guild_name, self.scope, self.page
-        )
+        embed, total_pages = await self.cog.build_leaderboard_embed(self.guild_id, self.guild_name, self.scope, self.page)
         self.total_pages = total_pages
         self.update_buttons()
         await interaction.response.edit_message(embed=embed, view=self)
@@ -207,17 +201,13 @@ class Leveling(commands.Cog):
                 )
 
             custom_title = config.get('title')
-            title = (
-                replace_placeholders(custom_title) if custom_title else i18n.get_text('commands.level_up.title', locale)
-            )
+            title = replace_placeholders(custom_title) if custom_title else i18n.get_text('commands.level_up.title', locale)
 
             custom_desc = config.get('description')
             if custom_desc:
                 description = replace_placeholders(custom_desc)
             else:
-                description = i18n.get_text(
-                    'commands.level_up.description', locale, member=message.author.mention, level=new_lvl
-                )
+                description = i18n.get_text('commands.level_up.description', locale, member=message.author.mention, level=new_lvl)
 
             raw_color = config.get('color') or '#f1c40f'
             color_int = 0xF1C40F
@@ -248,17 +238,11 @@ class Leveling(commands.Cog):
                     embed.set_image(url=img_url)
 
             if config.get('show_xp_field', True):
-                embed.add_field(
-                    name=i18n.get_text('commands.level_up.total_xp', locale), value=f'{total_xp_str} XP', inline=True
-                )
+                embed.add_field(name=i18n.get_text('commands.level_up.total_xp', locale), value=f'{total_xp_str} XP', inline=True)
 
             footer_text = config.get('footer_text')
             footer_url = config.get('footer_url')
-            f_text = (
-                replace_placeholders(footer_text)
-                if footer_text
-                else i18n.get_text('commands.level_up.footer', locale, server=message.guild.name)
-            )
+            f_text = replace_placeholders(footer_text) if footer_text else i18n.get_text('commands.level_up.footer', locale, server=message.guild.name)
             f_icon = replace_placeholders(footer_url) if footer_url else (server_icon_url or None)
             if f_text:
                 embed.set_footer(text=f_text, icon_url=f_icon or None)
@@ -363,9 +347,7 @@ class Leveling(commands.Cog):
             )
 
         embed.description = '\n\n'.join(lines)
-        embed.set_footer(
-            text=i18n.get_text('commands.leaderboard.footer', locale, total=total_count, page=page, pages=total_pages)
-        )
+        embed.set_footer(text=i18n.get_text('commands.leaderboard.footer', locale, total=total_count, page=page, pages=total_pages))
         return embed, total_pages
 
     @commands.hybrid_command(name='rank', aliases=['level', 'lvl'])
@@ -378,10 +360,7 @@ class Leveling(commands.Cog):
 
         stats = await self.level_model.get_user_stats(guild_id, target.id)
 
-        title = (
-            await i18n.t(ctx, 'commands.rank.title', username=target.display_name)
-            or f"📊 {target.display_name}'s Rank Card"
-        )
+        title = await i18n.t(ctx, 'commands.rank.title', username=target.display_name) or f"📊 {target.display_name}'s Rank Card"
         embed = discord.Embed(title=title, color=discord.Color.gold() if target == ctx.author else discord.Color.blue())
         embed.set_thumbnail(url=target.display_avatar.url)
 
@@ -406,22 +385,13 @@ class Leveling(commands.Cog):
 
         embed.add_field(
             name=f'🏰 {guild_rank_label} ({guild_name})',
-            value=(
-                f'**{guild_rank_label}:** #{g_rank}\n'
-                f'**{guild_level_label}:** {g_lvl}\n'
-                f'**{guild_xp_label}:** {g_xp:,}\n'
-                f'**{messages_label}:** {g_msgs:,}'
-            ),
+            value=(f'**{guild_rank_label}:** #{g_rank}\n**{guild_level_label}:** {g_lvl}\n**{guild_xp_label}:** {g_xp:,}\n**{messages_label}:** {g_msgs:,}'),
             inline=True,
         )
 
         embed.add_field(
             name=f'🌐 {global_rank_label}',
-            value=(
-                f'**{global_rank_label}:** #{glb_rank}\n'
-                f'**{global_level_label}:** {glb_lvl}\n'
-                f'**{global_xp_label}:** {glb_xp:,}'
-            ),
+            value=(f'**{global_rank_label}:** #{glb_rank}\n**{global_level_label}:** {glb_lvl}\n**{global_xp_label}:** {glb_xp:,}'),
             inline=True,
         )
 
@@ -439,9 +409,7 @@ class Leveling(commands.Cog):
 
     @commands.hybrid_command(name='leaderboard', aliases=['lb', 'top'])
     @app_commands.describe(scope='Scope of leaderboard (server or global)', page='Page number')
-    async def leaderboard_command(
-        self, ctx: commands.Context, scope: Literal['server', 'global'] = 'server', page: int = 1
-    ):
+    async def leaderboard_command(self, ctx: commands.Context, scope: Literal['server', 'global'] = 'server', page: int = 1):
         """View server or global leveling leaderboard."""
         guild_id = ctx.guild.id if ctx.guild else 0
         guild_name = ctx.guild.name if ctx.guild else 'Global'
@@ -484,12 +452,7 @@ class Leveling(commands.Cog):
 
         result = await self.level_model.set_xp(guild_id=ctx.guild.id, user_id=member.id, total_xp=xp)
 
-        msg = (
-            await i18n.t(
-                ctx, 'commands.setxp.success', member=member.mention, xp=f'{result["xp"]:,}', level=result['level']
-            )
-            or f'✅ Set XP for {member.mention} to **{result["xp"]:,}** XP (Level {result["level"]}).'
-        )
+        msg = await i18n.t(ctx, 'commands.setxp.success', member=member.mention, xp=f'{result["xp"]:,}', level=result['level']) or f'✅ Set XP for {member.mention} to **{result["xp"]:,}** XP (Level {result["level"]}).'
 
         await ctx.send(msg)
 
@@ -511,10 +474,7 @@ class Leveling(commands.Cog):
             amount=f'{amount:,}',
             xp=f'{result["xp"]:,}',
             level=result['new_level'],
-        ) or (
-            f'✅ Added **{amount:,}** XP to {member.mention}. '
-            f'Total: **{result["xp"]:,}** XP (Level {result["new_level"]}).'
-        )
+        ) or (f'✅ Added **{amount:,}** XP to {member.mention}. Total: **{result["xp"]:,}** XP (Level {result["new_level"]}).')
 
         await ctx.send(msg)
 
@@ -533,19 +493,11 @@ class Leveling(commands.Cog):
         embed = discord.Embed(title=title, color=discord.Color.blue())
 
         status_label = await i18n.t(ctx, 'commands.leveling.status_label')
-        status_val = (
-            await i18n.t(ctx, 'commands.leveling.status_enabled')
-            if is_enabled
-            else await i18n.t(ctx, 'commands.leveling.status_disabled')
-        )
+        status_val = await i18n.t(ctx, 'commands.leveling.status_enabled') if is_enabled else await i18n.t(ctx, 'commands.leveling.status_disabled')
         embed.add_field(name=status_label, value=status_val, inline=False)
 
         alerts_label = await i18n.t(ctx, 'commands.leveling.alerts_label')
-        alerts_val = (
-            await i18n.t(ctx, 'commands.levelchannel.status_enabled')
-            if alert_cfg.get('enabled')
-            else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
-        )
+        alerts_val = await i18n.t(ctx, 'commands.levelchannel.status_enabled') if alert_cfg.get('enabled') else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
         embed.add_field(name=alerts_label, value=alerts_val, inline=False)
 
         usage_label = await i18n.t(ctx, 'commands.leveling.usage_label')
@@ -620,11 +572,7 @@ class Leveling(commands.Cog):
         embed = discord.Embed(title=title, color=discord.Color.blue())
 
         status_label = await i18n.t(ctx, 'commands.levelchannel.status_label')
-        status_val = (
-            await i18n.t(ctx, 'commands.levelchannel.status_enabled')
-            if is_enabled
-            else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
-        )
+        status_val = await i18n.t(ctx, 'commands.levelchannel.status_enabled') if is_enabled else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
         embed.add_field(name=status_label, value=status_val, inline=False)
 
         current_label = await i18n.t(ctx, 'commands.levelchannel.current_channel')

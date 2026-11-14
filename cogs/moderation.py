@@ -442,9 +442,7 @@ class Moderation(commands.Cog):
 
     @commands.hybrid_command(name='warnings', description='Show a member warning summary')
     @commands.has_permissions(moderate_members=True)
-    @app_commands.describe(
-        member='The member whose active warning points should be shown', decay_days='Decay window in days'
-    )
+    @app_commands.describe(member='The member whose active warning points should be shown', decay_days='Decay window in days')
     async def warning_summary(self, ctx: commands.Context, member: discord.Member, decay_days: int = 90):
         if decay_days < 1 or decay_days > 3650:
             await ctx.send(await i18n.t(ctx, 'commands.casebook.invalid_decay'))
@@ -526,9 +524,7 @@ class Moderation(commands.Cog):
             return
         await ctx.send(await i18n.t(ctx, 'commands.casebook.appeal_reviewed', case_id=case_id, status=status))
 
-    @commands.hybrid_command(
-        name='case-cleanup', description='Delete recent messages from the member attached to a case'
-    )
+    @commands.hybrid_command(name='case-cleanup', description='Delete recent messages from the member attached to a case')
     @commands.has_permissions(manage_messages=True, moderate_members=True)
     @app_commands.describe(case_id='Moderation case number', amount='Maximum matching messages to delete (1-100)')
     async def cleanup_case_messages(self, ctx: commands.Context, case_id: int, amount: int = 25):

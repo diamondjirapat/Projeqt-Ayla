@@ -193,11 +193,7 @@ def _normalize_images(value: Any, canvas_width: int, canvas_height: int) -> list
         source_type = str(raw.get('source', default['source'])).lower()
         normalized_source = source_type if source_type in IMAGE_SOURCES else default['source']
         width = _number(raw.get('width'), default['width'], 1, 200)
-        height = (
-            round(width * canvas_width / canvas_height, 3)
-            if normalized_source == 'avatar'
-            else _number(raw.get('height'), default['height'], 1, 200)
-        )
+        height = round(width * canvas_width / canvas_height, 3) if normalized_source == 'avatar' else _number(raw.get('height'), default['height'], 1, 200)
         output.append(
             {
                 'id': layer_id,
@@ -224,11 +220,7 @@ def _normalize_texts(value: Any, legacy_value: Any) -> list[dict[str, Any]]:
         source = value
     elif isinstance(legacy_value, dict):
         source = [{**default, **(legacy_value.get(default['id']) or {})} for default in defaults]
-        source.extend(
-            {'id': layer_id, 'name': legacy_names.get(layer_id, layer_id.title()), **raw}
-            for layer_id, raw in legacy_value.items()
-            if layer_id not in defaults_by_id and isinstance(raw, dict)
-        )
+        source.extend({'id': layer_id, 'name': legacy_names.get(layer_id, layer_id.title()), **raw} for layer_id, raw in legacy_value.items() if layer_id not in defaults_by_id and isinstance(raw, dict))
     else:
         return deepcopy(defaults)
 
@@ -242,9 +234,7 @@ def _normalize_texts(value: Any, legacy_value: Any) -> list[dict[str, Any]]:
         while layer_id in used_ids:
             layer_id = f'{layer_id}-{index + 1}'
         used_ids.add(layer_id)
-        default = deepcopy(
-            defaults_by_id.get(layer_id) or _text_layer(layer_id, f'Text {index + 1}', '', 50, 50, 40, align='center')
-        )
+        default = deepcopy(defaults_by_id.get(layer_id) or _text_layer(layer_id, f'Text {index + 1}', '', 50, 50, 40, align='center'))
         family = str(raw.get('font_family', default['font_family'])).lower()
         weight = _number(raw.get('font_weight'), default['font_weight'], 400, 800)
         alignment = str(raw.get('align', default['align'])).lower()
@@ -370,28 +360,20 @@ def _font(layer: dict[str, Any]) -> ImageFont.FreeTypeFont | ImageFont.ImageFont
     candidates = {
         'serif': [
             'DejaVuSerif-Bold.ttf' if bold else 'DejaVuSerif.ttf',
-            '/usr/share/fonts/google-noto/NotoSerif-Bold.ttf'
-            if bold
-            else '/usr/share/fonts/google-noto/NotoSerif-Regular.ttf',
+            '/usr/share/fonts/google-noto/NotoSerif-Bold.ttf' if bold else '/usr/share/fonts/google-noto/NotoSerif-Regular.ttf',
             'C:/Windows/Fonts/timesbd.ttf' if bold else 'C:/Windows/Fonts/times.ttf',
         ],
         'mono': [
             'DejaVuSansMono-Bold.ttf' if bold else 'DejaVuSansMono.ttf',
-            '/usr/share/fonts/google-noto/NotoSansMono-Bold.ttf'
-            if bold
-            else '/usr/share/fonts/google-noto/NotoSansMono-Regular.ttf',
+            '/usr/share/fonts/google-noto/NotoSansMono-Bold.ttf' if bold else '/usr/share/fonts/google-noto/NotoSansMono-Regular.ttf',
             'C:/Windows/Fonts/courbd.ttf' if bold else 'C:/Windows/Fonts/cour.ttf',
         ],
     }.get(
         family,
         [
             'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf',
-            '/usr/share/fonts/google-noto/NotoSans-Bold.ttf'
-            if bold
-            else '/usr/share/fonts/google-noto/NotoSans-Regular.ttf',
-            '/usr/share/fonts/open-sans/OpenSans-Bold.ttf'
-            if bold
-            else '/usr/share/fonts/open-sans/OpenSans-Regular.ttf',
+            '/usr/share/fonts/google-noto/NotoSans-Bold.ttf' if bold else '/usr/share/fonts/google-noto/NotoSans-Regular.ttf',
+            '/usr/share/fonts/open-sans/OpenSans-Bold.ttf' if bold else '/usr/share/fonts/open-sans/OpenSans-Regular.ttf',
             'C:/Windows/Fonts/arialbd.ttf' if bold else 'C:/Windows/Fonts/arial.ttf',
         ],
     )
@@ -405,11 +387,7 @@ def _font(layer: dict[str, Any]) -> ImageFont.FreeTypeFont | ImageFont.ImageFont
 
 def _within_decode_limits(image: Image.Image) -> bool:
     width, height = image.size
-    return (
-        0 < width <= MAX_LINKED_IMAGE_SIDE
-        and 0 < height <= MAX_LINKED_IMAGE_SIDE
-        and (width * height <= MAX_LINKED_IMAGE_PIXELS)
-    )
+    return 0 < width <= MAX_LINKED_IMAGE_SIDE and 0 < height <= MAX_LINKED_IMAGE_SIDE and (width * height <= MAX_LINKED_IMAGE_PIXELS)
 
 
 def _open_image(payload: bytes) -> Image.Image | None:
@@ -519,9 +497,7 @@ def render_level_alert_image(
             filled_width = round(width * progress)
             if filled_width > 0:
                 fill_bounds = (left, top, left + filled_width, top + height)
-                draw.rounded_rectangle(
-                    fill_bounds, radius=min(radius, filled_width // 2), fill=ImageColor.getrgb(bar['fill_color'])
-                )
+                draw.rounded_rectangle(fill_bounds, radius=min(radius, filled_width // 2), fill=ImageColor.getrgb(bar['fill_color']))
             continue
 
         layer = texts_by_key.get(key)

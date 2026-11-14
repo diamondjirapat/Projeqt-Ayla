@@ -37,12 +37,7 @@ def detect_evidence_extension(data: bytes) -> Optional[str]:
 
 
 def parse_integer(value: Any, field: str, *, minimum: int = 0, maximum: Optional[int] = None) -> int:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float, str))
-        or (isinstance(value, str) and not re.fullmatch(r'[+-]?[0-9]+', value.strip()))
-        or (isinstance(value, float) and (not math.isfinite(value) or not value.is_integer() or abs(value) > 2**53 - 1))
-    ):
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)) or (isinstance(value, str) and not re.fullmatch(r'[+-]?[0-9]+', value.strip())) or (isinstance(value, float) and (not math.isfinite(value) or not value.is_integer() or abs(value) > 2**53 - 1)):
         raise HTTPException(status_code=400, detail=f'{field} must be an integer.')
     try:
         parsed = int(value)

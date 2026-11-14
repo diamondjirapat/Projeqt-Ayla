@@ -70,9 +70,7 @@ class PlaybackRecovery:
             return True
         except Exception as play_err:
             failures = self._register_playback_failure(player, next_track)
-            logger.error(
-                f"[PLAYBACK] Failed to start next track '{getattr(next_track, 'title', 'Unknown')}': {play_err}"
-            )
+            logger.error(f"[PLAYBACK] Failed to start next track '{getattr(next_track, 'title', 'Unknown')}': {play_err}")
             if failures >= MAX_CONSECUTIVE_PLAYBACK_FAILURES:
                 await self._give_up_after_repeated_failures(player, next_track, failures)
             else:

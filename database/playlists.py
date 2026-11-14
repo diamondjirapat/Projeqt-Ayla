@@ -13,15 +13,11 @@ def _normalize_playlist(playlist: Optional[Dict[str, Any]]) -> Optional[Dict[str
     if not playlist:
         return playlist
     normalized = dict(playlist)
-    normalized['tracks'] = [
-        normalize_saved_track(track) for track in playlist.get('tracks', []) if isinstance(track, dict)
-    ]
+    normalized['tracks'] = [normalize_saved_track(track) for track in playlist.get('tracks', []) if isinstance(track, dict)]
     modifications = playlist.get('modifications')
     if isinstance(modifications, dict):
         normalized_modifications = dict(modifications)
-        normalized_modifications['additions'] = [
-            normalize_saved_track(track) for track in modifications.get('additions', []) if isinstance(track, dict)
-        ]
+        normalized_modifications['additions'] = [normalize_saved_track(track) for track in modifications.get('additions', []) if isinstance(track, dict)]
         normalized['modifications'] = normalized_modifications
     return normalized
 

@@ -50,12 +50,7 @@ class TicketPanelModel(BaseModel):
         )
 
     async def list_panels(self, guild_id: int) -> list[Dict[str, Any]]:
-        return [
-            item
-            async for item in self.collection.find({'guild_id': int(guild_id), 'deleted': {'$ne': True}}).sort(
-                'created_at', 1
-            )
-        ]
+        return [item async for item in self.collection.find({'guild_id': int(guild_id), 'deleted': {'$ne': True}}).sort('created_at', 1)]
 
     async def update_panel(self, guild_id: int, panel_id: str, config: Dict[str, Any]) -> bool:
         from utils.tickets import normalize_ticket_panel
@@ -394,14 +389,8 @@ class TicketModel(BaseModel):
         return result.modified_count > 0
 
     async def statistics(self, guild_id: int) -> Dict[str, Any]:
-        items = [
-            item async for item in self.collection.find({'guild_id': int(guild_id)}).sort('created_at', -1).limit(5000)
-        ]
-        response_times = [
-            (item['first_staff_response_at'] - item['created_at']).total_seconds()
-            for item in items
-            if item.get('first_staff_response_at') and item.get('created_at')
-        ]
+        items = [item async for item in self.collection.find({'guild_id': int(guild_id)}).sort('created_at', -1).limit(5000)]
+        response_times = [(item['first_staff_response_at'] - item['created_at']).total_seconds() for item in items if item.get('first_staff_response_at') and item.get('created_at')]
         resolution_times = [item['resolution_seconds'] for item in items if item.get('resolution_seconds') is not None]
         ratings = [item['rating'] for item in items if item.get('rating') is not None]
         workload: Dict[str, int] = {}

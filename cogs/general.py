@@ -64,9 +64,7 @@ class General(commands.Cog):
         unknown_text = await i18n.t(ctx, 'general.unknown')
 
         try:
-            result = await asyncio.to_thread(
-                subprocess.run, ['git', 'log', '-1', '--format=%h (%s)'], capture_output=True, text=True, timeout=5
-            )
+            result = await asyncio.to_thread(subprocess.run, ['git', 'log', '-1', '--format=%h (%s)'], capture_output=True, text=True, timeout=5)
             commit_info = result.stdout.strip() if result.returncode == 0 else unknown_text
         except Exception:
             commit_info = unknown_text
@@ -198,9 +196,7 @@ class General(commands.Cog):
 
             await asyncio.to_thread(subprocess.run, fetch_cmd, capture_output=True, text=True, timeout=60)
 
-            result = await asyncio.to_thread(
-                subprocess.run, ['git', 'reset', '--hard', 'FETCH_HEAD'], capture_output=True, text=True, timeout=30
-            )
+            result = await asyncio.to_thread(subprocess.run, ['git', 'reset', '--hard', 'FETCH_HEAD'], capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0:
                 output = result.stdout.strip() or 'Already up to date.'

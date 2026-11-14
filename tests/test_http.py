@@ -42,9 +42,7 @@ class SafeHttpTests(unittest.IsolatedAsyncioTestCase):
             await self.fetch([self.response([b'x' * MAX_RESPONSE_BYTES, b'y'])])
 
     async def test_larger_bounded_responses_can_be_requested_without_changing_the_default(self):
-        result = await self.fetch(
-            [self.response([b'x' * MAX_RESPONSE_BYTES, b'y'])], max_response_bytes=MAX_RESPONSE_BYTES + 1
-        )
+        result = await self.fetch([self.response([b'x' * MAX_RESPONSE_BYTES, b'y'])], max_response_bytes=MAX_RESPONSE_BYTES + 1)
         self.assertEqual(len(result[2]), MAX_RESPONSE_BYTES + 1)
         with self.assertRaisesRegex(ValueError, 'limit'):
             await self.fetch([self.response([b'x' * 11])], max_response_bytes=10)

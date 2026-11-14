@@ -71,9 +71,7 @@ class IdlePlaylistView(discord.ui.View):
         except Exception:
             pass
 
-    @discord.ui.button(
-        label='📂 My Playlists', style=discord.ButtonStyle.primary, row=0, custom_id='idle_playlist:user'
-    )
+    @discord.ui.button(label='📂 My Playlists', style=discord.ButtonStyle.primary, row=0, custom_id='idle_playlist:user')
     async def user_playlist_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             playlists = await self.user_model.get_all_playlists(interaction.user.id)
@@ -237,20 +235,11 @@ class PlaylistSelect(discord.ui.Select):
         voice_id = interaction.user.voice.channel.id
         candidates = [bot for bot in (all_bots or [self.bot]) if bot.get_guild(interaction.guild_id)]
         playback_bot = next(
-            (
-                bot
-                for bot in candidates
-                if (vc := bot.get_guild(interaction.guild_id).voice_client)
-                and vc.is_connected
-                and vc.channel
-                and vc.channel.id == voice_id
-            ),
+            (bot for bot in candidates if (vc := bot.get_guild(interaction.guild_id).voice_client) and vc.is_connected and vc.channel and vc.channel.id == voice_id),
             None,
         )
         if playback_bot is None:
-            playback_bot = next(
-                (bot for bot in candidates if not bot.get_guild(interaction.guild_id).voice_client), None
-            )
+            playback_bot = next((bot for bot in candidates if not bot.get_guild(interaction.guild_id).voice_client), None)
         if playback_bot is None:
             msg = await i18n.t(interaction, 'music.errors.voice_channel_mismatch')
             await interaction.followup.send(msg, ephemeral=True)
@@ -335,9 +324,7 @@ class PlaylistSelect(discord.ui.Select):
                         except Exception:
                             pass
 
-                    self.bot.loop.create_task(
-                        PlaylistLoader.load_additions_background(additions, player, progress_callback)
-                    )
+                    self.bot.loop.create_task(PlaylistLoader.load_additions_background(additions, player, progress_callback))
                 else:
                     await status_msg.edit(content=added_msg)
             else:
@@ -363,9 +350,7 @@ class PlaylistSelect(discord.ui.Select):
 
                             # Start playing after first track is loaded
                             if count == 1 and not player.is_playing:
-                                await apply_session_volume(
-                                    player, await self.guild_model.get_default_volume(interaction.guild_id)
-                                )
+                                await apply_session_volume(player, await self.guild_model.get_default_volume(interaction.guild_id))
 
                                 await player.play(player.queue.get(force_next=True))
 
@@ -479,19 +464,11 @@ class PlayerSettingsSelect(discord.ui.Select):
         locale = self.locale
 
         autoplay_on = getattr(self.player, 'autoplay_enabled', True)
-        autoplay_label = (
-            i18n.get_text('music.ui.settings_autoplay_on', locale)
-            if autoplay_on
-            else i18n.get_text('music.ui.settings_autoplay_off', locale)
-        )
+        autoplay_label = i18n.get_text('music.ui.settings_autoplay_on', locale) if autoplay_on else i18n.get_text('music.ui.settings_autoplay_off', locale)
         autoplay_desc = i18n.get_text('music.ui.settings_desc_autoplay', locale)
 
         is_247 = getattr(self.player, 'twenty_four_seven', True)
-        twenty_four_seven_label = (
-            i18n.get_text('music.ui.settings_247_on', locale)
-            if is_247
-            else i18n.get_text('music.ui.settings_247_off', locale)
-        )
+        twenty_four_seven_label = i18n.get_text('music.ui.settings_247_on', locale) if is_247 else i18n.get_text('music.ui.settings_247_off', locale)
         twenty_four_seven_desc = i18n.get_text('music.ui.settings_desc_247', locale)
 
         options = [
@@ -691,15 +668,8 @@ class PlayerSettingsSelect(discord.ui.Select):
 class NowPlayingView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         voice = getattr(interaction.user, 'voice', None)
-        if (
-            not self.player.is_connected
-            or interaction.guild.voice_client is not self.player
-            or not voice
-            or voice.channel != self.player.channel
-        ):
-            await interaction.response.send_message(
-                await i18n.t(interaction, 'music.errors.voice_channel_mismatch'), ephemeral=True
-            )
+        if not self.player.is_connected or interaction.guild.voice_client is not self.player or not voice or voice.channel != self.player.channel:
+            await interaction.response.send_message(await i18n.t(interaction, 'music.errors.voice_channel_mismatch'), ephemeral=True)
             return False
         return True
 
@@ -774,9 +744,7 @@ class NowPlayingView(discord.ui.View):
         previous_track = self.player.history.pop()
         if self.player.queue.loop_mode == LoopMode.QUEUE:
             await self.player.play(previous_track)
-            return await interaction.followup.send(
-                await i18n.t(interaction, 'music.player.playing_previous'), ephemeral=True
-            )
+            return await interaction.followup.send(await i18n.t(interaction, 'music.player.playing_previous'), ephemeral=True)
 
         if self.player.is_playing:
             current_track = self.player.current

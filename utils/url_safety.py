@@ -4,9 +4,7 @@ import ipaddress
 import re
 from urllib.parse import SplitResult
 
-_LDH_HOST = re.compile(
-    r'(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*'
-)
+_LDH_HOST = re.compile(r'(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*')
 
 
 def has_parser_differential(raw_url: str, parts: SplitResult) -> bool:

@@ -30,10 +30,7 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     'idle': {
         'content': '',
         'title': '🎵 Music Player',
-        'description': (
-            'No track is currently playing. Send a song title or link in {channel_mention} '
-            'or use buttons below to start listening!'
-        ),
+        'description': ('No track is currently playing. Send a song title or link in {channel_mention} or use buttons below to start listening!'),
         'color': '#5865f2',
         'image_url': '{banner}',
         'thumbnail_url': '{server_icon}',
@@ -49,9 +46,7 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
 }
 
 
-_DISCORD_REFRESHED_URLS_CACHE: TTLCache[str, Tuple[str, float]] = TTLCache(
-    ttl=21600, max_size=2000, name='music.attachment_urls'
-)
+_DISCORD_REFRESHED_URLS_CACHE: TTLCache[str, Tuple[str, float]] = TTLCache(ttl=21600, max_size=2000, name='music.attachment_urls')
 _DISCORD_ATTACHMENT_DOMAINS = ('discord.com', 'discordapp.com', 'discordapp.net')
 
 
@@ -185,12 +180,8 @@ async def refresh_discord_attachment_urls(urls: list[str], bot_token: Optional[s
                         clean_refreshed = refreshed.split('?')[0]
                         exp = extract_discord_attachment_expiry(refreshed)
                         cache_exp = exp - 300 if exp > time.time() else time.time() + 21600
-                        _DISCORD_REFRESHED_URLS_CACHE.set(
-                            clean_orig, (refreshed, cache_exp), ttl=max(1, cache_exp - time.time())
-                        )
-                        _DISCORD_REFRESHED_URLS_CACHE.set(
-                            clean_refreshed, (refreshed, cache_exp), ttl=max(1, cache_exp - time.time())
-                        )
+                        _DISCORD_REFRESHED_URLS_CACHE.set(clean_orig, (refreshed, cache_exp), ttl=max(1, cache_exp - time.time()))
+                        _DISCORD_REFRESHED_URLS_CACHE.set(clean_refreshed, (refreshed, cache_exp), ttl=max(1, cache_exp - time.time()))
                         for u in urls:
                             raw_u = str(u or '').strip()
                             if raw_u.split('?')[0] == clean_orig:
@@ -368,9 +359,7 @@ def normalize_music_channel_embed_config(raw_config: Any) -> Dict[str, Any]:
     return {'idle': _normalize_pane(raw, default['idle'])}
 
 
-def build_music_channel_embed(
-    guild_id: int, config: Dict[str, Any], placeholders: Mapping[str, str]
-) -> Tuple[discord.Embed, str | None]:
+def build_music_channel_embed(guild_id: int, config: Dict[str, Any], placeholders: Mapping[str, str]) -> Tuple[discord.Embed, str | None]:
     return build_custom_music_embed(
         guild_id,
         'idle',
@@ -457,9 +446,7 @@ def render_music_embed_template(template: str, placeholders: Mapping[str, str]) 
     return rendered
 
 
-def _url_template_or_default(
-    pane: Mapping[str, Any], default_pane: Mapping[str, Any], key: str, *, fallback_to_default: bool = True
-) -> str:
+def _url_template_or_default(pane: Mapping[str, Any], default_pane: Mapping[str, Any], key: str, *, fallback_to_default: bool = True) -> str:
     """Return the URL template for key, optionally falling back to the default pane.
 
     Only the main ``image_url`` falls back: an empty image means "not customized"
@@ -479,9 +466,7 @@ def _url_template_or_default(
     return str(default_raw or '')
 
 
-def _author_url_template_or_default(
-    pane: Mapping[str, Any], default_pane: Mapping[str, Any], key: str, *, fallback_to_default: bool = False
-) -> str:
+def _author_url_template_or_default(pane: Mapping[str, Any], default_pane: Mapping[str, Any], key: str, *, fallback_to_default: bool = False) -> str:
     """Return the author URL template for key.
 
     An empty author ``url``/``icon_url`` means "hidden", so no fallback applies
@@ -533,24 +518,18 @@ def build_custom_music_embed(
     if description:
         embed.description = description[:4096]
 
-    raw_image = render_music_embed_template(
-        _url_template_or_default(pane, default_pane, 'image_url'), placeholders
-    ).strip()
+    raw_image = render_music_embed_template(_url_template_or_default(pane, default_pane, 'image_url'), placeholders).strip()
     norm_image = normalize_http_url(raw_image)
     if is_http_url(norm_image):
         embed.set_image(url=norm_image[:2048])
 
-    raw_thumb = render_music_embed_template(
-        _url_template_or_default(pane, default_pane, 'thumbnail_url', fallback_to_default=False), placeholders
-    ).strip()
+    raw_thumb = render_music_embed_template(_url_template_or_default(pane, default_pane, 'thumbnail_url', fallback_to_default=False), placeholders).strip()
     norm_thumb = normalize_http_url(raw_thumb)
     if is_http_url(norm_thumb):
         embed.set_thumbnail(url=norm_thumb[:2048])
 
     raw_footer = render_music_embed_template(pane.get('footer_text', ''), placeholders).strip()
-    raw_footer_icon = render_music_embed_template(
-        _url_template_or_default(pane, default_pane, 'footer_icon_url', fallback_to_default=False), placeholders
-    ).strip()
+    raw_footer_icon = render_music_embed_template(_url_template_or_default(pane, default_pane, 'footer_icon_url', fallback_to_default=False), placeholders).strip()
     norm_footer_icon = normalize_http_url(raw_footer_icon)
     if raw_footer or is_http_url(norm_footer_icon):  # text optional if icon is a URL or {variable}
         embed.set_footer(
@@ -561,13 +540,9 @@ def build_custom_music_embed(
     author = pane.get('author') if isinstance(pane.get('author'), dict) else {}
     raw_author_name = render_music_embed_template(author.get('name', ''), placeholders).strip()
     if raw_author_name:
-        raw_author_url = render_music_embed_template(
-            _author_url_template_or_default(pane, default_pane, 'url'), placeholders
-        ).strip()
+        raw_author_url = render_music_embed_template(_author_url_template_or_default(pane, default_pane, 'url'), placeholders).strip()
         norm_author_url = normalize_http_url(raw_author_url)
-        raw_author_icon = render_music_embed_template(
-            _author_url_template_or_default(pane, default_pane, 'icon_url'), placeholders
-        ).strip()
+        raw_author_icon = render_music_embed_template(_author_url_template_or_default(pane, default_pane, 'icon_url'), placeholders).strip()
         norm_author_icon = normalize_http_url(raw_author_icon)
         embed.set_author(
             name=raw_author_name[:256],

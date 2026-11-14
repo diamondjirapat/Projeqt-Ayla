@@ -53,9 +53,7 @@ def audit_database(db, *, samples: int = 10, max_time_ms: int = 30_000) -> dict:
         try:
             metadata[collection_name] = db[collection_name].index_information()
         except Exception as error:
-            report['errors'].append(
-                {'collection': collection_name, 'operation': 'index_information', 'error': type(error).__name__}
-            )
+            report['errors'].append({'collection': collection_name, 'operation': 'index_information', 'error': type(error).__name__})
     for spec in INDEX_SPECS:
         indexes = metadata.get(spec.collection)
         if indexes is not None:
@@ -102,9 +100,7 @@ def audit_database(db, *, samples: int = 10, max_time_ms: int = 30_000) -> dict:
                     'extra_documents': totals['extra_documents'],
                     'samples': [
                         {
-                            'values': {
-                                field: group['_id'][f'key_{index}'] for index, (field, _) in enumerate(spec.keys)
-                            },
+                            'values': {field: group['_id'][f'key_{index}'] for index, (field, _) in enumerate(spec.keys)},
                             'count': group['count'],
                         }
                         for group in result['samples']
@@ -112,17 +108,13 @@ def audit_database(db, *, samples: int = 10, max_time_ms: int = 30_000) -> dict:
                 }
             )
         except Exception as error:
-            report['errors'].append(
-                {'collection': spec.collection, 'operation': 'duplicates', 'error': type(error).__name__}
-            )
+            report['errors'].append({'collection': spec.collection, 'operation': 'duplicates', 'error': type(error).__name__})
     for name, value in metadata.get('user_levels', {}).items():
         if is_legacy_level_index(value):
             report['legacy_indexes'].append({'collection': 'user_levels', 'name': name})
     report['summary'] = {
         'missing_required_indexes': sum(item['required'] and not item['matching_names'] for item in report['indexes']),
-        'missing_optional_indexes': sum(
-            not item['required'] and not item['matching_names'] for item in report['indexes']
-        ),
+        'missing_optional_indexes': sum(not item['required'] and not item['matching_names'] for item in report['indexes']),
         'duplicate_groups': sum(item['groups'] for item in report['duplicates']),
         'extra_documents': sum(item['extra_documents'] for item in report['duplicates']),
         'legacy_indexes': len(report['legacy_indexes']),

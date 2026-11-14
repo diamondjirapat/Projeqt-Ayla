@@ -22,14 +22,7 @@ async def sync_gapless_queue(player) -> None:
         try:
             while True:
                 upcoming = player.queue.to_list()
-                head = (
-                    upcoming[0]
-                    if upcoming
-                    and player.current is not None
-                    and getattr(player, 'gapless_enabled', False) is True
-                    and player.queue.loop_mode != LoopMode.TRACK
-                    else None
-                )
+                head = upcoming[0] if upcoming and player.current is not None and getattr(player, 'gapless_enabled', False) is True and player.queue.loop_mode != LoopMode.TRACK else None
                 staged = getattr(player, '_next_track', None)
                 if staged is head:
                     return

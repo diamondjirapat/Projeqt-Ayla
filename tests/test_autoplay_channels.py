@@ -35,9 +35,7 @@ class ChannelIdentityTests(unittest.TestCase):
         self.assertTrue(is_channel_blocked(track(author='New Name'), config))
         self.assertFalse(is_channel_blocked(track(OTHER_CHANNEL_ID), config))
         self.assertFalse(is_channel_blocked(track(None, author=CHANNEL_ID), config))
-        self.assertEqual(
-            normalize_channel_blacklist([CHANNEL_ID, OTHER_CHANNEL_ID, CHANNEL_ID]), [CHANNEL_ID, OTHER_CHANNEL_ID]
-        )
+        self.assertEqual(normalize_channel_blacklist([CHANNEL_ID, OTHER_CHANNEL_ID, CHANNEL_ID]), [CHANNEL_ID, OTHER_CHANNEL_ID])
 
     def test_resolved_track_identity_is_used(self):
         resolved = SimpleNamespace(original=track(), info={'author': 'Spotify artist'})
@@ -54,13 +52,9 @@ class AutoplayBlockCommandTests(unittest.IsolatedAsyncioTestCase):
         self.cog = Music(self.bot)
         self.bot.get_cog.return_value = self.cog
         self.current = track()
-        self.player = SimpleNamespace(
-            guild=SimpleNamespace(id=123), current=self.current, get_tracks=AsyncMock(return_value=[])
-        )
+        self.player = SimpleNamespace(guild=SimpleNamespace(id=123), current=self.current, get_tracks=AsyncMock(return_value=[]))
         self.bot.voice_clients = [self.player]
-        self.ctx = SimpleNamespace(
-            guild=self.player.guild, voice_client=self.player, permissions=discord.Permissions(manage_guild=True)
-        )
+        self.ctx = SimpleNamespace(guild=self.player.guild, voice_client=self.player, permissions=discord.Permissions(manage_guild=True))
         self.config = {**default_autoplay_config(), 'history_size': 7}
         self.cog.guild_model.get_autoplay_settings = AsyncMock(return_value={'config': self.config})
         self.cog.guild_model.set_autoplay_custom_config = AsyncMock()

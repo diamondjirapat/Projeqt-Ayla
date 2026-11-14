@@ -60,9 +60,7 @@ async def reconcile(channel, attempt: dict) -> bool:
     started_at = datetime.fromisoformat(attempt['started_at'])
     try:
         async for message in channel.history(limit=100, after=started_at - timedelta(seconds=5)):
-            if message.author.id == attempt['bot_id'] and any(
-                str(embed.footer.text or '').endswith(attempt['marker']) for embed in message.embeds
-            ):
+            if message.author.id == attempt['bot_id'] and any(str(embed.footer.text or '').endswith(attempt['marker']) for embed in message.embeds):
                 return True
     except (discord.HTTPException, OSError, TimeoutError):
         return False

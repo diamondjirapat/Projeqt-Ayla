@@ -49,18 +49,14 @@ def _guild_model(doc=None):
 
 class NormalizeAutoplayConfigTests(unittest.TestCase):
     def test_channel_blacklist_normalizes_names_and_rejects_invalid_values(self):
-        normalized = normalize_autoplay_config(
-            {'channel_blacklist': ['  Uploader  ', 'UPLOADER', '', None, 123, 'Other']}
-        )
+        normalized = normalize_autoplay_config({'channel_blacklist': ['  Uploader  ', 'UPLOADER', '', None, 123, 'Other']})
         self.assertEqual(normalized['channel_blacklist'], ['Uploader', 'Other'])
         self.assertEqual(normalize_autoplay_config({'channel_blacklist': 'Uploader'})['channel_blacklist'], [])
 
     def test_channel_blacklist_limits_size_and_does_not_share_default_list(self):
         normalized = normalize_autoplay_config({'channel_blacklist': [str(i) for i in range(150)] + ['x' * 300]})
         self.assertEqual(len(normalized['channel_blacklist']), 100)
-        self.assertEqual(
-            len(normalize_autoplay_config({'channel_blacklist': ['x' * 300]})['channel_blacklist'][0]), 200
-        )
+        self.assertEqual(len(normalize_autoplay_config({'channel_blacklist': ['x' * 300]})['channel_blacklist'][0]), 200)
         config = default_autoplay_config()
         config['channel_blacklist'].append('Blocked')
         self.assertEqual(default_autoplay_config()['channel_blacklist'], [])
@@ -228,9 +224,7 @@ class ConfigDrivenAutoplayTests(unittest.IsolatedAsyncioTestCase):
                     'enable_artist_fallback': stage == 'artist',
                     'enable_radio_fallback': stage == 'radio',
                 }
-                chosen = await cog._fetch_autoplay_track(
-                    player, MockTrack('Last Song', 'Last Artist', 'uri-last'), config
-                )
+                chosen = await cog._fetch_autoplay_track(player, MockTrack('Last Song', 'Last Artist', 'uri-last'), config)
                 self.assertIs(chosen, allowed)
 
     async def test_all_channels_blocked_returns_none(self):
@@ -239,9 +233,7 @@ class ConfigDrivenAutoplayTests(unittest.IsolatedAsyncioTestCase):
         blocked = MockTrack('Blocked Song', 'Uploader', 'uri-blocked')
         player.get_recommendations = AsyncMock(return_value=[blocked])
         player.get_tracks = AsyncMock(return_value=[blocked])
-        chosen = await cog._fetch_autoplay_track(
-            player, MockTrack('Last Song', 'Last Artist', 'uri-last'), {'channel_blacklist': ['Uploader']}
-        )
+        chosen = await cog._fetch_autoplay_track(player, MockTrack('Last Song', 'Last Artist', 'uri-last'), {'channel_blacklist': ['Uploader']})
         self.assertIsNone(chosen)
         self.assertNotIn('uri-blocked', cog.autoplay_played_uris[123])
 
@@ -250,9 +242,7 @@ class ConfigDrivenAutoplayTests(unittest.IsolatedAsyncioTestCase):
         player = self._player()
         allowed = MockTrack('New Song', 'Uploader - Topic', 'uri-allowed')
         player.get_recommendations = AsyncMock(return_value=[allowed])
-        chosen = await cog._fetch_autoplay_track(
-            player, MockTrack('Last Song', 'Last Artist', 'uri-last'), {'channel_blacklist': ['Uploader']}
-        )
+        chosen = await cog._fetch_autoplay_track(player, MockTrack('Last Song', 'Last Artist', 'uri-last'), {'channel_blacklist': ['Uploader']})
         self.assertIs(chosen, allowed)
 
     def _create_cog(self):

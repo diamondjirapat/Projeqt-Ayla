@@ -328,11 +328,7 @@ class Giveaway(commands.Cog):
             title = await i18n.t(ctx_or_interaction, 'giveaway.ended_title')
             color = discord.Color.dark_grey()
         else:
-            title_template = (
-                embed_config.get('title')
-                or extra_data.get('title')
-                or await i18n.t(ctx_or_interaction, 'giveaway.title')
-            )
+            title_template = embed_config.get('title') or extra_data.get('title') or await i18n.t(ctx_or_interaction, 'giveaway.title')
             title = render_giveaway_template(title_template, placeholder_values)
             raw_color = embed_config.get('color', DEFAULT_GIVEAWAY_EMBED_COLOR)
             color = discord.Color(int(raw_color.removeprefix('#'), 16))
@@ -342,11 +338,7 @@ class Giveaway(commands.Cog):
         title = title[:256]
 
         description_template = embed_config.get('description')
-        description = (
-            render_giveaway_template(description_template, placeholder_values)
-            if description_template
-            else f'**{prize}**'
-        )
+        description = render_giveaway_template(description_template, placeholder_values) if description_template else f'**{prize}**'
         description = description[:4096]
 
         embed = discord.Embed(
@@ -721,9 +713,7 @@ class Giveaway(commands.Cog):
             for g in active:
                 end_timestamp = int(_coerce_end_time(g.get('end_time')).timestamp())
 
-                jump_url = (
-                    f'https://discord.com/channels/{g.get("guild_id")}/{g.get("channel_id")}/{g.get("message_id")}'
-                )
+                jump_url = f'https://discord.com/channels/{g.get("guild_id")}/{g.get("channel_id")}/{g.get("message_id")}'
                 line = await i18n.t(
                     ctx,
                     'giveaway.list_item',

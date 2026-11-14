@@ -136,14 +136,7 @@ class Greetings(commands.Cog):
 
         embed, placeholders = build_greeting_embed(member, kind, config, channel)
         content = render_greeting_template(config.get('content', ''), placeholders)
-        if (
-            config.get('mode') != 'image'
-            and not content
-            and not embed.title
-            and not embed.description
-            and not embed.image.url
-            and not embed.fields
-        ):
+        if config.get('mode') != 'image' and not content and not embed.title and not embed.description and not embed.image.url and not embed.fields:
             logger.warning('Skipped empty %s greeting for guild %s.', kind, member.guild.id)
             return
 

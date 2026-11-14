@@ -51,15 +51,7 @@ def register_routes(
 
         manageable = []
         for guild in services.get_all_guilds():
-            capabilities = (
-                sorted(CAPABILITIES)
-                if is_admin
-                else [
-                    cap
-                    for cap in sorted(CAPABILITIES)
-                    if await services.check_user_guild_capability(user_id, guild.id, cap)
-                ]
-            )
+            capabilities = sorted(CAPABILITIES) if is_admin else [cap for cap in sorted(CAPABILITIES) if await services.check_user_guild_capability(user_id, guild.id, cap)]
             if capabilities:
                 icon_url = ''
                 if guild.icon:
@@ -134,10 +126,7 @@ def register_routes(
                     )
 
         await services.guild_model.set_greetings_config(guild_id, greetings)
-        response_greetings = {
-            kind: {**config, 'channel_id': str(config['channel_id']) if config['channel_id'] else None}
-            for kind, config in greetings.items()
-        }
+        response_greetings = {kind: {**config, 'channel_id': str(config['channel_id']) if config['channel_id'] else None} for kind, config in greetings.items()}
         return {'success': True, 'greetings': response_greetings}
 
     @app.post('/internal/guild/reaction-roles/generate')

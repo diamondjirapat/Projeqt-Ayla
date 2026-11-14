@@ -119,9 +119,7 @@ class Language(commands.Cog):
                 lang_name = await _display_language_name(ctx, lang_code)
                 available_langs.append(f'{lang_name} ({lang_code})')
 
-            embed.add_field(
-                name=await i18n.t(ctx, 'language.available_languages'), value='\n'.join(available_langs), inline=False
-            )
+            embed.add_field(name=await i18n.t(ctx, 'language.available_languages'), value='\n'.join(available_langs), inline=False)
             embed.add_field(
                 name=await i18n.t(ctx, 'language.usage'),
                 value=await i18n.t(ctx, 'language.usage_text', prefix=ctx.prefix),

@@ -128,9 +128,7 @@ class CogButton(discord.ui.Button):
             'ReactionRolesCog': '📋',
         }
 
-        super().__init__(
-            label=cog_name, emoji=emoji_map.get(cog_name, '📁'), style=discord.ButtonStyle.primary, row=row
-        )
+        super().__init__(label=cog_name, emoji=emoji_map.get(cog_name, '📁'), style=discord.ButtonStyle.primary, row=row)
         self.cog_name = cog_name
         self.commands = commands
 

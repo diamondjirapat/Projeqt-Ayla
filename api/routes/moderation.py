@@ -69,9 +69,7 @@ def register_routes(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except discord.HTTPException as exc:
-            raise HTTPException(
-                status_code=502, detail='Discord could not reverse this sanction. Please retry.'
-            ) from exc
+            raise HTTPException(status_code=502, detail='Discord could not reverse this sanction. Please retry.') from exc
 
     @app.get('/internal/guild/moderation/cases')
     async def internal_get_moderation_cases(
@@ -143,9 +141,7 @@ def register_routes(
         if not services._actor_has_action_permission(actor, action):
             raise HTTPException(status_code=403, detail='You do not have permission to perform this action.')
         if action != 'unban':
-            services._validate_web_moderation_target(
-                guild, actor, target, actor_is_owner=int(user_id) in Config.OWNER_IDS
-            )
+            services._validate_web_moderation_target(guild, actor, target, actor_is_owner=int(user_id) in Config.OWNER_IDS)
 
         reason = str(data.get('reason') or 'No reason provided')[:1024]
         internal_note = str(data.get('internal_note') or '')[:4096]
@@ -171,9 +167,7 @@ def register_routes(
             else:
                 expires_at = await services._execute_web_moderation_action(action, target, reason, duration_seconds)
         except discord.Forbidden as exc:
-            raise HTTPException(
-                status_code=403, detail='Ayla does not have permission to perform this action.'
-            ) from exc
+            raise HTTPException(status_code=403, detail='Ayla does not have permission to perform this action.') from exc
         except discord.HTTPException as exc:
             raise HTTPException(status_code=502, detail='Discord rejected the moderation action.') from exc
         case = await services.moderation_case_model.create_case(
@@ -186,17 +180,13 @@ def register_routes(
             duration_seconds=duration_seconds,
             expires_at=expires_at,
             target_snapshot=services._discord_user_snapshot(target),
-            moderator_snapshot=(
-                services._discord_user_snapshot(actor) if actor else {'user_id': str(user_id), 'username': str(user_id)}
-            ),
+            moderator_snapshot=(services._discord_user_snapshot(actor) if actor else {'user_id': str(user_id), 'username': str(user_id)}),
             evidence=evidence,
             points=points,
             source='web',
             retention_days=casebook_config['case_retention_days'],
         )
-        await services.moderation_evidence_model.attach_to_case(
-            guild_id, _evidence_ids_from_urls(guild_id, evidence), casebook_config['case_retention_days']
-        )
+        await services.moderation_evidence_model.attach_to_case(guild_id, _evidence_ids_from_urls(guild_id, evidence), casebook_config['case_retention_days'])
         if bool(data.get('notify', True)) and action not in {'note', 'unban'}:
             await services._notify_web_case(target, case, reason)
         escalation_case = None
@@ -310,11 +300,7 @@ def register_routes(
         if extension is None:
             raise HTTPException(status_code=400, detail='Upload a PNG, JPEG, GIF, WebP, or PDF file.')
         usage = await services.moderation_evidence_model.guild_usage(guild_id)
-        if (
-            usage['count'] >= MAX_EVIDENCE_PER_GUILD
-            or usage['bytes'] + total_size > MAX_EVIDENCE_BYTES_PER_GUILD
-            or usage['unattached'] >= MAX_UNATTACHED_EVIDENCE_PER_GUILD
-        ):
+        if usage['count'] >= MAX_EVIDENCE_PER_GUILD or usage['bytes'] + total_size > MAX_EVIDENCE_BYTES_PER_GUILD or usage['unattached'] >= MAX_UNATTACHED_EVIDENCE_PER_GUILD:
             raise HTTPException(status_code=413, detail='Evidence storage quota reached for this server.')
         module = await services.guild_module_model.get_module(guild_id, 'moderation_casebook')
         config = normalize_casebook_config(module.get('config', {}) if module else {})
@@ -381,10 +367,7 @@ def register_routes(
             raise HTTPException(status_code=404, detail='Server not found.')
         module = await services.guild_module_model.get_module(guild_id, 'moderation_casebook')
         config = normalize_casebook_config(module.get('config', {}) if module else {})
-        if (
-            not await services.guild_module_model.is_enabled(guild_id, 'appeals', default=True)
-            or not config['appeals_enabled']
-        ):
+        if not await services.guild_module_model.is_enabled(guild_id, 'appeals', default=True) or not config['appeals_enabled']:
             raise HTTPException(status_code=404, detail='Appeals are disabled for this server.')
         result = await services.moderation_case_model.list_cases(
             guild_id,
@@ -419,9 +402,7 @@ def register_routes(
         changes = {key: data[key] for key in ('reason', 'internal_note', 'evidence', 'status', 'points') if key in data}
         if 'status' in changes and changes['status'] not in ModerationCaseModel.STATUSES:
             raise HTTPException(status_code=400, detail='Unknown moderation case status.')
-        if 'evidence' in changes and (
-            not isinstance(changes['evidence'], list) or not all(isinstance(item, str) for item in changes['evidence'])
-        ):
+        if 'evidence' in changes and (not isinstance(changes['evidence'], list) or not all(isinstance(item, str) for item in changes['evidence'])):
             raise HTTPException(status_code=400, detail='evidence must be an array of links.')
         if 'points' in changes:
             changes['points'] = _parse_integer(changes['points'], 'points', minimum=0, maximum=100)
@@ -435,9 +416,7 @@ def register_routes(
         if 'evidence' in changes:
             module = await services.guild_module_model.get_module(guild_id, 'moderation_casebook')
             casebook_config = normalize_casebook_config(module.get('config', {}) if module else {})
-            await services.moderation_evidence_model.attach_to_case(
-                guild_id, _evidence_ids_from_urls(guild_id, changes['evidence']), casebook_config['case_retention_days']
-            )
+            await services.moderation_evidence_model.attach_to_case(guild_id, _evidence_ids_from_urls(guild_id, changes['evidence']), casebook_config['case_retention_days'])
         return {
             'success': True,
             'case': _serialize_api_value(await services.moderation_case_model.get_case(guild_id, case_id)),
@@ -462,15 +441,8 @@ def register_routes(
         if not isinstance(channel, discord.TextChannel) or actor is None:
             raise HTTPException(status_code=400, detail='Select a text channel in this server.')
         perms = channel.permissions_for(actor)
-        if not (
-            perms.view_channel
-            and perms.read_message_history
-            and perms.manage_messages
-            and actor.guild_permissions.moderate_members
-        ):
-            raise HTTPException(
-                status_code=403, detail='Message cleanup requires channel access and moderation permissions.'
-            )
+        if not (perms.view_channel and perms.read_message_history and perms.manage_messages and actor.guild_permissions.moderate_members):
+            raise HTTPException(status_code=403, detail='Message cleanup requires channel access and moderation permissions.')
         case = await services.moderation_case_model.get_case(guild_id, case_id)
         if not case:
             raise HTTPException(status_code=404, detail='Moderation case not found.')
@@ -508,11 +480,7 @@ def register_routes(
         services = provide()
         if not await services.check_user_guild_capability(user_id, guild_id, 'manage_moderation'):
             raise HTTPException(status_code=403, detail='You do not have permission to view warning points.')
-        return _serialize_api_value(
-            await services.moderation_case_model.warning_summary(
-                guild_id, target_user_id, decay_days=max(1, min(3650, decay_days))
-            )
-        )
+        return _serialize_api_value(await services.moderation_case_model.warning_summary(guild_id, target_user_id, decay_days=max(1, min(3650, decay_days))))
 
     @app.get('/internal/guild/moderation/cases/export')
     async def internal_export_moderation_cases(
@@ -596,9 +564,7 @@ def register_routes(
             raise HTTPException(status_code=404, detail='Appeals are disabled for this server.')
         if status and status not in ModerationAppealModel.STATUSES:
             raise HTTPException(status_code=400, detail='Unknown appeal status.')
-        return _serialize_api_value(
-            await services.moderation_appeal_model.list_appeals(guild_id, status=status, page=page, limit=limit)
-        )
+        return _serialize_api_value(await services.moderation_appeal_model.list_appeals(guild_id, status=status, page=page, limit=limit))
 
     @app.post('/internal/guild/moderation/appeals')
     async def internal_submit_moderation_appeal(
@@ -615,18 +581,10 @@ def register_routes(
             raise HTTPException(status_code=404, detail='Server not found.')
         module = await services.guild_module_model.get_module(guild_id, 'moderation_casebook')
         config = normalize_casebook_config(module.get('config', {}) if module else {})
-        if (
-            not await services.guild_module_model.is_enabled(guild_id, 'appeals', default=True)
-            or not config['appeals_enabled']
-        ):
+        if not await services.guild_module_model.is_enabled(guild_id, 'appeals', default=True) or not config['appeals_enabled']:
             raise HTTPException(status_code=404, detail='Appeals are disabled for this server.')
         case = await services.moderation_case_model.get_case(guild_id, case_id)
-        if (
-            not case
-            or case['target_user_id'] != int(user_id)
-            or case.get('status') != 'active'
-            or case.get('action') == 'note'
-        ):
+        if not case or case['target_user_id'] != int(user_id) or case.get('status') != 'active' or case.get('action') == 'note':
             raise HTTPException(status_code=404, detail='An appealable moderation case was not found.')
         appeal = await services.moderation_appeal_model.create_appeal(
             guild_id,

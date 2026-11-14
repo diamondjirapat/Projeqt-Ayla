@@ -86,11 +86,7 @@ class MusicPresentation:
 
     async def _delete_voice_music_message(self, guild_id: int):
         message = self.now_playing_messages.get(guild_id)
-        binding = (
-            {'channel_id': message.channel.id, 'message_id': message.id}
-            if message
-            else await self.guild_model.get_voice_music_message(guild_id, self.bot.user.id)
-        )
+        binding = {'channel_id': message.channel.id, 'message_id': message.id} if message else await self.guild_model.get_voice_music_message(guild_id, self.bot.user.id)
         if message is None and binding:
             channel = self.bot.get_channel(binding['channel_id'])
             if channel is None:
@@ -152,11 +148,7 @@ class MusicPresentation:
             # Never adopt arbitrary embeds or another bot's controls from history.
             found = []
             async for candidate in channel.history(limit=100):
-                if candidate.author.id == self.bot.user.id and any(
-                    str(getattr(component, 'custom_id', '')).startswith('voice_music:')
-                    for row in candidate.components
-                    for component in row.children
-                ):
+                if candidate.author.id == self.bot.user.id and any(str(getattr(component, 'custom_id', '')).startswith('voice_music:') for row in candidate.components for component in row.children):
                     found.append(candidate)
             if found:
                 message = found[0]
@@ -193,11 +185,7 @@ class MusicPresentation:
                 prefix = '!'
 
         channel_name = channel.name if hasattr(channel, 'name') and channel.name else ''
-        channel_mention = (
-            channel.mention
-            if hasattr(channel, 'mention') and channel.mention
-            else (f'#{channel_name}' if channel_name else '')
-        )
+        channel_mention = channel.mention if hasattr(channel, 'mention') and channel.mention else (f'#{channel_name}' if channel_name else '')
 
         guild_name = guild.name if guild and getattr(guild, 'name', None) else ''
         server_icon = ''
@@ -231,9 +219,7 @@ class MusicPresentation:
             loop_mode_val = player.queue.loop_mode
             loop_mode_str = getattr(loop_mode_val, 'name', str(loop_mode_val)).capitalize()
 
-        queue_len_str = (
-            str(player.queue.count) if player and hasattr(player, 'queue') and hasattr(player.queue, 'count') else '0'
-        )
+        queue_len_str = str(player.queue.count) if player and hasattr(player, 'queue') and hasattr(player.queue, 'count') else '0'
         volume_str = str(getattr(player, 'volume', 100)) if player else '100'
 
         placeholders = {
@@ -273,9 +259,7 @@ class MusicPresentation:
             track_uri = current_track.uri or ''
             track_source = 'Spotify' if ('spotify' in track_uri.lower()) else 'YouTube'
             requester_val = getattr(current_track, 'requester', None) or unknown_user
-            requester_mention_val = (
-                getattr(current_track, 'requester_mention', None) or getattr(current_track, 'requester', None) or ''
-            )
+            requester_mention_val = getattr(current_track, 'requester_mention', None) or getattr(current_track, 'requester', None) or ''
             artwork_url = get_track_artwork(current_track) or ''
 
             placeholders.update(
@@ -356,17 +340,12 @@ class MusicPresentation:
                     source_indicator = 'YouTube\n'
 
                 embed.title = now_playing_title
-                embed.description = (
-                    f'{source_indicator}**[{current_track.title}]({current_track.uri})**\n\n'
-                    f'{artist_label}\n{duration_label}'
-                )
+                embed.description = f'{source_indicator}**[{current_track.title}]({current_track.uri})**\n\n{artist_label}\n{duration_label}'
                 artwork = get_track_artwork(current_track)
                 if is_http_url(artwork):
                     embed.set_thumbnail(url=artwork)
                 if hasattr(current_track, 'requester') and current_track.requester:
-                    req_text = await i18n.t(
-                        channel, 'music.player.requester_label', user=current_track.requester, static_embed=True
-                    )
+                    req_text = await i18n.t(channel, 'music.player.requester_label', user=current_track.requester, static_embed=True)
                     embed.add_field(name=' ', value=req_text)
                     embed.set_image(url=Config.BAR_URL.strip()) if is_http_url(Config.BAR_URL) else None
 
@@ -381,12 +360,7 @@ class MusicPresentation:
                 item.custom_id = f'voice_music:{item.custom_id}'
 
         # Voice moves/disconnects can happen while artwork/configuration is loading.
-        if (
-            guild.voice_client is not player
-            or not player.is_connected
-            or not player.channel
-            or player.channel.id != channel.id
-        ):
+        if guild.voice_client is not player or not player.is_connected or not player.channel or player.channel.id != channel.id:
             view.stop()
             return
         try:
@@ -449,16 +423,8 @@ class MusicPresentation:
                 continue
             cog = bot.get_cog('Music')
             message = cog.now_playing_messages.get(guild_id) if cog else None
-            url = (
-                f'https://discord.com/channels/{guild_id}/{player.channel.id}/{message.id}'
-                if message and message.channel.id == player.channel.id
-                else f'https://discord.com/channels/{guild_id}/{player.channel.id}'
-            )
-            links.append(
-                i18n.get_text(
-                    'music.player.directory.entry', locale, bot=bot.user.name, channel=player.channel.mention, url=url
-                )
-            )
+            url = f'https://discord.com/channels/{guild_id}/{player.channel.id}/{message.id}' if message and message.channel.id == player.channel.id else f'https://discord.com/channels/{guild_id}/{player.channel.id}'
+            links.append(i18n.get_text('music.player.directory.entry', locale, bot=bot.user.name, channel=player.channel.mention, url=url))
         guild = channel.guild
         config = await self.guild_model.get_music_channel_embed_config(guild_id)
         await refresh_music_embed_config_attachments(config)
@@ -507,11 +473,7 @@ class MusicPresentation:
             managed_ids = {bot.user.id for bot in bots}
             found = []
             async for candidate in channel.history(limit=100):
-                if candidate.author.id in managed_ids and any(
-                    str(getattr(component, 'custom_id', '')).startswith('music_directory:')
-                    for row in candidate.components
-                    for component in row.children
-                ):
+                if candidate.author.id in managed_ids and any(str(getattr(component, 'custom_id', '')).startswith('music_directory:') for row in candidate.components for component in row.children):
                     found.append(candidate)
             if found:
                 message = found[0]
@@ -520,9 +482,7 @@ class MusicPresentation:
                 message = await owner_channel.fetch_message(message.id)
                 for duplicate in found[1:]:
                     duplicate_bot = next(bot for bot in bots if bot.user.id == duplicate.author.id)
-                    duplicate_channel = duplicate_bot.get_channel(channel_id) or await duplicate_bot.fetch_channel(
-                        channel_id
-                    )
+                    duplicate_channel = duplicate_bot.get_channel(channel_id) or await duplicate_bot.fetch_channel(channel_id)
                     try:
                         duplicate = await duplicate_channel.fetch_message(duplicate.id)
                         await duplicate.delete()

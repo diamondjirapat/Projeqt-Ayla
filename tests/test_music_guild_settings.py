@@ -80,9 +80,7 @@ class GuildMusicSettingsTests(unittest.IsolatedAsyncioTestCase):
         bot.all_bots = [bot]
         bot.get_guild.return_value = guild
         bot.get_cog.return_value = cog
-        self.dependencies = replace(
-            self.dependencies, bot_instance=bot, _find_guild=lambda gid: guild, get_all_voice_clients=lambda: []
-        )
+        self.dependencies = replace(self.dependencies, bot_instance=bot, _find_guild=lambda gid: guild, get_all_voice_clients=lambda: [])
 
         async def verify_saved(guild_id):
             self.model.set_music_channel.assert_awaited_once_with(123, 999)

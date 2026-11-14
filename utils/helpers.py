@@ -87,9 +87,7 @@ def log_retention_days() -> int:
         return DEFAULT_LOG_RETENTION_DAYS
 
 
-def prune_dated_logs(
-    logs_dir: Path | str | None = None, keep_days: int | None = None, today: date | None = None
-) -> list[Path]:
+def prune_dated_logs(logs_dir: Path | str | None = None, keep_days: int | None = None, today: date | None = None) -> list[Path]:
     """Delete ``DD-MM-YYYY-N.log`` files dated more than ``keep_days`` before ``today``.
 
     Only files following the dated naming scheme are touched. Returns the removed paths.

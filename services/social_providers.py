@@ -135,8 +135,7 @@ class SocialProviders:
             try:
                 delay = int(lower_headers.get('retry-after', 0)) or max(
                     60,
-                    int(lower_headers.get('x-rate-limit-reset') or lower_headers.get('ratelimit-reset', 0))
-                    - int(time.time()),
+                    int(lower_headers.get('x-rate-limit-reset') or lower_headers.get('ratelimit-reset', 0)) - int(time.time()),
                 )
             except (ValueError, TypeError):
                 pass
@@ -250,14 +249,9 @@ class SocialProviders:
         video_ids = [item['contentDetails']['videoId'] for item in uploads.get('items', [])]
         warning = ''
         discovery_at = timestamp(state.get('live_discovered_at', ''))
-        if (
-            live
-            and (datetime.now(UTC) - discovery_at).total_seconds() >= self.config.SOCIAL_YOUTUBE_LIVE_DISCOVERY_SECONDS
-        ):
+        if live and (datetime.now(UTC) - discovery_at).total_seconds() >= self.config.SOCIAL_YOUTUBE_LIVE_DISCOVERY_SECONDS:
             try:
-                streams = await youtube(
-                    'search', part='id', channelId=state['channel_id'], type='video', eventType='live', maxResults=50
-                )
+                streams = await youtube('search', part='id', channelId=state['channel_id'], type='video', eventType='live', maxResults=50)
                 state['live_ids'] = [item['id']['videoId'] for item in streams.get('items', [])]
                 state['live_discovered_at'] = datetime.now(UTC).isoformat()
             except ProviderError as error:
@@ -268,9 +262,7 @@ class SocialProviders:
         events = []
         remaining_live = []
         for offset in range(0, len(video_ids), 50):
-            details = await youtube(
-                'videos', part='snippet,liveStreamingDetails', id=','.join(video_ids[offset : offset + 50])
-            )
+            details = await youtube('videos', part='snippet,liveStreamingDetails', id=','.join(video_ids[offset : offset + 50]))
             for item in details.get('items', []):
                 snippet = item['snippet']
                 streaming = item.get('liveStreamingDetails', {})
@@ -302,9 +294,7 @@ class SocialProviders:
         state = dict(metadata)
         headers = {'Authorization': f'Bearer {self.config.X_BEARER_TOKEN}'}
         if not state.get('user_id'):
-            result = await self._json(
-                'GET', f'https://api.x.com/2/users/by/username/{quote(handle, safe="")}', headers=headers
-            )
+            result = await self._json('GET', f'https://api.x.com/2/users/by/username/{quote(handle, safe="")}', headers=headers)
             if not result.get('data'):
                 raise ProviderError('account_not_found', 3600)
             state.update(user_id=result['data']['id'], creator=result['data'].get('name', handle))

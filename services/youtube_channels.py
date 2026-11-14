@@ -66,18 +66,10 @@ def parse_channel_input(value: str) -> tuple[str, str]:
 
 
 def _preview(channel_id, name, avatar='') -> dict:
-    if (
-        not isinstance(channel_id, str)
-        or not YOUTUBE_CHANNEL_ID.fullmatch(channel_id)
-        or not isinstance(name, str)
-        or not name.strip()
-    ):
+    if not isinstance(channel_id, str) or not YOUTUBE_CHANNEL_ID.fullmatch(channel_id) or not isinstance(name, str) or not name.strip():
         raise ChannelLookupError('lookup_unavailable')
     image = urlsplit(avatar if isinstance(avatar, str) else '')
-    if image.scheme != 'https' or not any(
-        (image.hostname or '') == host or (image.hostname or '').endswith('.' + host)
-        for host in ('googleusercontent.com', 'ggpht.com', 'ytimg.com')
-    ):
+    if image.scheme != 'https' or not any((image.hostname or '') == host or (image.hostname or '').endswith('.' + host) for host in ('googleusercontent.com', 'ggpht.com', 'ytimg.com')):
         avatar = ''
     return {
         'id': channel_id,
@@ -116,12 +108,7 @@ async def _fetch(url: str) -> bytes:
 
 
 async def _api(resource: str, **params) -> list:
-    body = await _fetch(
-        'https://www.googleapis.com/youtube/v3/'
-        + resource
-        + '?'
-        + urlencode({'key': Config.YOUTUBE_API_KEY, 'part': 'snippet', **params})
-    )
+    body = await _fetch('https://www.googleapis.com/youtube/v3/' + resource + '?' + urlencode({'key': Config.YOUTUBE_API_KEY, 'part': 'snippet', **params}))
     return json.loads(body).get('items', [])
 
 
@@ -133,16 +120,12 @@ async def _load(kind: str, target: str) -> dict:
                 if not videos:
                     raise ChannelLookupError('not_found')
                 kind, target = 'id', videos[0]['snippet']['channelId']
-            items = await _api(
-                'channels', **{{'id': 'id', 'handle': 'forHandle', 'username': 'forUsername'}[kind]: target}
-            )
+            items = await _api('channels', **{{'id': 'id', 'handle': 'forHandle', 'username': 'forUsername'}[kind]: target})
             if not items:
                 raise ChannelLookupError('not_found')
             item = items[0]
             snippet = item['snippet']
-            return _preview(
-                item['id'], snippet['title'], snippet.get('thumbnails', {}).get('default', {}).get('url', '')
-            )
+            return _preview(item['id'], snippet['title'], snippet.get('thumbnails', {}).get('default', {}).get('url', ''))
         except ChannelLookupError as error:
             if error.code == 'not_found':
                 raise

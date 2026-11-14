@@ -223,9 +223,7 @@ def register_routes(
                 panel = await services.ticket_panel_model.get_panel(guild_id, ticket['panel_id'])
                 staff_roles = {int(role_id) for role_id in (panel or {}).get('staff_role_ids', [])}
                 grants = await services.guild_permission_model.get_role_grants(guild_id)
-                if not has_capability(member, 'manage_tickets', grants) and not staff_roles.intersection(
-                    role.id for role in member.roles
-                ):
+                if not has_capability(member, 'manage_tickets', grants) and not staff_roles.intersection(role.id for role in member.roles):
                     raise HTTPException(status_code=400, detail='The assignee is not ticket staff.')
                 values['assigned_staff_id'] = assignee
             if 'name' in data and isinstance(channel, discord.TextChannel):

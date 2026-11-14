@@ -110,10 +110,7 @@ def register_routes(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not updated:
             raise HTTPException(status_code=409, detail='Scheduled item is no longer editable.')
-        if services.bot_instance and any(
-            key in changes
-            for key in ('kind', 'title', 'content', 'starts_at', 'event_end_at', 'location', 'channel_id')
-        ):
+        if services.bot_instance and any(key in changes for key in ('kind', 'title', 'content', 'starts_at', 'event_end_at', 'location', 'channel_id')):
             cog = services.bot_instance.get_cog('Scheduler')
             if cog:
                 await cog.sync_native_event(guild, updated)

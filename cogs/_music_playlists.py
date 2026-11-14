@@ -319,9 +319,7 @@ class PlaylistCommands:
                         except Exception:
                             pass
 
-                    self.bot.loop.create_task(
-                        PlaylistLoader.load_additions_background(additions, player, progress_callback)
-                    )
+                    self.bot.loop.create_task(PlaylistLoader.load_additions_background(additions, player, progress_callback))
                 else:
                     await status_msg.edit(content=msg_content)
 
@@ -342,9 +340,7 @@ class PlaylistCommands:
 
                 # A track that fails to load is skipped on its own; the rest
                 # of the playlist keeps loading instead of being dropped.
-                resolved_tracks, failed = await PlaylistLoader.resolve_saved_tracks(
-                    tracks_list, player, requester=ctx.author.mention
-                )
+                resolved_tracks, failed = await PlaylistLoader.resolve_saved_tracks(tracks_list, player, requester=ctx.author.mention)
                 count = 0
                 for t in resolved_tracks:
                     player.queue.put(t)
@@ -752,9 +748,7 @@ class PlaylistCommands:
                         except Exception:
                             pass
 
-                    self.bot.loop.create_task(
-                        PlaylistLoader.load_additions_background(additions, player, progress_callback)
-                    )
+                    self.bot.loop.create_task(PlaylistLoader.load_additions_background(additions, player, progress_callback))
                 else:
                     await status_msg.edit(content=msg_content)
 
@@ -774,9 +768,7 @@ class PlaylistCommands:
 
                 # A track that fails to load is skipped on its own; the rest
                 # of the playlist keeps loading instead of being dropped.
-                resolved_tracks, failed = await PlaylistLoader.resolve_saved_tracks(
-                    tracks_list, player, requester=ctx.author.mention
-                )
+                resolved_tracks, failed = await PlaylistLoader.resolve_saved_tracks(tracks_list, player, requester=ctx.author.mention)
                 count = 0
                 for t in resolved_tracks:
                     player.queue.put(t)

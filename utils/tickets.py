@@ -56,9 +56,7 @@ def normalize_ticket_panel(data: dict[str, Any] | None) -> dict[str, Any]:
         'button_label': str(source.get('button_label') or 'Open ticket').strip()[:80],
         'button_emoji': str(source.get('button_emoji') or '🎫').strip()[:32],
         'category_name': str(source.get('category_name') or 'Support').strip()[:80],
-        'discord_category_id': (
-            int(source['discord_category_id']) if str(source.get('discord_category_id', '')).isdigit() else None
-        ),
+        'discord_category_id': (int(source['discord_category_id']) if str(source.get('discord_category_id', '')).isdigit() else None),
         'staff_role_ids': _snowflakes(source.get('staff_role_ids')),
         'questions': questions[:4],
         'evidence_enabled': bool(source.get('evidence_enabled', True)),
@@ -104,17 +102,7 @@ def render_transcript(ticket: dict[str, Any], messages: list[dict[str, Any]], fo
             lines.append('')
         else:
             links = ''.join(f'<li><a href="{escape(url, quote=True)}">{escape(url)}</a></li>' for url in attachments)
-            lines.append(
-                '<article><header><strong>'
-                + escape(author)
-                + '</strong> <time>'
-                + escape(timestamp)
-                + '</time></header><p>'
-                + escape(content).replace('\n', '<br>')
-                + '</p>'
-                + (f'<ul>{links}</ul>' if links else '')
-                + '</article>'
-            )
+            lines.append('<article><header><strong>' + escape(author) + '</strong> <time>' + escape(timestamp) + '</time></header><p>' + escape(content).replace('\n', '<br>') + '</p>' + (f'<ul>{links}</ul>' if links else '') + '</article>')
     if format_name == 'markdown':
         return f'# Ticket #{ticket.get("ticket_id", "?")} transcript\n\n' + '\n'.join(lines)
     if format_name != 'html':

@@ -104,13 +104,9 @@ class UserModel(BaseModel):
         if not await self.get_playlist(uid, name):
             return False
         if cover_url:
-            result = await self.collection.update_one(
-                {'user_id': uid, f'playlists.{key}': {'$exists': True}}, {'$set': {f'playlists.{key}.cover': cover_url}}
-            )
+            result = await self.collection.update_one({'user_id': uid, f'playlists.{key}': {'$exists': True}}, {'$set': {f'playlists.{key}.cover': cover_url}})
         else:
-            result = await self.collection.update_one(
-                {'user_id': uid, f'playlists.{key}': {'$exists': True}}, {'$unset': {f'playlists.{key}.cover': ''}}
-            )
+            result = await self.collection.update_one({'user_id': uid, f'playlists.{key}': {'$exists': True}}, {'$unset': {f'playlists.{key}.cover': ''}})
         return result.modified_count > 0 or result.matched_count > 0
 
     async def add_track_to_playlist(self, user_id: int, playlist_name: str, track_info: Dict[str, Any]) -> bool:

@@ -15,9 +15,7 @@ async def social_runtime(guild_id: int, entries: list[dict]) -> dict:
             statuses = await SocialAlertState().statuses(guild_id)
         except Exception:
             available = False
-    running = any(
-        bot.is_ready() and (cog := bot.get_cog('SocialAlerts')) and cog.monitor.is_running() for bot in all_bots
-    )
+    running = any(bot.is_ready() and (cog := bot.get_cog('SocialAlerts')) and cog.monitor.is_running() for bot in all_bots)
     alerts = {}
     for entry in entries:
         try:
@@ -25,16 +23,7 @@ async def social_runtime(guild_id: int, entries: list[dict]) -> dict:
         except ProviderError:
             status = {}
         problem = setup_problem(entry, Config)
-        code = (
-            'paused'
-            if not entry['enabled']
-            else problem
-            or (
-                'worker_offline'
-                if not running
-                else status.get('code') or ('watching' if status.get('checked_at') else 'waiting_first_check')
-            )
-        )
+        code = 'paused' if not entry['enabled'] else problem or ('worker_offline' if not running else status.get('code') or ('watching' if status.get('checked_at') else 'waiting_first_check'))
         if not available and not problem and entry['enabled'] and running:
             code = 'status_unavailable'
         alerts[entry['id']] = {**status, 'code': code}

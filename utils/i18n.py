@@ -22,12 +22,8 @@ class I18nManager:
         self.guild_model = GuildModel()
         self._discord_translation_index: Dict[str, Dict[str, str]] = {}
         # Cache missing values too; most users do not set a custom locale.
-        self._user_locale_cache: AsyncTTLCache[int, Optional[str]] = AsyncTTLCache(
-            ttl=300, max_size=5000, name='locale.users'
-        )
-        self._guild_locale_cache: AsyncTTLCache[int, Optional[str]] = AsyncTTLCache(
-            ttl=300, max_size=5000, name='locale.guilds'
-        )
+        self._user_locale_cache: AsyncTTLCache[int, Optional[str]] = AsyncTTLCache(ttl=300, max_size=5000, name='locale.users')
+        self._guild_locale_cache: AsyncTTLCache[int, Optional[str]] = AsyncTTLCache(ttl=300, max_size=5000, name='locale.guilds')
         self.load_translations()
 
     def _discover_locales(self) -> list:
@@ -190,9 +186,7 @@ class I18nManager:
             logger.error(f'Error setting guild locale: {e}')
             return False
 
-    async def get_locale(
-        self, ctx: Union[commands.Context, discord.Interaction, Any], static_embed: bool = False
-    ) -> str:
+    async def get_locale(self, ctx: Union[commands.Context, discord.Interaction, Any], static_embed: bool = False) -> str:
         """
         Get the appropriate locale based on priority:
         - For static embeds: Guild locale > Default locale
@@ -269,9 +263,7 @@ class I18nManager:
             logger.warning(f'Translation key not found: {key}')
             return key
 
-    async def t(
-        self, ctx: Union[commands.Context, discord.Interaction, Any], key: str, static_embed: bool = False, **kwargs
-    ) -> str:
+    async def t(self, ctx: Union[commands.Context, discord.Interaction, Any], key: str, static_embed: bool = False, **kwargs) -> str:
         """
         Convenience method to get translated text with context-aware locale
 

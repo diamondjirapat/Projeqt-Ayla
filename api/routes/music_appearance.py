@@ -82,9 +82,7 @@ def register_routes(
             if channel
             else None,
             'config': config,
-            'defaults': get_default_music_channel_embed_config()
-            if target == 'channel'
-            else get_default_music_embed_config(),
+            'defaults': get_default_music_channel_embed_config() if target == 'channel' else get_default_music_embed_config(),
             'banner_url': await services._resolve_music_banner_url(),
             'bar_url': await services._resolve_music_bar_url(),
         }
@@ -240,11 +238,7 @@ def register_routes(
         elif not isinstance(raw_config, dict):
             raise HTTPException(status_code=400, detail='config must be an object.')
         else:
-            config = (
-                normalize_music_channel_embed_config(raw_config)
-                if target == 'channel'
-                else normalize_music_embed_config(raw_config)
-            )
+            config = normalize_music_channel_embed_config(raw_config) if target == 'channel' else normalize_music_embed_config(raw_config)
 
         await refresh_music_embed_config_attachments(config)
 
@@ -297,9 +291,7 @@ def register_routes(
                 {
                     'directory_title': i18n.get_text('music.player.directory.title', locale),
                     'directory_description': i18n.get_text('music.player.directory.description', locale),
-                    'players': i18n.get_text(
-                        'music.player.directory.entry', locale, bot=bot_name, channel='#Music Lounge', url=sample_url
-                    ),
+                    'players': i18n.get_text('music.player.directory.entry', locale, bot=bot_name, channel='#Music Lounge', url=sample_url),
                     'active_player_count': '1',
                 }
             )
@@ -338,11 +330,7 @@ def register_routes(
         previews: Dict[str, Any] = {}
         for state in states:
             placeholders = idle_placeholders if state == 'idle' else now_playing_placeholders
-            embed, content = (
-                build_music_channel_embed(guild_id, config, placeholders)
-                if target == 'channel'
-                else build_custom_music_embed(guild_id, state, config, placeholders)
-            )
+            embed, content = build_music_channel_embed(guild_id, config, placeholders) if target == 'channel' else build_custom_music_embed(guild_id, state, config, placeholders)
             previews[state] = {'embed': embed.to_dict(), 'content': content}
 
         return {

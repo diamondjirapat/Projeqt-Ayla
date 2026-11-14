@@ -55,12 +55,7 @@ class GuildPermissionModel(BaseModel):
 
     async def get_role_grants(self, guild_id: int) -> Dict[str, list[str]]:
         grants = await self.get_guild_grants(guild_id)
-        return {
-            str(item['role_id']): [
-                capability for capability in item.get('capabilities', []) if capability in CAPABILITIES
-            ]
-            for item in grants
-        }
+        return {str(item['role_id']): [capability for capability in item.get('capabilities', []) if capability in CAPABILITIES] for item in grants}
 
     async def set_role_grants(
         self,

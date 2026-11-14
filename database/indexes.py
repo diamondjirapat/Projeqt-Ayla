@@ -71,6 +71,4 @@ async def ensure_required_index(collection, spec: IndexSpec) -> None:
     except Exception as error:
         # Driver errors may contain record values or credentials. Expose only
         # the constraint and exception category in the startup diagnostic.
-        raise IndexRequirementError(
-            f'Required index unavailable: {label} ({type(error).__name__}); run python -m scripts.audit_database'
-        ) from error
+        raise IndexRequirementError(f'Required index unavailable: {label} ({type(error).__name__}); run python -m scripts.audit_database') from error

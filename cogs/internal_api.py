@@ -315,14 +315,8 @@ def _module_runtime_health(definition, guild: discord.Guild, enabled: bool) -> d
     member = guild.me
     permissions = getattr(member, 'guild_permissions', None)
     intents = getattr(candidate, 'intents', None)
-    missing_permissions = [
-        name
-        for name in definition.required_bot_permissions
-        if permissions is None or not bool(getattr(permissions, name, False))
-    ]
-    missing_intents = [
-        name for name in definition.required_intents if intents is None or not bool(getattr(intents, name, False))
-    ]
+    missing_permissions = [name for name in definition.required_bot_permissions if permissions is None or not bool(getattr(permissions, name, False))]
+    missing_intents = [name for name in definition.required_intents if intents is None or not bool(getattr(intents, name, False))]
     status = 'disabled' if not enabled else 'degraded' if missing_permissions or missing_intents else 'healthy'
     return {
         'status': status,
@@ -351,12 +345,7 @@ def _validate_web_moderation_target(
         raise HTTPException(status_code=400, detail='Bots cannot be targeted by this moderation action.')
     if target.id == guild.owner_id:
         raise HTTPException(status_code=400, detail='The server owner cannot be moderated.')
-    if (
-        actor is not None
-        and not actor_is_owner
-        and not actor.guild_permissions.administrator
-        and target.top_role >= actor.top_role
-    ):
+    if actor is not None and not actor_is_owner and not actor.guild_permissions.administrator and target.top_role >= actor.top_role:
         raise HTTPException(status_code=403, detail='The selected member is at or above your highest role.')
     bot_member = guild.me
     if bot_member is None or target.top_role >= bot_member.top_role:

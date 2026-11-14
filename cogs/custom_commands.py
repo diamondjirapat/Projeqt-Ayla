@@ -101,9 +101,7 @@ class CustomCommands(commands.Cog):
         except Exception:
             color = discord.Color.blurple()
 
-        embed = discord.Embed(
-            title=title if title else None, description=description if description else None, color=color
-        )
+        embed = discord.Embed(title=title if title else None, description=description if description else None, color=color)
 
         image_url = parse_placeholders(embed_config.get('image_url', ''), author, guild, channel, args_text)
         if image_url and (image_url.startswith('http://') or image_url.startswith('https://')):
@@ -118,11 +116,7 @@ class CustomCommands(commands.Cog):
         if footer_text:
             embed.set_footer(
                 text=footer_text,
-                icon_url=(
-                    footer_icon
-                    if footer_icon and (footer_icon.startswith('http://') or footer_icon.startswith('https://'))
-                    else None
-                ),
+                icon_url=(footer_icon if footer_icon and (footer_icon.startswith('http://') or footer_icon.startswith('https://')) else None),
             )
 
         return embed
@@ -169,9 +163,7 @@ class CustomCommands(commands.Cog):
         # Increment command trigger count asynchronously
         await self.model.increment_use_count(message.guild.id, command_name)
 
-        response_text = parse_placeholders(
-            cmd.get('response', ''), message.author, message.guild, message.channel, args_text
-        )
+        response_text = parse_placeholders(cmd.get('response', ''), message.author, message.guild, message.channel, args_text)
         is_embed = cmd.get('is_embed', False)
         embed_config = cmd.get('embed_config', {})
 
@@ -183,9 +175,7 @@ class CustomCommands(commands.Cog):
                 if response_text:
                     await message.channel.send(response_text)
         except Exception as e:
-            logger.error(
-                f"[CustomCommands] Failed to execute trigger '{command_name}' in guild {message.guild.id}: {e}"
-            )
+            logger.error(f"[CustomCommands] Failed to execute trigger '{command_name}' in guild {message.guild.id}: {e}")
 
     @commands.hybrid_group(name='customcommand', aliases=['cc', 'customcmd'], invoke_without_command=True)
     async def custom_command_group(self, ctx: commands.Context):
@@ -202,11 +192,7 @@ class CustomCommands(commands.Cog):
         )
         embed.add_field(
             name=await i18n.t(ctx, 'custom_commands.response_variables'),
-            value=(
-                '`{user}`, `{author_mention}`, `{server}`, `{channel}`, '
-                '`{member_count}`, `{date}`, `{time}`, `{args}`, `{avatar}`, '
-                '`{server_icon}`, `{server_banner}`'
-            ),
+            value=('`{user}`, `{author_mention}`, `{server}`, `{channel}`, `{member_count}`, `{date}`, `{time}`, `{args}`, `{avatar}`, `{server_icon}`, `{server_banner}`'),
             inline=False,
         )
         embed.set_footer(text=await i18n.t(ctx, 'custom_commands.dashboard_tip'))
@@ -242,9 +228,7 @@ class CustomCommands(commands.Cog):
         if created:
             embed = discord.Embed(
                 title=await i18n.t(ctx, 'custom_commands.created_title'),
-                description=await i18n.t(
-                    ctx, 'custom_commands.created_description', name=name_clean, response=response
-                ),
+                description=await i18n.t(ctx, 'custom_commands.created_description', name=name_clean, response=response),
                 color=discord.Color.green(),
             )
             await ctx.send(embed=embed)
@@ -266,9 +250,7 @@ class CustomCommands(commands.Cog):
         if success:
             embed = discord.Embed(
                 title=await i18n.t(ctx, 'custom_commands.updated_title'),
-                description=await i18n.t(
-                    ctx, 'custom_commands.updated_description', name=name_clean, response=response
-                ),
+                description=await i18n.t(ctx, 'custom_commands.updated_description', name=name_clean, response=response),
                 color=discord.Color.blue(),
             )
             await ctx.send(embed=embed)
@@ -311,11 +293,7 @@ class CustomCommands(commands.Cog):
             status = '🟢' if cmd.get('enabled', True) else '🔴'
             embed_badge = await i18n.t(ctx, 'custom_commands.embed_badge') if cmd.get('is_embed') else ''
             uses = cmd.get('use_count', 0)
-            formatted_cmds.append(
-                await i18n.t(
-                    ctx, 'custom_commands.list_item', status=status, name=cmd['name'], type=embed_badge, uses=uses
-                )
-            )
+            formatted_cmds.append(await i18n.t(ctx, 'custom_commands.list_item', status=status, name=cmd['name'], type=embed_badge, uses=uses))
 
         embed.add_field(
             name=await i18n.t(ctx, 'custom_commands.commands'),
@@ -337,35 +315,25 @@ class CustomCommands(commands.Cog):
             await ctx.send(await i18n.t(ctx, 'custom_commands.not_found', name=name_clean))
             return
 
-        embed = discord.Embed(
-            title=await i18n.t(ctx, 'custom_commands.info_title', name=cmd['name']), color=discord.Color.blurple()
-        )
+        embed = discord.Embed(title=await i18n.t(ctx, 'custom_commands.info_title', name=cmd['name']), color=discord.Color.blurple())
         embed.add_field(
             name=await i18n.t(ctx, 'custom_commands.status'),
-            value=await i18n.t(
-                ctx, 'custom_commands.enabled' if cmd.get('enabled', True) else 'custom_commands.disabled'
-            ),
+            value=await i18n.t(ctx, 'custom_commands.enabled' if cmd.get('enabled', True) else 'custom_commands.disabled'),
             inline=True,
         )
         embed.add_field(
             name=await i18n.t(ctx, 'custom_commands.type'),
-            value=await i18n.t(
-                ctx, 'custom_commands.rich_embed' if cmd.get('is_embed') else 'custom_commands.plain_text'
-            ),
+            value=await i18n.t(ctx, 'custom_commands.rich_embed' if cmd.get('is_embed') else 'custom_commands.plain_text'),
             inline=True,
         )
-        embed.add_field(
-            name=await i18n.t(ctx, 'custom_commands.times_used'), value=str(cmd.get('use_count', 0)), inline=True
-        )
+        embed.add_field(name=await i18n.t(ctx, 'custom_commands.times_used'), value=str(cmd.get('use_count', 0)), inline=True)
         embed.add_field(
             name=await i18n.t(ctx, 'custom_commands.created_by'),
             value=cmd.get('created_by_name') or await i18n.t(ctx, 'general.unknown'),
             inline=True,
         )
         if cmd.get('description'):
-            embed.add_field(
-                name=await i18n.t(ctx, 'custom_commands.description'), value=cmd['description'], inline=False
-            )
+            embed.add_field(name=await i18n.t(ctx, 'custom_commands.description'), value=cmd['description'], inline=False)
         embed.add_field(
             name=await i18n.t(ctx, 'custom_commands.response_template'),
             value=f'```{cmd.get("response", "")}```',

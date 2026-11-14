@@ -224,10 +224,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
                         free_bot = b
 
             if same_channel_bot:
-                msg = (
-                    f'I am currently in use. Please use {same_channel_bot.user.mention}'
-                    f' who is already in your voice channel!'
-                )
+                msg = f'I am currently in use. Please use {same_channel_bot.user.mention} who is already in your voice channel!'
             elif free_bot:
                 msg = f'I am currently in use. Please use {free_bot.user.mention} instead!'
             else:
@@ -416,12 +413,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
             # instead of GAPLESS.  No TrackStart event follows, so we must
             # handle it here identically to GAPLESS — advance the queue, sync
             # the now-playing embed, and preload the next-next song.
-            is_gapless_replaced = (
-                normalized_reason == 'REPLACED'
-                and getattr(player, 'gapless_enabled', False)
-                and player.current is not None
-                and player.current is not track
-            )
+            is_gapless_replaced = normalized_reason == 'REPLACED' and getattr(player, 'gapless_enabled', False) and player.current is not None and player.current is not track
 
             if normalized_reason == 'GAPLESS' or is_gapless_replaced:
                 # A new track took over, so any failure streak ends here.
@@ -484,10 +476,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
                     except Exception:
                         pass
                     if failures >= MAX_CONSECUTIVE_PLAYBACK_FAILURES:
-                        logger.warning(
-                            f'[PLAYBACK] Giving up after {failures} consecutive playback failures '
-                            f'for guild {player.guild.id if player.guild else "unknown"}'
-                        )
+                        logger.warning(f'[PLAYBACK] Giving up after {failures} consecutive playback failures for guild {player.guild.id if player.guild else "unknown"}')
                         await self._give_up_after_repeated_failures(player, track, failures)
                         return
 
@@ -504,9 +493,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
                 else:
                     await self._advance_queue_or_autoplay(player, track)
 
-            if (
-                reason.lower() == 'finished' or normalized_reason == 'GAPLESS' or is_gapless_replaced
-            ) and player.channel:
+            if (reason.lower() == 'finished' or normalized_reason == 'GAPLESS' or is_gapless_replaced) and player.channel:
                 member_ids = [m.id for m in player.channel.members if not m.bot]
                 logger.info(f'Track finished: {track.title} - checking scrobble for {len(member_ids)} users')
 
@@ -549,12 +536,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
 
         def is_idle_session():
             # A paused song also owns playback even though is_playing is False.
-            return (
-                player.is_connected
-                and player.guild.voice_client is player
-                and player.current is None
-                and not player.is_playing
-            )
+            return player.is_connected and player.guild.voice_client is player and player.current is None and not player.is_playing
 
         def can_autoplay():
             return player.autoplay_enabled and player.queue.is_empty
@@ -584,9 +566,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
                         await apply_session_volume(player, default_volume)
                         if not is_idle_session():
                             return
-                        if can_autoplay() and not is_channel_blocked(
-                            recommended, getattr(player, 'autoplay_config', None)
-                        ):
+                        if can_autoplay() and not is_channel_blocked(recommended, getattr(player, 'autoplay_config', None)):
                             try:
                                 await player.play(recommended)
                                 return
@@ -595,9 +575,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
                                 if failures >= MAX_CONSECUTIVE_PLAYBACK_FAILURES:
                                     await self._give_up_after_repeated_failures(player, recommended, failures)
                                     return
-                                logger.error(
-                                    f"[AUTOPLAY] Failed to play recommended track '{recommended.title}': {play_err}"
-                                )
+                                logger.error(f"[AUTOPLAY] Failed to play recommended track '{recommended.title}': {play_err}")
 
         # User requests arriving during any await take precedence over autoplay.
         if not player.queue.is_empty:
@@ -618,10 +596,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
             return
         failures = self._register_playback_failure(player, track)
         if failures >= MAX_CONSECUTIVE_PLAYBACK_FAILURES:
-            logger.warning(
-                f'[PLAYBACK] Giving up after {failures} consecutive playback failures '
-                f'for guild {player.guild.id if player.guild else "unknown"}'
-            )
+            logger.warning(f'[PLAYBACK] Giving up after {failures} consecutive playback failures for guild {player.guild.id if player.guild else "unknown"}')
             await self._give_up_after_repeated_failures(player, track, failures)
             return
 
@@ -640,10 +615,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
 
         failures = self._register_playback_failure(player, track)
         if failures >= MAX_CONSECUTIVE_PLAYBACK_FAILURES:
-            logger.warning(
-                f'[PLAYBACK] Giving up after {failures} consecutive playback failures '
-                f'for guild {player.guild.id if player.guild else "unknown"}'
-            )
+            logger.warning(f'[PLAYBACK] Giving up after {failures} consecutive playback failures for guild {player.guild.id if player.guild else "unknown"}')
             await self._give_up_after_repeated_failures(player, track, failures)
             return
 
@@ -651,18 +623,13 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
 
         if target_channel:
             locale = await i18n.get_guild_locale(player.guild.id) or i18n.default_locale
-            await target_channel.send(
-                i18n.get_text('music.errors.track_stuck', locale, seconds=int(threshold // 1000)), delete_after=10
-            )
+            await target_channel.send(i18n.get_text('music.errors.track_stuck', locale, seconds=int(threshold // 1000)), delete_after=10)
 
     @commands.Cog.listener()
     async def on_lyra_websocket_closed(self, payload: lava_lyra.WebSocketClosedPayload):
         guild = payload.guild or self.bot.get_guild(getattr(payload, '_guild_id', 0))
         guild_id_str = str(guild.id) if guild else str(getattr(payload, '_guild_id', 'Unknown'))
-        logger.warning(
-            f'[LYRA] WebSocket closed for guild {guild_id_str}: '
-            f'Code {payload.code}, Reason: {payload.reason} (by_remote={payload.by_remote})'
-        )
+        logger.warning(f'[LYRA] WebSocket closed for guild {guild_id_str}: Code {payload.code}, Reason: {payload.reason} (by_remote={payload.by_remote})')
 
         # 4014 also occurs during channel moves, including local voice transport
         # replacement in NodeLink. The close can arrive before the gateway move
@@ -776,9 +743,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
 
         channel_id = await self.guild_model.get_music_channel(message.guild.id)
         player = message.guild.voice_client
-        in_voice_chat = bool(
-            player and player.is_connected and player.channel and player.channel.id == message.channel.id
-        )
+        in_voice_chat = bool(player and player.is_connected and player.channel and player.channel.id == message.channel.id)
         if not in_voice_chat:
             if not channel_id or message.channel.id != channel_id:
                 return
@@ -838,9 +803,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
         else:
             await ctx.send(msg, delete_after=10)
 
-        self.bot.loop.create_task(
-            target_cog._play_logic(new_ctx, query, target_response_channel, redirected=True, mode=mode)
-        )
+        self.bot.loop.create_task(target_cog._play_logic(new_ctx, query, target_response_channel, redirected=True, mode=mode))
         return True
 
     async def _play_logic(
@@ -1904,11 +1867,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
         username = lfm.get('username') or await i18n.t(ctx, 'general.unknown')
         scrobbling = lfm.get('scrobbling', True)
 
-        status_text = (
-            await i18n.t(ctx, 'music.lastfm.scrobbling_enabled')
-            if scrobbling
-            else await i18n.t(ctx, 'music.lastfm.scrobbling_disabled')
-        )
+        status_text = await i18n.t(ctx, 'music.lastfm.scrobbling_enabled') if scrobbling else await i18n.t(ctx, 'music.lastfm.scrobbling_disabled')
         msg = await i18n.t(ctx, 'music.lastfm.info_status', username=username, status=status_text)
         await ctx.send(msg, delete_after=10)
 
@@ -1921,9 +1880,7 @@ class Music(commands.Cog, AutoplayMixin, MusicPresentation, PlaylistCommands, Pl
 
     @lastfm.command(name='scrobble')
     @app_commands.describe(state='Enable or disable scrobbling (on/off)')
-    @app_commands.choices(
-        state=[app_commands.Choice(name='On', value='on'), app_commands.Choice(name='Off', value='off')]
-    )
+    @app_commands.choices(state=[app_commands.Choice(name='On', value='on'), app_commands.Choice(name='Off', value='off')])
     async def lastfm_scrobble(self, ctx, state: app_commands.Choice[str]):
         """Toggle scrobbling on/off"""
         user_data = await self.user_model.get_user(ctx.author.id)

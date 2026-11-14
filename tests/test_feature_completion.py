@@ -120,16 +120,10 @@ class FeatureCompletionRoutes(unittest.TestCase):
                 AsyncMock(return_value=True),
             )
         )
-        self.stack.enter_context(
-            patch.object(internal_api.guild_module_model, 'get_module', AsyncMock(return_value=None))
-        )
-        self.stack.enter_context(
-            patch.object(internal_api.guild_module_model, 'is_enabled', AsyncMock(return_value=True))
-        )
+        self.stack.enter_context(patch.object(internal_api.guild_module_model, 'get_module', AsyncMock(return_value=None)))
+        self.stack.enter_context(patch.object(internal_api.guild_module_model, 'is_enabled', AsyncMock(return_value=True)))
         self.case = {'case_id': 1, 'guild_id': 123, 'action': 'ban', 'target_user_id': 7, 'status': 'active'}
-        self.stack.enter_context(
-            patch.object(internal_api.moderation_case_model, 'get_case', AsyncMock(return_value=self.case))
-        )
+        self.stack.enter_context(patch.object(internal_api.moderation_case_model, 'get_case', AsyncMock(return_value=self.case)))
         self.save = self.stack.enter_context(
             patch.object(
                 internal_api.moderation_case_model,
@@ -185,9 +179,7 @@ class FeatureCompletionRoutes(unittest.TestCase):
         self.review.assert_not_awaited()
 
     def test_revocation_reverses_the_sanction(self):
-        response = self.client.patch(
-            '/internal/guild/moderation/cases/1', headers=self.headers, json={'guild_id': 123, 'status': 'revoked'}
-        )
+        response = self.client.patch('/internal/guild/moderation/cases/1', headers=self.headers, json={'guild_id': 123, 'status': 'revoked'})
         self.assertEqual(response.status_code, 200)
         self.guild.unban.assert_awaited_once()
 
@@ -244,9 +236,7 @@ class FeatureCompletionRoutes(unittest.TestCase):
 
         channel.purge = AsyncMock(side_effect=purge)
         self.guild.get_channel.return_value = channel
-        revision = self.stack.enter_context(
-            patch.object(internal_api.moderation_case_model, 'record_revision', AsyncMock())
-        )
+        revision = self.stack.enter_context(patch.object(internal_api.moderation_case_model, 'record_revision', AsyncMock()))
         response = self.client.post(
             '/internal/guild/moderation/cases/1/cleanup',
             headers=self.headers,

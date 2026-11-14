@@ -39,10 +39,7 @@ class DiscordBot(commands.Bot):
             intents.members = True
             intents.presences = True
 
-        logger.info(
-            f'Bot intents: message_content={intents.message_content}, '
-            f'guilds={intents.guilds}, members={intents.members}'
-        )
+        logger.info(f'Bot intents: message_content={intents.message_content}, guilds={intents.guilds}, members={intents.members}')
         logger.info(f'All intents enabled: {Config.INTENTS_ALL}')
 
         super().__init__(
@@ -108,9 +105,7 @@ class DiscordBot(commands.Bot):
                 raise RuntimeError(f'Failed to load cog {cog_name}') from e
 
     async def update_status(self):
-        activity = discord.Activity(
-            type=discord.ActivityType.listening, name=f' {len(self.guilds)} servers | @{self.user.name} help'
-        )
+        activity = discord.Activity(type=discord.ActivityType.listening, name=f' {len(self.guilds)} servers | @{self.user.name} help')
         await self.change_presence(activity=activity)
 
     async def on_ready(self):
