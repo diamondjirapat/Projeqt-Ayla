@@ -1,0 +1,639 @@
+[
+  {
+    "collection": "users",
+    "keys": [
+      [
+        "user_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "guilds",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "user_prefixes",
+    "keys": [
+      [
+        "user_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "guild_prefixes",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "user_levels",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "user_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "user_levels",
+    "keys": [
+      [
+        "user_id",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "user_levels",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "xp",
+        -1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "user_global_levels",
+    "keys": [
+      [
+        "user_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "user_global_levels",
+    "keys": [
+      [
+        "xp",
+        -1
+      ],
+      [
+        "user_id",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "custom_commands",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "name",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "custom_commands",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "giveaways",
+    "keys": [
+      [
+        "message_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "giveaways",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "ended",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "giveaways",
+    "keys": [
+      [
+        "ended",
+        1
+      ],
+      [
+        "end_time",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "guild_modules",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "module_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "guild_permission_grants",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "role_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "moderation_cases",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "case_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "moderation_cases",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "target_user_id",
+        1
+      ],
+      [
+        "created_at",
+        -1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "moderation_cases",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "moderator_user_id",
+        1
+      ],
+      [
+        "created_at",
+        -1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "moderation_cases",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "status",
+        1
+      ],
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "moderation_cases",
+    "keys": [
+      [
+        "status",
+        1
+      ],
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "moderation_cases",
+    "keys": [
+      [
+        "data_expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  },
+  {
+    "collection": "moderation_counters",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "moderation_appeals",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "status",
+        1
+      ],
+      [
+        "created_at",
+        -1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "moderation_appeals",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "case_id",
+        1
+      ],
+      [
+        "target_user_id",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "moderation_appeals",
+    "keys": [
+      [
+        "data_expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  },
+  {
+    "collection": "moderation_evidence",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "evidence_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "moderation_evidence",
+    "keys": [
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  },
+  {
+    "collection": "ticket_panels",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "panel_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "ticket_panels",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "message_id",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "tickets",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "ticket_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "tickets",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "channel_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "tickets",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "status",
+        1
+      ],
+      [
+        "updated_at",
+        -1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "tickets",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "member_user_id",
+        1
+      ],
+      [
+        "status",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "tickets",
+    "keys": [
+      [
+        "rating_message_id",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "tickets",
+    "keys": [
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  },
+  {
+    "collection": "ticket_counters",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "ticket_events",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "ticket_id",
+        1
+      ],
+      [
+        "created_at",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "ticket_events",
+    "keys": [
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  },
+  {
+    "collection": "ticket_transcripts",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "ticket_id",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "ticket_transcripts",
+    "keys": [
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  },
+  {
+    "collection": "ticket_transcript_messages",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "ticket_id",
+        1
+      ],
+      [
+        "sequence",
+        1
+      ]
+    ],
+    "unique": true
+  },
+  {
+    "collection": "ticket_transcript_messages",
+    "keys": [
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  },
+  {
+    "collection": "scheduled_items",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ],
+      [
+        "status",
+        1
+      ],
+      [
+        "next_run_at",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "scheduled_items",
+    "keys": [
+      [
+        "status",
+        1
+      ],
+      [
+        "lease_until",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "giveaway_creations",
+    "keys": [
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  },
+  {
+    "collection": "social_alert_state",
+    "keys": [
+      [
+        "guild_id",
+        1
+      ]
+    ],
+    "unique": false
+  },
+  {
+    "collection": "social_alert_state",
+    "keys": [
+      [
+        "expires_at",
+        1
+      ]
+    ],
+    "unique": false,
+    "expireAfterSeconds": 0
+  }
+]

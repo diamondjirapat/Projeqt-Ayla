@@ -7,23 +7,19 @@ async-timeout==5.0.1
 attrs==25.4.0
 audioop-lts==0.2.2
 certifi==2025.11.12
-# Session/web/auth-critical packages are pinned exactly so builds are reproducible
-discord.py~=2.7.1
+discord.py[voice]~=2.7.1
 dnspython==2.8.0
 fastapi==0.141.1
 frozenlist==1.8.0
 h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
 idna==3.11
-itsdangerous==2.2.0
-motor==3.7.1
 multidict==6.7.0
-wavelink==3.5.2
+Pillow==11.3.0
+lava-lyra==2.2.4
 propcache==0.4.1
 pymongo==4.15.5
+pydantic==2.13.4
 python-dotenv==1.2.1
-ruff==0.12.12
 typing_extensions==4.15.0
 uvicorn==0.52.0
 yarl==1.22.0

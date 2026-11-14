@@ -1,0 +1,36 @@
+{
+  "valid": [
+    {"contract": "SettingsRequest", "value": {"theme": "fantasy", "animations": true, "transparency": 8, "startup": "discover", "language": "th"}},
+    {"contract": "SettingsRequest", "value": {}},
+    {"contract": "GuildSettingsRequest", "value": {"guild_id": "1134567890123456789", "autoplay": false, "247": true, "music_channel_id": null}},
+    {"contract": "ScheduleRequest", "value": {"guild_id": "1134567890123456789", "channel_id": "1234567890123456789", "kind": "announcement", "content": "Hello", "starts_at": "2099-01-01T00:00:00Z"}},
+    {"contract": "SchedulePatch", "value": {"guild_id": 123, "title": "Renamed"}},
+    {"contract": "GiveawayRequest", "value": {"guild_id": 123, "channel_id": 456, "prize": "Nitro", "winners_count": 2}},
+    {"contract": "TicketRequest", "value": {"guild_id": 123, "action": "update", "name": "support"}},
+    {"contract": "ModerationRequest", "value": {"guild_id": 123, "target_user_id": 456, "action": "note", "notify": false}},
+    {"contract": "ScheduleList", "value": {"items": [], "can_manage": true, "future_field": 1}},
+    {"contract": "PlaylistQueueRequest", "value": {"name": "My Queue", "tracks": [{"title": "Song", "uri": "ytsearch:Song"}]}}
+  ],
+  "invalid": [
+    {"contract": "GuildSettingsRequest", "value": {"guild_id": 123, "gapless": false}},
+    {"contract": "SettingsRequest", "value": {"autoplay": "false"}},
+    {"contract": "SettingsRequest", "value": {"autoplay": null}},
+    {"contract": "SettingsRequest", "value": {"settings.autoplay": true}},
+    {"contract": "SettingsRequest", "value": {"unknown": true}},
+    {"contract": "SettingsRequest", "value": {"transparency": 99}},
+    {"contract": "SettingsRequest", "value": {"transparency": 1.5}},
+    {"contract": "SettingsRequest", "value": {"language": "invalid"}},
+    {"contract": "SettingsRequest", "value": []},
+    {"contract": "GuildSettingsRequest", "value": {"guild_id": 1134567890123456800}},
+    {"contract": "GuildSettingsRequest", "value": {"guild_id": 123, "autoplay": 1}},
+    {"contract": "ScheduleRequest", "value": {"guild_id": 123, "channel_id": 456}},
+    {"contract": "SchedulePatch", "value": {"guild_id": 123, "content": []}},
+    {"contract": "ScheduleList", "value": {"items": "invalid", "can_manage": true}},
+    {"contract": "ScheduleList", "value": {"items": [], "can_manage": "true"}},
+    {"contract": "GiveawayRequest", "value": {"guild_id": 123, "channel_id": 456, "prize": "Nitro", "winners_count": true}},
+    {"contract": "PlaylistQueueRequest", "value": {"name": "My Queue", "tracks": []}},
+    {"contract": "PlaylistQueueRequest", "value": {"name": "My Queue", "tracks": ["invalid"]}},
+    {"contract": "PlaylistNameRequest", "value": {"name": "   "}},
+    {"contract": "PlaylistRemoveRequest", "value": {"playlist_name": "Mix", "index": "1"}}
+  ]
+}

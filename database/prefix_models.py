@@ -34,7 +34,7 @@ class PrefixModel:
             return True
         except Exception:
             logger.exception(
-                "Failed to set prefix in %s for %s=%s",
+                'Failed to set prefix in %s for %s=%s',
                 self.collection_name,
                 self.identity_field,
                 identity,
@@ -50,7 +50,7 @@ class PrefixModel:
             return result.get('prefix') if result else None
         except Exception:
             logger.exception(
-                "Failed to get prefix from %s for %s=%s",
+                'Failed to get prefix from %s for %s=%s',
                 self.collection_name,
                 self.identity_field,
                 identity,
@@ -63,7 +63,7 @@ class PrefixModel:
             return result.deleted_count > 0
         except Exception:
             logger.exception(
-                "Failed to remove prefix from %s for %s=%s",
+                'Failed to remove prefix from %s for %s=%s',
                 self.collection_name,
                 self.identity_field,
                 identity,
@@ -76,7 +76,7 @@ class PrefixModel:
             return await cursor.to_list(length=None)
         except Exception:
             logger.exception(
-                "Failed to list documents from %s for prefix=%r",
+                'Failed to list documents from %s for prefix=%r',
                 self.collection_name,
                 prefix,
             )

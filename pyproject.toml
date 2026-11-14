@@ -1,6 +1,7 @@
 [tool.ruff]
 target-version = "py313"
-line-length = 120
+# No enforced line limit: lint rules exclude E501, and 320 is the widest ruff format allows.
+line-length = 320
 exclude = ["frontend", "static"]
 
 [tool.ruff.lint]

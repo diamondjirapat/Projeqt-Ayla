@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "collection": "users",
+  "legacy_version": 1,
+  "identity": { "field": "user_id", "bson": "int32-or-int64", "wire": "decimal-string" },
+  "dates": ["created_at", "updated_at", "playlists.*.created_at", "playlists.*.tracks.*.added_at"],
+  "optional_fields": ["locale", "avatar", "settings", "lastfm", "playlists"],
+  "playlist_types": ["regular", "imported"],
+  "unknown_fields": "preserve",
+  "migration_policy": "offline-backup-reviewed-up-down"
+}

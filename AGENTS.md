@@ -2,23 +2,31 @@
 
 ## Project Structure & Module Organization
 
-`bot.py` starts the application and auto-loads public modules from `cogs/`; keep Discord features there. MongoDB connections and models belong in `database/`, while shared queue, artwork, cache, prefix, Last.fm, and i18n helpers belong in `utils/`. Keep English and Thai catalog keys aligned in `locales/en.json` and `locales/th.json`.
+This repository is the `Backend/` service. `bot.py` and `config.py` are at its
+root; bot extensions live in `cogs/`, internal API routes in `api/`, database
+models in `database/`, background tasks in `services/`, shared utilities in
+`utils/`, translations in `locales/`, and Python tests in `tests/`.
 
-The Vue 3/Vite client lives in `frontend/src/`. Put reusable components in `frontend/src/components/`, shared types in `frontend/src/types/`, and source images in `frontend/public/` or `frontend/src/assets/`. Vite builds into `static/`, which `cogs/web_server.py` serves; do not hand-edit hashed files under `static/assets/`. Backend tests are in `tests/`; frontend tests are colocated as `*.spec.ts`.
+The optional sibling repositories are `../frontend/` (Vue client and Bun/Elysia
+public API) and `../Nodelink/` (audio server, including `patches/nodelink/`).
+Backend checks must work without those sibling repositories. Cross-service
+integration checks require explicit setup as described in `../README.md`.
 
 ## Build, Test, and Development Commands
 
-- `python -m pip install -r requirements.txt` installs runtime dependencies and Ruff.
-- `python bot.py` starts the bot and embedded FastAPI server after local services are configured.
-- `run_dev.bat` / `./run_dev.sh` starts development mode with live Vite dev server and bot.
-- `run_prod.bat` / `./run_prod.sh` creates `.venv`, installs dependencies, builds the client, and starts the bot in production.
-- `python -m unittest discover -s tests -v` runs the backend suite.
-- `python -m ruff check .` lints Python; `python -m ruff format --check .` verifies formatting.
-- `bun install --cwd frontend` installs locked client dependencies. Use `bun --cwd frontend dev`, `bun --cwd frontend test`, or `bun --cwd frontend build` to serve, test, or type-check/build.
+Run these commands from this repository's root:
+
+- `python -m pip install -r requirements-dev.txt` (runtime plus test and lint tools)
+- `python bot.py`
+- `python -m unittest discover -s tests -v`
+- `python -m ruff check .`
+- `python -m ruff format --check .`
+- `run_dev.bat` / `./run_dev.sh` starts the backend for development.
+- `run_prod.bat` / `./run_prod.sh` starts the backend for production.
 
 ## Coding Style & Naming Conventions
 
-Target Python 3.13, four-space indentation, single quotes, and a 120-character line limit as configured in `pyproject.toml`. Use `snake_case` for modules/functions and `PascalCase` for classes and cogs. Vue/TypeScript uses two spaces, single quotes, `camelCase` identifiers, and `PascalCase.vue` components.
+Target Python 3.14, four-space indentation, and single quotes as configured in `pyproject.toml`; there is no line-length limit. Use `snake_case` for modules/functions and `PascalCase` for classes and cogs. Vue/TypeScript uses two spaces, single quotes, `camelCase` identifiers, and `PascalCase.vue` components.
 
 ## Testing Guidelines
 
@@ -69,4 +77,4 @@ History favors short imperative subjects prefixed by purpose emoji, for example 
 
 ## Security & Repository Hygiene
 
-Copy `.env.example` to `.env`; never commit tokens, MongoDB URIs, OAuth secrets, Lavalink credentials, or session keys. Restrict `WEB_ALLOWED_ORIGINS`. The current `.gitignore` excludes `/frontend`, `/static`, `/tests`, and `*.txt`; use `git check-ignore -v <path>` and confirm intended files are visible before submitting changes.
+Copy `.env.example` to `.env`; never commit tokens, MongoDB URIs, OAuth secrets, NodeLink credentials, or session keys. Restrict `WEB_ALLOWED_ORIGINS`. Frontend sources and tests must remain visible to Git. Generated `static/` output, dependencies, caches, scratch work, secrets, and test results remain ignored; use `git check-ignore -v <path>` to confirm intended files are visible before submitting changes.

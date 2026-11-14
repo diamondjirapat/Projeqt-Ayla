@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "createPlaylist": {
+    "filter": {"user_id": "{{user_id}}", "playlists.{{key}}": {"$exists": false}},
+    "update": {
+      "$set": {"playlists.{{key}}": "{{playlist}}", "updated_at": "{{now}}"},
+      "$setOnInsert": {"created_at": "{{now}}"}
+    }
+  },
+  "removePlaylistTrack": {
+    "filter": {"user_id": "{{user_id}}", "{{path}}": "{{before}}"},
+    "update": {"$set": {"{{path}}": "{{after}}", "updated_at": "{{now}}"}}
+  }
+}

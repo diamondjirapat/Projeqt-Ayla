@@ -2,240 +2,221 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from database.models import UserModel
+from runtime.bots import is_primary_for_guild
 from utils.i18n import i18n
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Slash-command options generated from locales/*.json at import time, so
+# adding a new catalog file automatically adds the option on next restart.
+_LANGUAGE_CHOICES = i18n.get_language_choices()
+
+
+async def _display_language_name(ctx, code: str) -> str:
+    """Localized language name, falling back to the raw code."""
+    name = await i18n.t(ctx, f'languages.{code}')
+    return code if name == f'languages.{code}' else name
+
+
+async def _available_languages_text(ctx) -> str:
+    """Comma-separated "Name (code)" list for the discovered locales."""
+    parts = [f'{await _display_language_name(ctx, code)} ({code})' for code in i18n.supported_locales]
+    return ', '.join(parts)
+
+
 class Language(commands.Cog):
     """Language management commands"""
-    
+
     def __init__(self, bot):
         self.bot = bot
         self.user_model = UserModel()
-    
+
     async def cog_before_invoke(self, ctx: commands.Context):
         """Automatically defer slash commands to prevent timeout"""
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
-    
+
     @commands.Cog.listener()
     async def on_ready(self):
         logger.info(f'{self.__class__.__name__} cog loaded')
-    
+
     @commands.hybrid_command(name='langinfo')
     async def language_info(self, ctx: commands.Context):
         """Show language priority and current settings"""
-        title = await i18n.t(ctx, "languages.info_title")
-        description = await i18n.t(ctx, "languages.info_description")
+        title = await i18n.t(ctx, 'languages.info_title')
+        description = await i18n.t(ctx, 'languages.info_description')
 
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.blue()
-        )
+        embed = discord.Embed(title=title, description=description, color=discord.Color.blue())
 
         user_locale = await i18n.get_user_locale(ctx.author.id)
         guild_locale = await i18n.get_guild_locale(ctx.guild.id) if ctx.guild else None
         effective_locale = await i18n.get_locale(ctx)
 
-        priority_text = await i18n.t(ctx, "languages.priority_text")
-        
-        embed.add_field(
-            name=await i18n.t(ctx, "languages.how_it_works"),
-            value=priority_text,
-            inline=False
-        )
+        priority_text = await i18n.t(ctx, 'languages.priority_text')
 
-        settings_text = ""
+        embed.add_field(name=await i18n.t(ctx, 'languages.how_it_works'), value=priority_text, inline=False)
+
+        settings_text = ''
         if user_locale:
-            lang_name = await i18n.t(ctx, f'languages.{user_locale}')
-            settings_text += await i18n.t(ctx, "languages.user_locale", lang_name=lang_name, user_locale=user_locale)
+            lang_name = await _display_language_name(ctx, user_locale)
+            settings_text += await i18n.t(ctx, 'languages.user_locale', lang_name=lang_name, user_locale=user_locale)
         else:
-            settings_text += await i18n.t(ctx, "languages.no_user_locale")
-        
+            settings_text += await i18n.t(ctx, 'languages.no_user_locale')
+
         if guild_locale and ctx.guild:
-            lang_name = await i18n.t(ctx, f'languages.{guild_locale}')
-            settings_text += await i18n.t(ctx, "languages.server_locale", lang_name=lang_name, guild_locale=guild_locale)
+            lang_name = await _display_language_name(ctx, guild_locale)
+            settings_text += await i18n.t(
+                ctx,
+                'languages.server_locale',
+                lang_name=lang_name,
+                guild_locale=guild_locale,
+            )
         else:
-            settings_text += await i18n.t(ctx, "languages.no_server_locale")
-        
-        effective_lang_name = await i18n.t(ctx, f'languages.{effective_locale}')
-        settings_text += await i18n.t(ctx, "languages.effective_lang", effective_lang_name=effective_lang_name, effective_locale=effective_locale)
-        
-        embed.add_field(
-            name=await i18n.t(ctx, "languages.current_settings"),
-            value=settings_text,
-            inline=False
-        )
-        prefix = ctx.prefix
-        commands_text = await i18n.t(ctx, "languages.commands_text", prefix=prefix)
-        commands_text += await i18n.t(ctx, "languages.commands_text2", prefix=prefix)
-        commands_text += await i18n.t(ctx, "languages.commands_text3")
-        
-        embed.add_field(
-            name=await i18n.t(ctx, "languages.commands"),
-            value=commands_text,
-            inline=False
+            settings_text += await i18n.t(ctx, 'languages.no_server_locale')
+
+        effective_lang_name = await _display_language_name(ctx, effective_locale)
+        settings_text += await i18n.t(
+            ctx,
+            'languages.effective_lang',
+            effective_lang_name=effective_lang_name,
+            effective_locale=effective_locale,
         )
 
-        text = await i18n.t(ctx, "languages.tip")
+        embed.add_field(name=await i18n.t(ctx, 'languages.current_settings'), value=settings_text, inline=False)
+        prefix = ctx.prefix
+        commands_text = await i18n.t(ctx, 'languages.commands_text', prefix=prefix)
+        commands_text += await i18n.t(ctx, 'languages.commands_text2', prefix=prefix)
+        available_langs = await _available_languages_text(ctx)
+        commands_text += await i18n.t(ctx, 'languages.commands_text3', languages=available_langs)
+
+        embed.add_field(name=await i18n.t(ctx, 'languages.commands'), value=commands_text, inline=False)
+
+        text = await i18n.t(ctx, 'languages.tip')
         embed.set_footer(text=text)
-        
+
         await ctx.send(embed=embed)
-    
+
     @commands.hybrid_command(name='mylang')
-    @app_commands.describe(language="Language code (en, th)")
-    @app_commands.choices(language=[
-        app_commands.Choice(name="English", value="en"),
-        app_commands.Choice(name="ไทย (Thai)", value="th")
-    ])
+    @app_commands.describe(language='Language code')
+    @app_commands.choices(language=_LANGUAGE_CHOICES)
     async def set_user_language(self, ctx: commands.Context, language: str = None):
         """Set your personal language preference"""
         if language is None:
             user_locale = await i18n.get_user_locale(ctx.author.id)
             if user_locale:
-                lang_name = await i18n.t(ctx, f'languages.{user_locale}')
-                title = await i18n.t(ctx, "language.your_language_title")
-                description = await i18n.t(ctx, "language.current_language", language=lang_name, code=user_locale)
-                embed = discord.Embed(
-                    title=title,
-                    description=description,
-                    color=discord.Color.blue()
-                )
+                lang_name = await _display_language_name(ctx, user_locale)
+                title = await i18n.t(ctx, 'language.your_language_title')
+                description = await i18n.t(ctx, 'language.current_language', language=lang_name, code=user_locale)
+                embed = discord.Embed(title=title, description=description, color=discord.Color.blue())
             else:
-                title = await i18n.t(ctx, "language.your_language_title")
-                description = await i18n.t(ctx, "language.no_personal_language")
-                embed = discord.Embed(
-                    title=title,
-                    description=description,
-                    color=discord.Color.blue()
-                )
+                title = await i18n.t(ctx, 'language.your_language_title')
+                description = await i18n.t(ctx, 'language.no_personal_language')
+                embed = discord.Embed(title=title, description=description, color=discord.Color.blue())
 
             available_langs = []
             for lang_code in i18n.supported_locales:
-                lang_name = await i18n.t(ctx, f'languages.{lang_code}')
-                available_langs.append(f"{lang_name} ({lang_code})")
-            
+                lang_name = await _display_language_name(ctx, lang_code)
+                available_langs.append(f'{lang_name} ({lang_code})')
+
+            embed.add_field(name=await i18n.t(ctx, 'language.available_languages'), value='\n'.join(available_langs), inline=False)
             embed.add_field(
-                name=await i18n.t(ctx, "language.available_languages"),
-                value="\n".join(available_langs),
-                inline=False
+                name=await i18n.t(ctx, 'language.usage'),
+                value=await i18n.t(ctx, 'language.usage_text', prefix=ctx.prefix),
+                inline=False,
             )
-            embed.add_field(
-                name=await i18n.t(ctx, "language.usage"),
-                value=await i18n.t(ctx, "language.usage_text", prefix=ctx.prefix),
-                inline=False
-            )
-            
+
             await ctx.send(embed=embed)
             return
-        
+
         language = language.lower()
-        
+
         if language not in i18n.supported_locales:
-            available_langs = ', '.join([f"{await i18n.t(ctx, f'languages.{lang}')} ({lang})" for lang in i18n.supported_locales])
-            error_msg = await i18n.t(ctx, "language.invalid_language", languages=available_langs)
+            available_langs = await _available_languages_text(ctx)
+            error_msg = await i18n.t(ctx, 'language.invalid_language', languages=available_langs)
             await ctx.send(error_msg)
             return
 
         user_data = await self.user_model.get_user(ctx.author.id)
         if not user_data:
             await self.user_model.create_user(ctx.author.id, ctx.author.display_name, locale=language)
-        
+
         success = await i18n.set_user_locale(ctx.author.id, language)
-        
+
         if success:
             i18n.clear_user_cache(ctx.author.id)
-            
-            lang_name = await i18n.t(ctx, f'languages.{language}')
-            title = await i18n.t(ctx, "language.updated_title")
-            description = await i18n.t(ctx, "language.updated", language=lang_name)
-            embed = discord.Embed(
-                title=title,
-                description=description,
-                color=discord.Color.green()
-            )
+
+            lang_name = await _display_language_name(ctx, language)
+            title = await i18n.t(ctx, 'language.updated_title')
+            description = await i18n.t(ctx, 'language.updated', language=lang_name)
+            embed = discord.Embed(title=title, description=description, color=discord.Color.green())
             await ctx.send(embed=embed)
         else:
-            await ctx.send(await i18n.t(ctx, "general.language_update_error"))
-    
+            await ctx.send(await i18n.t(ctx, 'general.language_update_error'))
+
     @commands.Cog.listener()
     async def on_member_join(self, member):
         """Auto-register new members with the server locale"""
-        if member.bot:
+        if member.bot or not is_primary_for_guild(self.bot, member.guild.id):
             return
-        
+
         try:
-            # Get guild locale or default to English
+            # Get guild locale or fall back to the default locale
             guild_locale = await i18n.get_guild_locale(member.guild.id)
             if not guild_locale:
-                guild_locale = 'en'
+                guild_locale = i18n.default_locale
 
             existing_user = await self.user_model.get_user(member.id)
             if not existing_user:
-                await self.user_model.create_user(
-                    member.id, 
-                    member.display_name, 
-                    locale=guild_locale
-                )
-                logger.info(f"Auto-registered user {member} with locale {guild_locale}")
-        
-        except Exception as e:
-            logger.error(f"Error auto-registering user {member}: {e}")
+                await self.user_model.create_user(member.id, member.display_name, locale=guild_locale)
+                logger.info(f'Auto-registered user {member} with locale {guild_locale}')
 
+        except Exception as e:
+            logger.error(f'Error auto-registering user {member}: {e}')
 
     @commands.hybrid_command(name='setlang')
     @commands.has_permissions(manage_guild=True)
-    @app_commands.describe(language="Language code (en, th)")
-    @app_commands.choices(language=[
-        app_commands.Choice(name="English", value="en"),
-        app_commands.Choice(name="ไทย (Thai)", value="th")
-    ])
+    @app_commands.describe(language='Language code')
+    @app_commands.choices(language=_LANGUAGE_CHOICES)
     async def set_language(self, ctx: commands.Context, language: str):
         """Set server language"""
         language = language.lower()
-        
+
         if language not in i18n.supported_locales:
-            available_langs = ', '.join([await i18n.t(ctx, f'languages.{lang}') for lang in i18n.supported_locales])
+            available_langs = await _available_languages_text(ctx)
             error_msg = await i18n.t(ctx, 'commands.setlang.invalid_language', languages=available_langs)
             await ctx.send(error_msg)
             return
-        
+
         success = await i18n.set_guild_locale(ctx.guild.id, language)
-        
+
         if success:
             i18n.clear_guild_cache(ctx.guild.id)
-            
-            lang_name = await i18n.t(ctx, f'languages.{language}')
+
+            lang_name = await _display_language_name(ctx, language)
             title = await i18n.t(ctx, 'commands.setlang.title')
             description = await i18n.t(ctx, 'commands.setlang.description', language=lang_name)
-            
-            embed = discord.Embed(
-                title=title,
-                description=description,
-                color=discord.Color.green()
-            )
+
+            embed = discord.Embed(title=title, description=description, color=discord.Color.green())
             await ctx.send(embed=embed)
         else:
             error_msg = await i18n.t(ctx, 'errors.unexpected_error')
             await ctx.send(error_msg)
-    
+
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
         """Auto-register new guilds with the default locale"""
+        if not is_primary_for_guild(self.bot, guild.id):
+            return
         try:
             existing_guild = await i18n.guild_model.get_guild(guild.id)
             if not existing_guild:
-                await i18n.guild_model.create_guild(
-                    guild.id,
-                    guild.name,
-                    locale='en'
-                )
-                logger.info(f"Auto-registered guild {guild.name} with default locale")
-        
+                await i18n.guild_model.create_guild(guild.id, guild.name, locale=i18n.default_locale)
+                logger.info(f'Auto-registered guild {guild.name} with default locale')
+
         except Exception as e:
-            logger.error(f"Error auto-registering guild {guild}: {e}")
+            logger.error(f'Error auto-registering guild {guild}: {e}')
+
 
 async def setup(bot):
     await bot.add_cog(Language(bot))
