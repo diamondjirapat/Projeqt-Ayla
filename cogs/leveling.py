@@ -1,13 +1,18 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import asyncio
+import io
 from typing import Optional, Literal
 import logging
 import random
 import time
 
-from database.models import LevelingModel, GuildModel
+from database.models import GuildModel, LevelingModel, get_level_progress
+from runtime.bots import is_primary_for_guild
+from utils.discord_profile import enrich_leaderboard_profiles
 from utils.i18n import i18n
+from utils.level_alert_images import fetch_level_alert_images, render_level_alert_image
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +22,20 @@ def make_progress_bar(pct: float, length: int = 12) -> str:
     filled_length = int(round(length * pct / 100.0))
     filled_length = max(0, min(length, filled_length))
     bar = '█' * filled_length + '░' * (length - filled_length)
-    return f"`[{bar}]` {pct:.1f}%"
+    return f'`[{bar}]` {pct:.1f}%'
 
 
 class LeaderboardPaginatorView(discord.ui.View):
-    def __init__(self, cog, guild_id: int, guild_name: str, author_id: int, scope: str = 'server', initial_page: int = 1, locale: str = 'en'):
+    def __init__(
+        self,
+        cog,
+        guild_id: int,
+        guild_name: str,
+        author_id: int,
+        scope: str = 'server',
+        initial_page: int = 1,
+        locale: str = 'en',
+    ):
         super().__init__(timeout=120)
         self.cog = cog
         self.guild_id = guild_id
@@ -35,52 +49,52 @@ class LeaderboardPaginatorView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
-                i18n.get_text("commands.leaderboard.author_only", self.locale),
-                ephemeral=True
+                i18n.get_text('commands.leaderboard.author_only', self.locale), ephemeral=True
             )
             return False
         return True
 
     def update_buttons(self):
-        self.prev_button.disabled = (self.page <= 1)
-        self.next_button.disabled = (self.page >= self.total_pages)
+        self.prev_button.disabled = self.page <= 1
+        self.next_button.disabled = self.page >= self.total_pages
         self.page_button.label = i18n.get_text(
-            "commands.leaderboard.page", self.locale,
-            page=self.page, pages=self.total_pages
+            'commands.leaderboard.page', self.locale, page=self.page, pages=self.total_pages
         )
         self.scope_button.label = i18n.get_text(
-            "commands.leaderboard.global_button" if self.scope == 'server' else "commands.leaderboard.server_button",
-            self.locale
+            'commands.leaderboard.global_button' if self.scope == 'server' else 'commands.leaderboard.server_button',
+            self.locale,
         )
 
-    @discord.ui.button(label="◀️", style=discord.ButtonStyle.primary, custom_id="lb_prev")
+    @discord.ui.button(label='◀️', style=discord.ButtonStyle.primary, custom_id='lb_prev')
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.page > 1:
             self.page -= 1
             await self.refresh_embed(interaction)
 
-    @discord.ui.button(label="Page 1/1", style=discord.ButtonStyle.secondary, disabled=True, custom_id="lb_page")
+    @discord.ui.button(label='Page 1/1', style=discord.ButtonStyle.secondary, disabled=True, custom_id='lb_page')
     async def page_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         pass
 
-    @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary, custom_id="lb_next")
+    @discord.ui.button(label='▶️', style=discord.ButtonStyle.primary, custom_id='lb_next')
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.page < self.total_pages:
             self.page += 1
             await self.refresh_embed(interaction)
 
-    @discord.ui.button(label="🌐 Global", style=discord.ButtonStyle.success, custom_id="lb_scope")
+    @discord.ui.button(label='🌐 Global', style=discord.ButtonStyle.success, custom_id='lb_scope')
     async def scope_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.scope = 'global' if self.scope == 'server' else 'server'
         self.page = 1
         await self.refresh_embed(interaction)
 
-    @discord.ui.button(label="🔄", style=discord.ButtonStyle.secondary, custom_id="lb_refresh")
+    @discord.ui.button(label='🔄', style=discord.ButtonStyle.secondary, custom_id='lb_refresh')
     async def refresh_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.refresh_embed(interaction)
 
     async def refresh_embed(self, interaction: discord.Interaction):
-        embed, total_pages = await self.cog.build_leaderboard_embed(self.guild_id, self.guild_name, self.scope, self.page)
+        embed, total_pages = await self.cog.build_leaderboard_embed(
+            self.guild_id, self.guild_name, self.scope, self.page
+        )
         self.total_pages = total_pages
         self.update_buttons()
         await interaction.response.edit_message(embed=embed, view=self)
@@ -96,6 +110,21 @@ class Leveling(commands.Cog):
         # Cooldown map: (guild_id, user_id) -> timestamp of last awarded XP
         self.cooldowns = {}
         self.cooldown_seconds = 60
+        self._cooldown_prune_at = 1024
+
+    async def cog_load(self):
+        # Build the per-user global totals before this bot starts receiving messages.
+        try:
+            await self.level_model.ensure_global_totals()
+        except Exception:
+            logger.exception('Could not rebuild global XP totals; global ranks may be stale until restart')
+
+    def _prune_cooldowns(self, now: float) -> None:
+        """Drop expired cooldowns once the map doubles, keeping it bounded by active chatters."""
+        if len(self.cooldowns) < self._cooldown_prune_at:
+            return
+        self.cooldowns = {key: stamp for key, stamp in self.cooldowns.items() if now - stamp < self.cooldown_seconds}
+        self._cooldown_prune_at = max(1024, len(self.cooldowns) * 2)
 
     async def cog_before_invoke(self, ctx: commands.Context):
         if ctx.interaction and not ctx.interaction.response.is_done():
@@ -103,41 +132,40 @@ class Leveling(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        logger.info(f"{self.__class__.__name__} cog loaded")
+        logger.info(f'{self.__class__.__name__} cog loaded')
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot or not message.guild:
             return
+        # Cooldowns are per bot; only the guild's primary bot awards XP.
+        if not is_primary_for_guild(self.bot, message.guild.id):
+            return
+
+        key = (message.guild.id, message.author.id)
+        now = time.monotonic()
+        last_xp_time = self.cooldowns.get(key)
+
+        if last_xp_time is not None and now - last_xp_time < self.cooldown_seconds:
+            return
 
         if not await self.guild_model.is_leveling_enabled(message.guild.id):
             return
-
-        # Check prefix if any, but standard XP triggers on normal messages
-        ctx = await self.bot.get_context(message)
-        if ctx.valid:
-            # Don't award XP for command invocations if desired, or allow them
-            pass
-
-        key = (message.guild.id, message.author.id)
-        now = time.time()
-        last_xp_time = self.cooldowns.get(key, 0)
-
-        if now - last_xp_time < self.cooldown_seconds:
+        # Another listener invocation may have awarded XP while the read awaited.
+        last_xp_time = self.cooldowns.get(key)
+        if last_xp_time is not None and now - last_xp_time < self.cooldown_seconds:
             return
 
+        self._prune_cooldowns(now)
         self.cooldowns[key] = now
         xp_gain = random.randint(15, 25)
 
         avatar_url = str(message.author.display_avatar.url)
-        username = message.author.display_name
 
         result = await self.level_model.add_xp(
             guild_id=message.guild.id,
             user_id=message.author.id,
-            username=username,
-            avatar_url=avatar_url,
-            xp_amount=xp_gain
+            xp_amount=xp_gain,
         )
 
         if result.get('leveled_up'):
@@ -148,36 +176,47 @@ class Leveling(commands.Cog):
             if not config.get('enabled', False):
                 return
 
-            server_icon_url = str(message.guild.icon.url) if message.guild.icon else ""
-            total_xp_str = f"{result['xp']:,}"
+            server_icon_url = str(message.guild.icon.url) if message.guild.icon else ''
+            guild_banner = getattr(message.guild, 'banner', None)
+            server_banner_url = str(guild_banner.url) if guild_banner else ''
+            total_xp_str = f'{result["xp"]:,}'
+            progress = get_level_progress(result['xp'])
+            current_xp_str = f'{progress["xp_in_level"]:,}'
+            xp_needed_str = f'{progress["xp_needed_for_next"]:,}'
 
             def replace_placeholders(text: str) -> str:
                 if not text:
-                    return ""
+                    return ''
                 return (
                     text.replace('{user}', message.author.display_name)
                     .replace('{username}', message.author.name)
                     .replace('{mention}', message.author.mention)
                     .replace('{member}', message.author.mention)
                     .replace('{level}', str(new_lvl))
+                    .replace('{lifetime_xp}', total_xp_str)
                     .replace('{xp}', total_xp_str)
+                    .replace('{current_xp}', current_xp_str)
+                    .replace('{curent_xp}', current_xp_str)
+                    .replace('{xp_needed}', xp_needed_str)
                     .replace('{server}', message.guild.name)
                     .replace('{guild}', message.guild.name)
                     .replace('{channel}', message.channel.name)
                     .replace('{avatar}', avatar_url)
                     .replace('{server_icon}', server_icon_url)
+                    .replace('{server_banner}', server_banner_url)
                 )
 
             custom_title = config.get('title')
-            title = replace_placeholders(custom_title) if custom_title else i18n.get_text("commands.level_up.title", locale)
+            title = (
+                replace_placeholders(custom_title) if custom_title else i18n.get_text('commands.level_up.title', locale)
+            )
 
             custom_desc = config.get('description')
             if custom_desc:
                 description = replace_placeholders(custom_desc)
             else:
                 description = i18n.get_text(
-                    "commands.level_up.description", locale,
-                    member=message.author.mention, level=new_lvl
+                    'commands.level_up.description', locale, member=message.author.mention, level=new_lvl
                 )
 
             raw_color = config.get('color') or '#f1c40f'
@@ -192,11 +231,7 @@ class Leveling(commands.Cog):
                 color_int = raw_color
             embed_color = discord.Color(color_int)
 
-            embed = discord.Embed(
-                title=title,
-                description=description,
-                color=embed_color
-            )
+            embed = discord.Embed(title=title, description=description, color=embed_color)
 
             thumb = config.get('thumbnail_url')
             if thumb:
@@ -214,14 +249,16 @@ class Leveling(commands.Cog):
 
             if config.get('show_xp_field', True):
                 embed.add_field(
-                    name=i18n.get_text("commands.level_up.total_xp", locale),
-                    value=f"{total_xp_str} XP",
-                    inline=True
+                    name=i18n.get_text('commands.level_up.total_xp', locale), value=f'{total_xp_str} XP', inline=True
                 )
 
             footer_text = config.get('footer_text')
             footer_url = config.get('footer_url')
-            f_text = replace_placeholders(footer_text) if footer_text else i18n.get_text("commands.level_up.footer", locale, server=message.guild.name)
+            f_text = (
+                replace_placeholders(footer_text)
+                if footer_text
+                else i18n.get_text('commands.level_up.footer', locale, server=message.guild.name)
+            )
             f_icon = replace_placeholders(footer_url) if footer_url else (server_icon_url or None)
             if f_text:
                 embed.set_footer(text=f_text, icon_url=f_icon or None)
@@ -239,11 +276,43 @@ class Leveling(commands.Cog):
                     target_channel = bound_channel
 
             try:
-                await target_channel.send(embed=embed)
+                if config.get('mode') == 'image':
+                    image_payloads = await fetch_level_alert_images(
+                        config,
+                        avatar_url=avatar_url,
+                        server_icon_url=server_icon_url,
+                        server_banner_url=server_banner_url,
+                    )
+                    image_bytes = await asyncio.to_thread(
+                        render_level_alert_image,
+                        config,
+                        {
+                            'user': message.author.display_name,
+                            'username': message.author.name,
+                            'mention': f'@{message.author.display_name}',
+                            'member': f'@{message.author.display_name}',
+                            'level': str(new_lvl),
+                            'lifetime_xp': total_xp_str,
+                            'xp': total_xp_str,
+                            'current_xp': current_xp_str,
+                            'curent_xp': current_xp_str,
+                            'xp_needed': xp_needed_str,
+                            'server': message.guild.name,
+                            'guild': message.guild.name,
+                            'channel': message.channel.name,
+                            'avatar': avatar_url,
+                            'server_icon': server_icon_url,
+                            'server_banner': server_banner_url,
+                        },
+                        image_payloads,
+                    )
+                    await target_channel.send(file=discord.File(io.BytesIO(image_bytes), filename='level-up.png'))
+                else:
+                    await target_channel.send(embed=embed)
             except discord.Forbidden:
                 pass
             except Exception as e:
-                logger.error(f"Failed to send level up message: {e}")
+                logger.error(f'Failed to send level up message: {e}')
 
     async def build_leaderboard_embed(self, guild_id: int, guild_name: str, scope: str, page: int = 1):
         """Build leaderboard embed and return (embed, total_pages)."""
@@ -260,55 +329,60 @@ class Leveling(commands.Cog):
         total_pages = data.get('total_pages', 1)
         total_count = data.get('total', 0)
 
-        embed = discord.Embed(
-            title=title,
-            color=discord.Color.blurple() if scope == 'server' else discord.Color.teal()
-        )
+        await enrich_leaderboard_profiles(self.bot, entries, guild_id=guild_id if scope == 'server' else None)
+
+        embed = discord.Embed(title=title, color=discord.Color.blurple() if scope == 'server' else discord.Color.teal())
 
         if not entries:
             embed.description = i18n.get_text('commands.leaderboard.empty_hint', locale)
             return embed, total_pages
 
-        medal_icons = {1: "🥇", 2: "🥈", 3: "🥉"}
+        medal_icons = {1: '🥇', 2: '🥈', 3: '🥉'}
 
         lines = []
         for item in entries:
             rank = item['rank']
-            rank_str = medal_icons.get(rank, f"`#{rank}`")
+            rank_str = medal_icons.get(rank, f'`#{rank}`')
             name = item['username']
             lvl = item['level']
             xp = item['xp']
             msg_cnt = item.get('messages_count', 0)
             p_bar = make_progress_bar(item['progress']['progress_pct'], length=8)
 
-            lines.append(i18n.get_text(
-                'commands.leaderboard.entry', locale,
-                rank=rank_str, name=name, level=lvl, xp=f"{xp:,}",
-                progress=p_bar, messages=msg_cnt
-            ))
+            lines.append(
+                i18n.get_text(
+                    'commands.leaderboard.entry',
+                    locale,
+                    rank=rank_str,
+                    name=name,
+                    level=lvl,
+                    xp=f'{xp:,}',
+                    progress=p_bar,
+                    messages=msg_cnt,
+                )
+            )
 
-        embed.description = "\n\n".join(lines)
-        embed.set_footer(text=i18n.get_text(
-            'commands.leaderboard.footer', locale,
-            total=total_count, page=page, pages=total_pages
-        ))
+        embed.description = '\n\n'.join(lines)
+        embed.set_footer(
+            text=i18n.get_text('commands.leaderboard.footer', locale, total=total_count, page=page, pages=total_pages)
+        )
         return embed, total_pages
 
     @commands.hybrid_command(name='rank', aliases=['level', 'lvl'])
-    @app_commands.describe(member="The member whose rank you want to inspect")
+    @app_commands.describe(member='The member whose rank you want to inspect')
     async def rank_command(self, ctx: commands.Context, member: Optional[discord.Member] = None):
         """View leveling rank card for yourself or another member."""
         target = member or ctx.author
         guild_id = ctx.guild.id if ctx.guild else 0
-        guild_name = ctx.guild.name if ctx.guild else "Direct Messages"
+        guild_name = ctx.guild.name if ctx.guild else 'Direct Messages'
 
         stats = await self.level_model.get_user_stats(guild_id, target.id)
 
-        title = await i18n.t(ctx, 'commands.rank.title', username=target.display_name) or f"📊 {target.display_name}'s Rank Card"
-        embed = discord.Embed(
-            title=title,
-            color=discord.Color.gold() if target == ctx.author else discord.Color.blue()
+        title = (
+            await i18n.t(ctx, 'commands.rank.title', username=target.display_name)
+            or f"📊 {target.display_name}'s Rank Card"
         )
+        embed = discord.Embed(title=title, color=discord.Color.gold() if target == ctx.author else discord.Color.blue())
         embed.set_thumbnail(url=target.display_avatar.url)
 
         g_rank = stats['guild_rank']
@@ -331,15 +405,24 @@ class Leveling(commands.Cog):
         progress_label = await i18n.t(ctx, 'commands.rank.progress')
 
         embed.add_field(
-            name=f"🏰 {guild_rank_label} ({guild_name})",
-            value=f"**{guild_rank_label}:** #{g_rank}\n**{guild_level_label}:** {g_lvl}\n**{guild_xp_label}:** {g_xp:,}\n**{messages_label}:** {g_msgs:,}",
-            inline=True
+            name=f'🏰 {guild_rank_label} ({guild_name})',
+            value=(
+                f'**{guild_rank_label}:** #{g_rank}\n'
+                f'**{guild_level_label}:** {g_lvl}\n'
+                f'**{guild_xp_label}:** {g_xp:,}\n'
+                f'**{messages_label}:** {g_msgs:,}'
+            ),
+            inline=True,
         )
 
         embed.add_field(
-            name=f"🌐 {global_rank_label}",
-            value=f"**{global_rank_label}:** #{glb_rank}\n**{global_level_label}:** {glb_lvl}\n**{global_xp_label}:** {glb_xp:,}",
-            inline=True
+            name=f'🌐 {global_rank_label}',
+            value=(
+                f'**{global_rank_label}:** #{glb_rank}\n'
+                f'**{global_level_label}:** {glb_lvl}\n'
+                f'**{global_xp_label}:** {glb_xp:,}'
+            ),
+            inline=True,
         )
 
         p_bar = make_progress_bar(g_prog['progress_pct'], length=12)
@@ -347,19 +430,21 @@ class Leveling(commands.Cog):
         curr_xp_in_level = g_prog['xp_in_level']
 
         embed.add_field(
-            name=f"⭐ {progress_label}",
-            value=f"{p_bar}\n`{curr_xp_in_level:,} / {next_xp_in_level:,} XP` → {guild_level_label} {g_lvl + 1}",
-            inline=False
+            name=f'⭐ {progress_label}',
+            value=f'{p_bar}\n`{curr_xp_in_level:,} / {next_xp_in_level:,} XP` → {guild_level_label} {g_lvl + 1}',
+            inline=False,
         )
 
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name='leaderboard', aliases=['lb', 'top'])
-    @app_commands.describe(scope="Scope of leaderboard (server or global)", page="Page number")
-    async def leaderboard_command(self, ctx: commands.Context, scope: Literal['server', 'global'] = 'server', page: int = 1):
+    @app_commands.describe(scope='Scope of leaderboard (server or global)', page='Page number')
+    async def leaderboard_command(
+        self, ctx: commands.Context, scope: Literal['server', 'global'] = 'server', page: int = 1
+    ):
         """View server or global leveling leaderboard."""
         guild_id = ctx.guild.id if ctx.guild else 0
-        guild_name = ctx.guild.name if ctx.guild else "Global"
+        guild_name = ctx.guild.name if ctx.guild else 'Global'
 
         embed, total_pages = await self.build_leaderboard_embed(guild_id, guild_name, scope, page)
         locale = await i18n.get_locale(ctx)
@@ -371,7 +456,7 @@ class Leveling(commands.Cog):
             author_id=ctx.author.id,
             scope=scope,
             initial_page=page,
-            locale=locale
+            locale=locale,
         )
         view.total_pages = total_pages
         view.update_buttons()
@@ -390,60 +475,46 @@ class Leveling(commands.Cog):
 
     @commands.hybrid_command(name='setxp')
     @commands.has_permissions(administrator=True)
-    @app_commands.describe(member="Member to set XP for", xp="Total XP to set")
+    @app_commands.describe(member='Member to set XP for', xp='Total XP to set')
     async def set_xp_command(self, ctx: commands.Context, member: discord.Member, xp: int):
         """Set XP for a member in this server (Admin only)."""
         if not ctx.guild:
             await ctx.send(await i18n.t(ctx, 'general.server_only'))
             return
 
-        avatar_url = str(member.display_avatar.url)
-        username = member.display_name
+        result = await self.level_model.set_xp(guild_id=ctx.guild.id, user_id=member.id, total_xp=xp)
 
-        result = await self.level_model.set_xp(
-            guild_id=ctx.guild.id,
-            user_id=member.id,
-            username=username,
-            avatar_url=avatar_url,
-            total_xp=xp
+        msg = (
+            await i18n.t(
+                ctx, 'commands.setxp.success', member=member.mention, xp=f'{result["xp"]:,}', level=result['level']
+            )
+            or f'✅ Set XP for {member.mention} to **{result["xp"]:,}** XP (Level {result["level"]}).'
         )
-
-        msg = await i18n.t(
-            ctx, 'commands.setxp.success',
-            member=member.mention,
-            xp=f"{result['xp']:,}",
-            level=result['level']
-        ) or f"✅ Set XP for {member.mention} to **{result['xp']:,}** XP (Level {result['level']})."
 
         await ctx.send(msg)
 
     @commands.hybrid_command(name='addxp')
     @commands.has_permissions(administrator=True)
-    @app_commands.describe(member="Member to add XP to", amount="XP amount to add")
+    @app_commands.describe(member='Member to add XP to', amount='XP amount to add')
     async def add_xp_command(self, ctx: commands.Context, member: discord.Member, amount: int):
         """Add XP to a member in this server (Admin only)."""
         if not ctx.guild:
             await ctx.send(await i18n.t(ctx, 'general.server_only'))
             return
 
-        avatar_url = str(member.display_avatar.url)
-        username = member.display_name
-
-        result = await self.level_model.add_xp(
-            guild_id=ctx.guild.id,
-            user_id=member.id,
-            username=username,
-            avatar_url=avatar_url,
-            xp_amount=amount
-        )
+        result = await self.level_model.add_xp(guild_id=ctx.guild.id, user_id=member.id, xp_amount=amount)
 
         msg = await i18n.t(
-            ctx, 'commands.addxp.success',
+            ctx,
+            'commands.addxp.success',
             member=member.mention,
-            amount=f"{amount:,}",
-            xp=f"{result['xp']:,}",
-            level=result['new_level']
-        ) or f"✅ Added **{amount:,}** XP to {member.mention}. Total: **{result['xp']:,}** XP (Level {result['new_level']})."
+            amount=f'{amount:,}',
+            xp=f'{result["xp"]:,}',
+            level=result['new_level'],
+        ) or (
+            f'✅ Added **{amount:,}** XP to {member.mention}. '
+            f'Total: **{result["xp"]:,}** XP (Level {result["new_level"]}).'
+        )
 
         await ctx.send(msg)
 
@@ -462,11 +533,19 @@ class Leveling(commands.Cog):
         embed = discord.Embed(title=title, color=discord.Color.blue())
 
         status_label = await i18n.t(ctx, 'commands.leveling.status_label')
-        status_val = await i18n.t(ctx, 'commands.leveling.status_enabled') if is_enabled else await i18n.t(ctx, 'commands.leveling.status_disabled')
+        status_val = (
+            await i18n.t(ctx, 'commands.leveling.status_enabled')
+            if is_enabled
+            else await i18n.t(ctx, 'commands.leveling.status_disabled')
+        )
         embed.add_field(name=status_label, value=status_val, inline=False)
 
         alerts_label = await i18n.t(ctx, 'commands.leveling.alerts_label')
-        alerts_val = await i18n.t(ctx, 'commands.levelchannel.status_enabled') if alert_cfg.get('enabled') else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
+        alerts_val = (
+            await i18n.t(ctx, 'commands.levelchannel.status_enabled')
+            if alert_cfg.get('enabled')
+            else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
+        )
         embed.add_field(name=alerts_label, value=alerts_val, inline=False)
 
         usage_label = await i18n.t(ctx, 'commands.leveling.usage_label')
@@ -541,7 +620,11 @@ class Leveling(commands.Cog):
         embed = discord.Embed(title=title, color=discord.Color.blue())
 
         status_label = await i18n.t(ctx, 'commands.levelchannel.status_label')
-        status_val = await i18n.t(ctx, 'commands.levelchannel.status_enabled') if is_enabled else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
+        status_val = (
+            await i18n.t(ctx, 'commands.levelchannel.status_enabled')
+            if is_enabled
+            else await i18n.t(ctx, 'commands.levelchannel.status_disabled')
+        )
         embed.add_field(name=status_label, value=status_val, inline=False)
 
         current_label = await i18n.t(ctx, 'commands.levelchannel.current_channel')
@@ -614,7 +697,7 @@ class Leveling(commands.Cog):
 
     @levelchannel.command(name='set')
     @commands.has_permissions(manage_guild=True)
-    @app_commands.describe(channel="The text channel to send leveling alerts in")
+    @app_commands.describe(channel='The text channel to send leveling alerts in')
     async def levelchannel_set(self, ctx: commands.Context, channel: discord.TextChannel):
         """Bind leveling alerts to a specific text channel and enable them"""
         if not ctx.guild:
@@ -661,8 +744,8 @@ class Leveling(commands.Cog):
             msg = await i18n.t(ctx, 'commands.levelchannel.no_permission')
             await ctx.send(msg)
         else:
-            logger.error(f"Levelchannel command error: {error}")
-            await ctx.send(f"❌ An error occurred: {error}")
+            logger.error(f'Levelchannel command error: {error}')
+            await ctx.send(f'❌ An error occurred: {error}')
 
 
 async def setup(bot):

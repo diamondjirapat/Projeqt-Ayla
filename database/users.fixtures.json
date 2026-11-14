@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "cases": [
+    { "id": "42", "name": "  My.Mix$ ไทย  ", "key": "my_mix__ไทย" },
+    { "id": "368581475660201985", "name": "Shared Queue", "key": "shared_queue" },
+    { "id": "9223372036854775807", "name": "Upper Bound", "key": "upper_bound" }
+  ],
+  "normalized_track": {
+    "title": "Shared Song",
+    "author": "Shared Artist",
+    "url": "https://example.org/audio.ogg",
+    "uri": "https://example.org/audio.ogg",
+    "canonical_url": "https://example.org/audio.ogg",
+    "length": 180000,
+    "artwork": "https://example.org/cover.png",
+    "artwork_fallbacks": [],
+    "artwork_source": "provider",
+    "media_kind": "track"
+  },
+  "track": {
+    "title": "Shared Song",
+    "author": "Shared Artist",
+    "uri": "https://example.org/audio.ogg",
+    "length": 180000,
+    "artwork": "https://example.org/cover.png"
+  }
+}

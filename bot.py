@@ -46,7 +46,14 @@ class DiscordBot(commands.Bot):
         logger.info(f'All intents enabled: {Config.INTENTS_ALL}')
 
         super().__init__(
-            command_prefix=prefix_manager.get_prefix, intents=intents, owner_ids=Config.OWNER_IDS, help_command=None
+            command_prefix=prefix_manager.get_prefix,
+            intents=intents,
+            owner_ids=Config.OWNER_IDS,
+            help_command=None,
+            # User-controlled text (custom-command args, playlist names, giveaway prizes, scheduled posts)
+            # must never turn into @everyone/@here/role pings made with the bot's authority. Sends that
+            # legitimately need those pings opt in explicitly with their own AllowedMentions.
+            allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True, replied_user=True),
         )
         DiscordBot.all_bots.append(self)
 
@@ -171,7 +178,9 @@ class DiscordBot(commands.Bot):
                 active_vc = next((vc for vc in active_bot.voice_clients if vc.guild.id == message.guild.id), None)
                 active_channel = active_vc.channel if active_vc else None
 
-                if user_vc and active_channel and user_vc == active_channel:
+                # Outside voice, a free bot could only reply with an error; let the
+                # active bot answer instead.
+                if user_vc is None or (active_channel and user_vc == active_channel):
                     return self == active_bot
                 else:
                     free_bot = None
@@ -303,6 +312,12 @@ class DiscordBot(commands.Bot):
                 await artwork_resolver.close()
             except Exception as e:
                 logger.debug(f'Error closing artwork_resolver during shutdown: {e}')
+            try:
+                from utils.lastfm import lastfm_handler
+
+                await lastfm_handler.close()
+            except Exception as e:
+                logger.debug(f'Error closing Last.fm session during shutdown: {e}')
             await db_manager.disconnect()
         await asyncio.sleep(0.25)
 
@@ -320,11 +335,23 @@ async def main():
     bots = []
     tasks = []
 
+    async def run_bot(bot: DiscordBot, token: str, position: int):
+        try:
+            await bot.start(token)
+        except Exception:
+            # The main bot hosts the internal API, so its failure stops the process.
+            # A failing secondary bot must not take the others down with it.
+            if bot.is_main:
+                raise
+            logger.exception('Secondary bot #%d failed; continuing without it', position)
+            if not bot.is_closed():
+                await bot.close()
+
     for i, token in enumerate(Config.DISCORD_TOKENS):
         is_main = i == 0
         bot = DiscordBot(is_main=is_main)
         bots.append(bot)
-        tasks.append(bot.start(token))
+        tasks.append(run_bot(bot, token, i + 1))
 
     try:
         await asyncio.gather(*tasks)

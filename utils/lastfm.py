@@ -1,4 +1,4 @@
-# NOTE: This file is 100% AI generated.
+import asyncio
 import hashlib
 import logging
 import re
@@ -10,52 +10,73 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+
 class LastFMHandler:
-    BASE_URL = "https://ws.audioscrobbler.com/2.0/"
+    BASE_URL = 'https://ws.audioscrobbler.com/2.0/'
 
     def __init__(self):
         self.enabled = False
         self.api_key = Config.LASTFM_API_KEY
         self.api_secret = Config.LASTFM_API_SECRET
-        
+
+        # One pooled session keeps TLS connections alive between scrobbles and now-playing updates.
+        self._session: aiohttp.ClientSession | None = None
+
         if self.api_key and self.api_secret:
             self.enabled = True
-            logger.info("Last.fm module enabled")
+            logger.info('Last.fm module enabled')
         else:
-            logger.warning("Last.fm module disabled (missing API keys)")
+            logger.warning('Last.fm module disabled (missing API keys)')
 
     @staticmethod
     def clean_track_info(artist, title):
         """Cleans up YouTube titles and extracts artist/title if possible."""
         # Common video tags to remove
         tags_to_remove = [
-            r'\(official.*?\)', r'\[official.*?\]',
-            r'\(lyric.*?\)', r'\[lyric.*?\]',
-            r'\(music video\)', r'\[music video\]',
-            r'\(video\)', r'\[video\]',
-            r'\(audio\)', r'\[audio\]',
-            r'\[mv\]', r'\(mv\)'
+            r'\(official.*?\)',
+            r'\[official.*?\]',
+            r'\(lyric.*?\)',
+            r'\[lyric.*?\]',
+            r'\(music video\)',
+            r'\[music video\]',
+            r'\(video\)',
+            r'\[video\]',
+            r'\(audio\)',
+            r'\[audio\]',
+            r'\[mv\]',
+            r'\(mv\)',
         ]
-        
+
         clean_title = title
         for tag in tags_to_remove:
             clean_title = re.sub(tag, '', clean_title, flags=re.IGNORECASE)
-        
+
         clean_title = clean_title.strip()
-        
+
         # If the title is "Artist - Title", extract them
         if ' - ' in clean_title:
             parts = clean_title.split(' - ', 1)
             artist = parts[0].strip()
             clean_title = parts[1].strip()
-        
+
         # Clean up artist channel names (e.g., "ArtistVEVO" or "Artist - Topic")
         if artist.endswith('VEVO'):
             artist = artist[:-4]
         elif artist.endswith(' - Topic'):
             artist = artist[:-8]
-            
+
         return artist.strip(), clean_title.strip()
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            # Without an explicit limit aiohttp waits up to five minutes on a stalled request.
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
+        return self._session
+
+    async def close(self) -> None:
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+        self._session = None
 
     def _sign_call(self, params):
         """
@@ -65,11 +86,11 @@ class LastFMHandler:
         """
         keys = list(params.keys())
         keys.sort()
-        sig_str = ""
+        sig_str = ''
         for key in keys:
             if key in ('format', 'callback'):
                 continue
-            sig_str += f"{key}{params[key]}"
+            sig_str += f'{key}{params[key]}'
         sig_str += self.api_secret
         return hashlib.md5(sig_str.encode('utf-8')).hexdigest()
 
@@ -79,7 +100,7 @@ class LastFMHandler:
 
         params['api_key'] = self.api_key
         params['method'] = method
-        
+
         if session_key:
             params['sk'] = session_key
 
@@ -89,25 +110,63 @@ class LastFMHandler:
 
         params['format'] = 'json'
 
-        async with aiohttp.ClientSession() as session:
+        max_retries = 2
+        retryable_statuses = {429, 500, 502, 503, 504}
+        retryable_errors = {8, 11, 16, 29}
+
+        session = self._get_session()
+        for attempt in range(max_retries + 1):
+            if attempt > 0:
+                await asyncio.sleep(0.35 * (2 ** (attempt - 1)))
+
             try:
                 if post:
                     async with session.post(self.BASE_URL, data=params) as resp:
                         if resp.status != 200:
                             content = await resp.text()
-                            logger.error(f"Last.fm API Error ({method}): {resp.status} - {content}")
+                            if resp.status in retryable_statuses and attempt < max_retries:
+                                logger.warning(
+                                    f'Last.fm Transient API Error ({method}): {resp.status} - retrying '
+                                    f'({attempt + 1}/{max_retries})'
+                                )
+                                continue
+                            logger.error(f'Last.fm API Error ({method}): {resp.status} - {content}')
                             return None
-                        return await resp.json()
+                        data = await resp.json()
                 else:
                     async with session.get(self.BASE_URL, params=params) as resp:
                         if resp.status != 200:
                             content = await resp.text()
-                            logger.error(f"Last.fm API Error ({method}): {resp.status} - {content}")
+                            if resp.status in retryable_statuses and attempt < max_retries:
+                                logger.warning(
+                                    f'Last.fm Transient API Error ({method}): {resp.status} - retrying '
+                                    f'({attempt + 1}/{max_retries})'
+                                )
+                                continue
+                            logger.error(f'Last.fm API Error ({method}): {resp.status} - {content}')
                             return None
-                        return await resp.json()
+                        data = await resp.json()
+
+                if isinstance(data, dict) and isinstance(data.get('error'), int):
+                    err_code = data['error']
+                    if err_code in retryable_errors and attempt < max_retries:
+                        logger.warning(
+                            f'Last.fm Transient API Error ({method}): error {err_code} - retrying '
+                            f'({attempt + 1}/{max_retries})'
+                        )
+                        continue
+                    logger.error(f'Last.fm API Error ({method}): {err_code} - {data.get("message", "Unknown error")}')
+                    return None
+
+                return data
             except Exception as e:
-                logger.error(f"Last.fm Request Failed ({method}): {e}")
+                if attempt < max_retries:
+                    logger.warning(f'Last.fm Request Failed ({method}): {e} - retrying ({attempt + 1}/{max_retries})')
+                    continue
+                logger.error(f'Last.fm Request Failed ({method}): {e}')
                 return None
+
+        return None
 
     async def get_auth_data(self, cb=None):
         """Get a desktop-flow auth URL and token."""
@@ -119,28 +178,28 @@ class LastFMHandler:
         params['api_sig'] = self._sign_call(params)
         params['format'] = 'json'
 
-        async with aiohttp.ClientSession() as session:
-             async with session.get(self.BASE_URL, params=params) as resp:
-                data = await resp.json()
-                if 'token' in data:
-                    token = data['token']
-                    auth_params = {
-                        'api_key': self.api_key,
-                        'token': token,
-                    }
-                    if cb:
-                        auth_params['cb'] = cb
-                    url = f"https://www.last.fm/api/auth/?{urlencode(auth_params)}"
-                    return url, token
-                else:
-                    logger.error(f"Failed to get token: {data}")
-                    return None, None
+        session = self._get_session()
+        async with session.get(self.BASE_URL, params=params) as resp:
+            data = await resp.json()
+            if 'token' in data:
+                token = data['token']
+                auth_params = {
+                    'api_key': self.api_key,
+                    'token': token,
+                }
+                if cb:
+                    auth_params['cb'] = cb
+                url = f'https://www.last.fm/api/auth/?{urlencode(auth_params)}'
+                return url, token
+            else:
+                logger.error(f'Failed to get token: {data}')
+                return None, None
 
     def get_web_auth_url(self, cb):
         """Build the web-flow URL; Last.fm returns the token to ``cb`` after approval."""
         if not self.enabled or not cb:
             return None
-        return f"https://www.last.fm/api/auth/?{urlencode({'api_key': self.api_key, 'cb': cb})}"
+        return f'https://www.last.fm/api/auth/?{urlencode({"api_key": self.api_key, "cb": cb})}'
 
     async def get_session_from_token(self, token, url=None):
         """Exchange web token for session key"""
@@ -148,42 +207,35 @@ class LastFMHandler:
             return None
         params = {'token': token}
         data = await self._request('auth.getSession', params, post=True)
-        
+
         if data and 'session' in data:
-            logger.info("[LASTFM] Session obtained for user")
+            logger.info('[LASTFM] Session obtained for user')
             return data['session']['key']
         if data and data.get('error'):
             logger.warning(
-                "[LASTFM] auth.getSession failed (%s): %s",
+                '[LASTFM] auth.getSession failed (%s): %s',
                 data.get('error'),
                 data.get('message', 'unknown error'),
             )
-        logger.warning("[LASTFM] Failed to get session from token")
+        logger.warning('[LASTFM] Failed to get session from token')
         return None
 
     async def update_now_playing(self, session_key, artist, title):
         if not self.enabled or not session_key:
             return
-        logger.debug(f"[LASTFM] Updating now playing: {artist} - {title}")
+        logger.debug(f'[LASTFM] Updating now playing: {artist} - {title}')
 
-        params = {
-            'artist': artist,
-            'track': title
-        }
+        params = {'artist': artist, 'track': title}
         await self._request('track.updateNowPlaying', params, session_key=session_key, post=True)
 
     async def scrobble(self, session_key, artist, title, timestamp):
         if not self.enabled or not session_key:
             return
 
-        params = {
-            'artist': artist,
-            'track': title,
-            'timestamp': str(timestamp)
-        }
-        logger.info(f"Sending scrobble request: {params}")
+        params = {'artist': artist, 'track': title, 'timestamp': str(timestamp)}
+        logger.info(f'Sending scrobble request: {params}')
         result = await self._request('track.scrobble', params, session_key=session_key, post=True)
-        logger.info(f"Scrobble result: {result}")
+        logger.info(f'Scrobble result: {result}')
 
     async def get_username_from_session(self, session_key):
         """Get username from session key"""
@@ -198,61 +250,43 @@ class LastFMHandler:
         """Get recent tracks for a user from Last.fm"""
         if not self.enabled or not username:
             return None
-        params = {
-            'user': username,
-            'limit': str(limit)
-        }
+        params = {'user': username, 'limit': str(limit)}
         return await self._request('user.getRecentTracks', params)
 
     async def get_top_tracks(self, username, limit=20, period='overall'):
         """Get top tracks for a user from Last.fm"""
         if not self.enabled or not username:
             return None
-        params = {
-            'user': username,
-            'limit': str(limit),
-            'period': period
-        }
+        params = {'user': username, 'limit': str(limit), 'period': period}
         return await self._request('user.getTopTracks', params)
 
     async def get_top_artists(self, username, limit=20, period='overall'):
         """Get top artists for a user from Last.fm"""
         if not self.enabled or not username:
             return None
-        params = {
-            'user': username,
-            'limit': str(limit),
-            'period': period
-        }
+        params = {'user': username, 'limit': str(limit), 'period': period}
         return await self._request('user.getTopArtists', params)
 
     async def get_similar_artists(self, artist, limit=10):
         """Get similar artists from Last.fm"""
         if not self.enabled or not artist:
             return None
-        params = {
-            'artist': artist,
-            'limit': str(limit)
-        }
+        params = {'artist': artist, 'limit': str(limit)}
         return await self._request('artist.getSimilar', params)
 
     async def get_chart_tracks(self, limit=20):
         """Get global top chart tracks from Last.fm"""
         if not self.enabled:
             return None
-        params = {
-            'limit': str(limit)
-        }
+        params = {'limit': str(limit)}
         return await self._request('chart.getTopTracks', params)
 
     async def get_tag_top_tracks(self, tag, limit=20):
         """Get top tracks for a tag (genre) from Last.fm"""
         if not self.enabled or not tag:
             return None
-        params = {
-            'tag': tag,
-            'limit': str(limit)
-        }
+        params = {'tag': tag, 'limit': str(limit)}
         return await self._request('tag.getTopTracks', params)
+
 
 lastfm_handler = LastFMHandler()

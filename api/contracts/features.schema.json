@@ -1,0 +1,3674 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Admin": {
+      "additionalProperties": true,
+      "properties": {
+        "is_admin": {
+          "title": "Is Admin",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "is_admin"
+      ],
+      "title": "Admin",
+      "type": "object"
+    },
+    "AppealRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "case_id": {
+          "minimum": 1,
+          "title": "Case Id",
+          "type": "integer"
+        },
+        "statement": {
+          "maxLength": 4000,
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id",
+        "case_id",
+        "statement"
+      ],
+      "title": "AppealRequest",
+      "type": "object"
+    },
+    "AppealSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "appeal": {
+          "additionalProperties": true,
+          "title": "Appeal",
+          "type": "object"
+        }
+      },
+      "required": [
+        "success",
+        "appeal"
+      ],
+      "title": "AppealSaved",
+      "type": "object"
+    },
+    "AutoplaySynced": {
+      "additionalProperties": true,
+      "properties": {
+        "synced": {
+          "title": "Synced",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "synced"
+      ],
+      "title": "AutoplaySynced",
+      "type": "object"
+    },
+    "CacheMetrics": {
+      "additionalProperties": true,
+      "properties": {
+        "caches": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Caches",
+          "type": "array"
+        }
+      },
+      "required": [
+        "caches"
+      ],
+      "title": "CacheMetrics",
+      "type": "object"
+    },
+    "CaseCleanupRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Channel Id"
+        },
+        "amount": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Amount",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "guild_id",
+        "channel_id",
+        "amount"
+      ],
+      "title": "CaseCleanupRequest",
+      "type": "object"
+    },
+    "CaseSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "case": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Case"
+        }
+      },
+      "required": [
+        "success",
+        "case"
+      ],
+      "title": "CaseSaved",
+      "type": "object"
+    },
+    "CommandNameRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Name",
+          "type": "string"
+        },
+        "enabled": {
+          "default": null,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "guild_id",
+        "name"
+      ],
+      "title": "CommandNameRequest",
+      "type": "object"
+    },
+    "CommandPreview": {
+      "additionalProperties": true,
+      "properties": {
+        "parsed_text": {
+          "title": "Parsed Text",
+          "type": "string"
+        },
+        "parsed_embed": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parsed Embed"
+        },
+        "preview_context": {
+          "additionalProperties": true,
+          "title": "Preview Context",
+          "type": "object"
+        }
+      },
+      "required": [
+        "parsed_text",
+        "parsed_embed",
+        "preview_context"
+      ],
+      "title": "CommandPreview",
+      "type": "object"
+    },
+    "CommandPreviewRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "response": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Response",
+          "type": "string"
+        },
+        "args_text": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Args Text",
+          "type": "string"
+        },
+        "is_embed": {
+          "default": null,
+          "title": "Is Embed",
+          "type": "boolean"
+        },
+        "embed_config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Embed Config"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "CommandPreviewRequest",
+      "type": "object"
+    },
+    "CommandRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Name",
+          "type": "string"
+        },
+        "response": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Response",
+          "type": "string"
+        },
+        "description": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Description",
+          "type": "string"
+        },
+        "is_embed": {
+          "default": null,
+          "title": "Is Embed",
+          "type": "boolean"
+        },
+        "embed_config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Embed Config"
+        },
+        "enabled": {
+          "default": null,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "guild_id",
+        "name"
+      ],
+      "title": "CommandRequest",
+      "type": "object"
+    },
+    "CommandSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "command": {
+          "additionalProperties": true,
+          "title": "Command",
+          "type": "object"
+        }
+      },
+      "required": [
+        "success",
+        "command"
+      ],
+      "title": "CommandSaved",
+      "type": "object"
+    },
+    "Commands": {
+      "additionalProperties": true,
+      "properties": {
+        "commands": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Commands",
+          "type": "array"
+        }
+      },
+      "required": [
+        "commands"
+      ],
+      "title": "Commands",
+      "type": "object"
+    },
+    "ConnectedState": {
+      "additionalProperties": true,
+      "anyOf": [
+        {
+          "required": [
+            "queue",
+            "history"
+          ]
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "queue"
+                ]
+              },
+              {
+                "required": [
+                  "history"
+                ]
+              }
+            ]
+          },
+          "properties": {
+            "timeline_revision": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "timeline_revision"
+          ]
+        }
+      ],
+      "properties": {
+        "connected": {
+          "const": true,
+          "title": "Connected",
+          "type": "boolean"
+        },
+        "guild_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Guild Id",
+          "type": "string"
+        },
+        "guild_name": {
+          "title": "Guild Name",
+          "type": "string"
+        },
+        "channel_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "channel_name": {
+          "title": "Channel Name",
+          "type": "string"
+        },
+        "bitrate": {
+          "title": "Bitrate",
+          "type": "number"
+        },
+        "is_playing": {
+          "title": "Is Playing",
+          "type": "boolean"
+        },
+        "is_paused": {
+          "title": "Is Paused",
+          "type": "boolean"
+        },
+        "volume": {
+          "title": "Volume",
+          "type": "number"
+        },
+        "position": {
+          "title": "Position",
+          "type": "number"
+        },
+        "loop_mode": {
+          "enum": [
+            "OFF",
+            "TRACK",
+            "QUEUE"
+          ],
+          "title": "Loop Mode",
+          "type": "string"
+        },
+        "autoplay": {
+          "title": "Autoplay",
+          "type": "boolean"
+        },
+        "gapless": {
+          "default": true,
+          "title": "Gapless",
+          "type": "boolean"
+        },
+        "current_track": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Track"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "queue": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "Queue",
+          "type": "array"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "timeline_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeline Revision"
+        }
+      },
+      "required": [
+        "connected",
+        "guild_id",
+        "guild_name",
+        "channel_id",
+        "channel_name",
+        "bitrate",
+        "is_playing",
+        "is_paused",
+        "volume",
+        "position",
+        "loop_mode",
+        "autoplay",
+        "current_track"
+      ],
+      "title": "ConnectedState",
+      "type": "object"
+    },
+    "ControlResult": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "const": true,
+          "title": "Success",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "title": "ControlResult",
+      "type": "object"
+    },
+    "DisconnectedState": {
+      "additionalProperties": true,
+      "properties": {
+        "connected": {
+          "const": false,
+          "title": "Connected",
+          "type": "boolean"
+        },
+        "msg": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Msg"
+        },
+        "guild_id": {
+          "default": null,
+          "title": "Guild Id",
+          "type": "null"
+        },
+        "channel_id": {
+          "default": null,
+          "title": "Channel Id",
+          "type": "null"
+        },
+        "user_voice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VoiceChannel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "volume": {
+          "default": 25,
+          "title": "Volume",
+          "type": "number"
+        },
+        "current_track": {
+          "default": null,
+          "title": "Current Track",
+          "type": "null"
+        },
+        "queue": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "Queue",
+          "type": "array"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "History",
+          "type": "array"
+        }
+      },
+      "required": [
+        "connected"
+      ],
+      "title": "DisconnectedState",
+      "type": "object"
+    },
+    "EvidenceSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "url",
+        "size",
+        "expires_at"
+      ],
+      "title": "EvidenceSaved",
+      "type": "object"
+    },
+    "GiveawayEntry": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "entered": {
+          "title": "Entered",
+          "type": "boolean"
+        },
+        "entries_count": {
+          "title": "Entries Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "success",
+        "entered",
+        "entries_count"
+      ],
+      "title": "GiveawayEntry",
+      "type": "object"
+    },
+    "GiveawayRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Channel Id"
+        },
+        "prize": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Prize",
+          "type": "string"
+        },
+        "winners_count": {
+          "default": null,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Winners Count",
+          "type": "integer"
+        },
+        "duration": {
+          "default": null,
+          "title": "Duration",
+          "type": "string"
+        },
+        "title": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Title",
+          "type": "string"
+        },
+        "embed": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Embed",
+          "type": "object"
+        }
+      },
+      "required": [
+        "guild_id",
+        "channel_id",
+        "prize"
+      ],
+      "title": "GiveawayRequest",
+      "type": "object"
+    },
+    "GiveawayReroll": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "winners": {
+          "items": {
+            "anyOf": [
+              {
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "type": "string"
+              },
+              {
+                "maximum": 9007199254740991,
+                "minimum": 1,
+                "type": "integer"
+              }
+            ]
+          },
+          "title": "Winners",
+          "type": "array"
+        }
+      },
+      "required": [
+        "success",
+        "winners"
+      ],
+      "title": "GiveawayReroll",
+      "type": "object"
+    },
+    "GiveawaySaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "giveaway": {
+          "additionalProperties": true,
+          "title": "Giveaway",
+          "type": "object"
+        }
+      },
+      "required": [
+        "success",
+        "giveaway"
+      ],
+      "title": "GiveawaySaved",
+      "type": "object"
+    },
+    "Giveaways": {
+      "additionalProperties": true,
+      "properties": {
+        "giveaways": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Giveaways",
+          "type": "array"
+        },
+        "can_manage": {
+          "title": "Can Manage",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "giveaways",
+        "can_manage"
+      ],
+      "title": "Giveaways",
+      "type": "object"
+    },
+    "Greetings": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "greetings": {
+          "additionalProperties": true,
+          "title": "Greetings",
+          "type": "object"
+        },
+        "can_edit": {
+          "title": "Can Edit",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "guild_id",
+        "greetings",
+        "can_edit"
+      ],
+      "title": "Greetings",
+      "type": "object"
+    },
+    "GreetingsRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "greetings": {
+          "additionalProperties": true,
+          "title": "Greetings",
+          "type": "object"
+        }
+      },
+      "required": [
+        "guild_id",
+        "greetings"
+      ],
+      "title": "GreetingsRequest",
+      "type": "object"
+    },
+    "GreetingsSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "greetings": {
+          "additionalProperties": true,
+          "title": "Greetings",
+          "type": "object"
+        }
+      },
+      "required": [
+        "success",
+        "greetings"
+      ],
+      "title": "GreetingsSaved",
+      "type": "object"
+    },
+    "GuildList": {
+      "items": {
+        "$ref": "#/$defs/GuildSummary"
+      },
+      "title": "GuildList",
+      "type": "array"
+    },
+    "GuildSettings": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "guild_name": {
+          "title": "Guild Name",
+          "type": "string"
+        },
+        "can_edit": {
+          "title": "Can Edit",
+          "type": "boolean"
+        },
+        "prefix": {
+          "title": "Prefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id",
+        "guild_name",
+        "can_edit",
+        "prefix"
+      ],
+      "title": "GuildSettings",
+      "type": "object"
+    },
+    "GuildSettingsRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "prefix": {
+          "default": null,
+          "maxLength": 20,
+          "minLength": 1,
+          "title": "Prefix",
+          "type": "string"
+        },
+        "default_volume": {
+          "default": null,
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Default Volume",
+          "type": "integer"
+        },
+        "music_channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "const": "",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Music Channel Id"
+        },
+        "music_message_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "const": "",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Music Message Id"
+        },
+        "autoplay": {
+          "default": null,
+          "title": "Autoplay",
+          "type": "boolean"
+        },
+        "autoplay_preset": {
+          "default": null,
+          "title": "Autoplay Preset",
+          "type": "string"
+        },
+        "autoplay_config": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Autoplay Config",
+          "type": "object"
+        },
+        "twenty_four_seven": {
+          "default": null,
+          "title": "Twenty Four Seven",
+          "type": "boolean"
+        },
+        "leveling_enabled": {
+          "default": null,
+          "title": "Leveling Enabled",
+          "type": "boolean"
+        },
+        "level_channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "const": "",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level Channel Id"
+        },
+        "level_alert_config": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Level Alert Config",
+          "type": "object"
+        },
+        "social_alerts": {
+          "default": null,
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Social Alerts",
+          "type": "array"
+        },
+        "stream_alerts": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Stream Alerts",
+          "type": "object"
+        },
+        "locale": {
+          "default": null,
+          "enum": [
+            "en",
+            "th"
+          ],
+          "title": "Locale",
+          "type": "string"
+        },
+        "auto_role_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "enum": [
+                "",
+                "none",
+                "null"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Role Id"
+        },
+        "reaction_roles": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Reaction Roles",
+          "type": "object"
+        },
+        "reaction_role_names": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Reaction Role Names",
+          "type": "object"
+        },
+        "reaction_role_embeds": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Reaction Role Embeds",
+          "type": "object"
+        },
+        "reaction_role_inline": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Reaction Role Inline",
+          "type": "object"
+        },
+        "247": {
+          "default": null,
+          "title": "247",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "GuildSettingsRequest",
+      "type": "object"
+    },
+    "GuildSummary": {
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Id"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "icon": {
+          "title": "Icon",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "icon"
+      ],
+      "title": "GuildSummary",
+      "type": "object"
+    },
+    "Health": {
+      "additionalProperties": true,
+      "properties": {
+        "status": {
+          "enum": [
+            "ok",
+            "ready"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "Health",
+      "type": "object"
+    },
+    "LastfmTokenRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Token",
+          "type": "string"
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "title": "LastfmTokenRequest",
+      "type": "object"
+    },
+    "Leaderboard": {
+      "additionalProperties": true,
+      "properties": {
+        "entries": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        },
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "limit": {
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entries",
+        "total",
+        "page",
+        "limit"
+      ],
+      "title": "Leaderboard",
+      "type": "object"
+    },
+    "Lyrics": {
+      "additionalProperties": true,
+      "properties": {
+        "found": {
+          "title": "Found",
+          "type": "boolean"
+        },
+        "lyrics": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lyrics"
+        }
+      },
+      "required": [
+        "found",
+        "lyrics"
+      ],
+      "title": "Lyrics",
+      "type": "object"
+    },
+    "Members": {
+      "additionalProperties": true,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "Members",
+      "type": "object"
+    },
+    "MessageRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "message_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Message Id"
+        }
+      },
+      "required": [
+        "message_id"
+      ],
+      "title": "MessageRequest",
+      "type": "object"
+    },
+    "ModerationPatch": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "evidence": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "points": {
+          "default": null,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Points",
+          "type": "integer"
+        },
+        "status": {
+          "default": null,
+          "enum": [
+            "active",
+            "expired",
+            "revoked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Reason",
+          "type": "string"
+        },
+        "internal_note": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Internal Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "ModerationPatch",
+      "type": "object"
+    },
+    "ModerationRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "target_user_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Target User Id"
+        },
+        "action": {
+          "enum": [
+            "warn",
+            "note",
+            "timeout",
+            "kick",
+            "ban",
+            "unban"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "evidence": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "points": {
+          "default": null,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Points",
+          "type": "integer"
+        },
+        "duration_seconds": {
+          "anyOf": [
+            {
+              "maximum": 2419200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Seconds"
+        },
+        "notify": {
+          "default": null,
+          "title": "Notify",
+          "type": "boolean"
+        },
+        "reason": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Reason",
+          "type": "string"
+        },
+        "internal_note": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Internal Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id",
+        "target_user_id",
+        "action"
+      ],
+      "title": "ModerationRequest",
+      "type": "object"
+    },
+    "ModuleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "module_id": {
+          "title": "Module Id",
+          "type": "string"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config"
+        }
+      },
+      "required": [
+        "guild_id",
+        "module_id",
+        "enabled"
+      ],
+      "title": "ModuleRequest",
+      "type": "object"
+    },
+    "Modules": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "modules": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Modules",
+          "type": "array"
+        }
+      },
+      "required": [
+        "guild_id",
+        "modules"
+      ],
+      "title": "Modules",
+      "type": "object"
+    },
+    "MusicEmbed": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "banner_url": {
+          "title": "Banner Url",
+          "type": "string"
+        },
+        "bar_url": {
+          "title": "Bar Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "config",
+        "banner_url",
+        "bar_url"
+      ],
+      "title": "MusicEmbed",
+      "type": "object"
+    },
+    "MusicEmbedRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config"
+        },
+        "target": {
+          "default": null,
+          "enum": [
+            "voice",
+            "channel"
+          ],
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "MusicEmbedRequest",
+      "type": "object"
+    },
+    "MusicEmbedResetRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "target": {
+          "default": null,
+          "enum": [
+            "voice",
+            "channel"
+          ],
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "MusicEmbedResetRequest",
+      "type": "object"
+    },
+    "MusicPreview": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "previews": {
+          "additionalProperties": true,
+          "title": "Previews",
+          "type": "object"
+        },
+        "banner_url": {
+          "title": "Banner Url",
+          "type": "string"
+        },
+        "bar_url": {
+          "title": "Bar Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "previews",
+        "banner_url",
+        "bar_url"
+      ],
+      "title": "MusicPreview",
+      "type": "object"
+    },
+    "MusicPreviewRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "enum": [
+                "idle",
+                "now_playing"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        },
+        "target": {
+          "default": null,
+          "enum": [
+            "voice",
+            "channel"
+          ],
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "MusicPreviewRequest",
+      "type": "object"
+    },
+    "Paginated": {
+      "additionalProperties": true,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        },
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "limit": {
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ],
+      "title": "Paginated",
+      "type": "object"
+    },
+    "PanelPublished": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Channel Id"
+        },
+        "message_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Message Id"
+        }
+      },
+      "required": [
+        "success",
+        "channel_id",
+        "message_id"
+      ],
+      "title": "PanelPublished",
+      "type": "object"
+    },
+    "PanelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "panel": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Panel",
+          "type": "object"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "PanelRequest",
+      "type": "object"
+    },
+    "PanelSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Panel"
+        }
+      },
+      "required": [
+        "success",
+        "panel"
+      ],
+      "title": "PanelSaved",
+      "type": "object"
+    },
+    "Permissions": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "roles": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "grants": {
+          "additionalProperties": true,
+          "title": "Grants",
+          "type": "object"
+        },
+        "can_edit": {
+          "title": "Can Edit",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "guild_id",
+        "capabilities",
+        "roles",
+        "grants",
+        "can_edit"
+      ],
+      "title": "Permissions",
+      "type": "object"
+    },
+    "PermissionsRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "role_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Role Id"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "guild_id",
+        "role_id",
+        "capabilities"
+      ],
+      "title": "PermissionsRequest",
+      "type": "object"
+    },
+    "PlayerControl": {
+      "additionalProperties": true,
+      "properties": {
+        "action": {
+          "enum": [
+            "play",
+            "pause",
+            "resume",
+            "skip",
+            "previous",
+            "volume",
+            "seek",
+            "shuffle",
+            "repeat",
+            "autoplay",
+            "queue_remove",
+            "queue_jump",
+            "history_jump",
+            "queue_clear",
+            "queue_move",
+            "history_move",
+            "history_to_queue",
+            "queue_to_history",
+            "current_to_queue",
+            "current_to_history"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value"
+        },
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Guild Id"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "PlayerControl",
+      "type": "object"
+    },
+    "PlayerList": {
+      "items": {
+        "$ref": "#/$defs/PlayerListItem"
+      },
+      "title": "PlayerList",
+      "type": "array"
+    },
+    "PlayerListItem": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Guild Id",
+          "type": "string"
+        },
+        "guild_name": {
+          "title": "Guild Name",
+          "type": "string"
+        },
+        "channel_name": {
+          "title": "Channel Name",
+          "type": "string"
+        },
+        "is_playing": {
+          "title": "Is Playing",
+          "type": "boolean"
+        },
+        "current_track": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Track"
+        }
+      },
+      "required": [
+        "guild_id",
+        "guild_name",
+        "channel_name",
+        "is_playing"
+      ],
+      "title": "PlayerListItem",
+      "type": "object"
+    },
+    "PlayerStateContract": {
+      "discriminator": {
+        "mapping": {
+          "False": "#/$defs/DisconnectedState",
+          "True": "#/$defs/ConnectedState"
+        },
+        "propertyName": "connected"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ConnectedState"
+        },
+        {
+          "$ref": "#/$defs/DisconnectedState"
+        }
+      ],
+      "title": "PlayerStateContract"
+    },
+    "PlaylistCoverRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "playlist_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Playlist Name",
+          "type": "string"
+        },
+        "cover_url": {
+          "default": null,
+          "maxLength": 2048,
+          "title": "Cover Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "playlist_name"
+      ],
+      "title": "PlaylistCoverRequest",
+      "type": "object"
+    },
+    "PlaylistNameRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "PlaylistNameRequest",
+      "type": "object"
+    },
+    "PlaylistQueueRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Name",
+          "type": "string"
+        },
+        "tracks": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "maxItems": 1000,
+          "minItems": 1,
+          "title": "Tracks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "tracks"
+      ],
+      "title": "PlaylistQueueRequest",
+      "type": "object"
+    },
+    "PlaylistRemoveRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "playlist_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Playlist Name",
+          "type": "string"
+        },
+        "index": {
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "playlist_name",
+        "index"
+      ],
+      "title": "PlaylistRemoveRequest",
+      "type": "object"
+    },
+    "PlaylistTrackRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "playlist_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Playlist Name",
+          "type": "string"
+        },
+        "track": {
+          "additionalProperties": true,
+          "title": "Track",
+          "type": "object"
+        }
+      },
+      "required": [
+        "playlist_name",
+        "track"
+      ],
+      "title": "PlaylistTrackRequest",
+      "type": "object"
+    },
+    "PublishPanelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Channel Id"
+        }
+      },
+      "required": [
+        "guild_id",
+        "channel_id"
+      ],
+      "title": "PublishPanelRequest",
+      "type": "object"
+    },
+    "ReactionRoleMessage": {
+      "additionalProperties": true,
+      "properties": {
+        "message_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Message Id"
+        }
+      },
+      "required": [
+        "message_id"
+      ],
+      "title": "ReactionRoleMessage",
+      "type": "object"
+    },
+    "ReactionRoleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Channel Id"
+        },
+        "title": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id",
+        "channel_id"
+      ],
+      "title": "ReactionRoleRequest",
+      "type": "object"
+    },
+    "RerollRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "message_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Message Id"
+        },
+        "winners_count": {
+          "default": null,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Winners Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "message_id"
+      ],
+      "title": "RerollRequest",
+      "type": "object"
+    },
+    "ReviewAppealRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "reviewing",
+            "accepted",
+            "declined"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id",
+        "status"
+      ],
+      "title": "ReviewAppealRequest",
+      "type": "object"
+    },
+    "ScheduleList": {
+      "additionalProperties": true,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "can_manage": {
+          "title": "Can Manage",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "items",
+        "can_manage"
+      ],
+      "title": "ScheduleList",
+      "type": "object"
+    },
+    "SchedulePatch": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "default": null,
+          "title": "Channel Id"
+        },
+        "kind": {
+          "default": null,
+          "enum": [
+            "announcement",
+            "event"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "content": {
+          "default": null,
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "title": {
+          "default": null,
+          "maxLength": 256,
+          "title": "Title",
+          "type": "string"
+        },
+        "starts_at": {
+          "default": null,
+          "title": "Starts At",
+          "type": "string"
+        },
+        "recurrence": {
+          "default": null,
+          "enum": [
+            "once",
+            "daily",
+            "weekly",
+            "monthly"
+          ],
+          "title": "Recurrence",
+          "type": "string"
+        },
+        "event_end_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event End At"
+        },
+        "location": {
+          "default": null,
+          "maxLength": 128,
+          "title": "Location",
+          "type": "string"
+        },
+        "embed": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Embed",
+          "type": "object"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "SchedulePatch",
+      "type": "object"
+    },
+    "ScheduleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Channel Id"
+        },
+        "kind": {
+          "enum": [
+            "announcement",
+            "event"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "content": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "starts_at": {
+          "title": "Starts At",
+          "type": "string"
+        },
+        "title": {
+          "default": null,
+          "maxLength": 256,
+          "title": "Title",
+          "type": "string"
+        },
+        "recurrence": {
+          "default": null,
+          "enum": [
+            "once",
+            "daily",
+            "weekly",
+            "monthly"
+          ],
+          "title": "Recurrence",
+          "type": "string"
+        },
+        "event_end_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event End At"
+        },
+        "location": {
+          "default": null,
+          "maxLength": 128,
+          "title": "Location",
+          "type": "string"
+        },
+        "embed": {
+          "additionalProperties": true,
+          "default": null,
+          "title": "Embed",
+          "type": "object"
+        }
+      },
+      "required": [
+        "guild_id",
+        "channel_id",
+        "kind",
+        "content",
+        "starts_at"
+      ],
+      "title": "ScheduleRequest",
+      "type": "object"
+    },
+    "ScheduleSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "item": {
+          "additionalProperties": true,
+          "title": "Item",
+          "type": "object"
+        }
+      },
+      "required": [
+        "success",
+        "item"
+      ],
+      "title": "ScheduleSaved",
+      "type": "object"
+    },
+    "ScrobbleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": null,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "ScrobbleRequest",
+      "type": "object"
+    },
+    "SearchResult": {
+      "additionalProperties": true,
+      "properties": {
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "is_playlist": {
+          "title": "Is Playlist",
+          "type": "boolean"
+        },
+        "playlist_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Playlist Name"
+        },
+        "playlist_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Playlist Url"
+        },
+        "tracks": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "Tracks",
+          "type": "array"
+        },
+        "playlists": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Playlists",
+          "type": "array"
+        }
+      },
+      "required": [
+        "mode",
+        "is_playlist",
+        "playlist_name",
+        "tracks",
+        "playlists"
+      ],
+      "title": "SearchResult",
+      "type": "object"
+    },
+    "SettingsRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "theme": {
+          "default": null,
+          "enum": [
+            "dark",
+            "light",
+            "fantasy"
+          ],
+          "title": "Theme",
+          "type": "string"
+        },
+        "accent": {
+          "default": null,
+          "enum": [
+            "blue",
+            "purple",
+            "green",
+            "orange",
+            "dynamic"
+          ],
+          "title": "Accent",
+          "type": "string"
+        },
+        "transparency": {
+          "default": null,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Transparency",
+          "type": "integer"
+        },
+        "blur": {
+          "default": null,
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Blur",
+          "type": "integer"
+        },
+        "corners": {
+          "default": null,
+          "maximum": 32,
+          "minimum": 0,
+          "title": "Corners",
+          "type": "integer"
+        },
+        "animations": {
+          "default": null,
+          "title": "Animations",
+          "type": "boolean"
+        },
+        "startup": {
+          "default": null,
+          "enum": [
+            "home",
+            "discover",
+            "library",
+            "history",
+            "playlists"
+          ],
+          "title": "Startup",
+          "type": "string"
+        },
+        "autoplay": {
+          "default": null,
+          "title": "Autoplay",
+          "type": "boolean"
+        },
+        "language": {
+          "default": null,
+          "enum": [
+            "en",
+            "th"
+          ],
+          "title": "Language",
+          "type": "string"
+        },
+        "locale": {
+          "default": null,
+          "enum": [
+            "en",
+            "th"
+          ],
+          "title": "Locale",
+          "type": "string"
+        }
+      },
+      "title": "SettingsRequest",
+      "type": "object"
+    },
+    "Success": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "title": "Success",
+      "type": "object"
+    },
+    "SyncAutoplayRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Guild Id"
+        },
+        "autoplay": {
+          "default": null,
+          "title": "Autoplay",
+          "type": "boolean"
+        }
+      },
+      "title": "SyncAutoplayRequest",
+      "type": "object"
+    },
+    "TicketDetail": {
+      "additionalProperties": true,
+      "properties": {
+        "ticket": {
+          "additionalProperties": true,
+          "title": "Ticket",
+          "type": "object"
+        },
+        "events": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ticket",
+        "events"
+      ],
+      "title": "TicketDetail",
+      "type": "object"
+    },
+    "TicketRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "action": {
+          "default": null,
+          "enum": [
+            "update",
+            "close",
+            "reopen",
+            "delete",
+            "note"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "note": {
+          "default": null,
+          "maxLength": 4000,
+          "title": "Note",
+          "type": "string"
+        },
+        "priority": {
+          "default": null,
+          "enum": [
+            "low",
+            "normal",
+            "high",
+            "urgent"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "category_name": {
+          "default": null,
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Category Name",
+          "type": "string"
+        },
+        "assigned_staff_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "default": null,
+          "title": "Assigned Staff Id"
+        },
+        "name": {
+          "default": null,
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id"
+      ],
+      "title": "TicketRequest",
+      "type": "object"
+    },
+    "TicketSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "ticket": {
+          "additionalProperties": true,
+          "title": "Ticket",
+          "type": "object"
+        }
+      },
+      "required": [
+        "success",
+        "ticket"
+      ],
+      "title": "TicketSaved",
+      "type": "object"
+    },
+    "Tickets": {
+      "additionalProperties": true,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "total"
+      ],
+      "title": "Tickets",
+      "type": "object"
+    },
+    "Track": {
+      "additionalProperties": true,
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        },
+        "length": {
+          "title": "Length",
+          "type": "number"
+        }
+      },
+      "required": [
+        "title",
+        "author",
+        "uri",
+        "length"
+      ],
+      "title": "Track",
+      "type": "object"
+    },
+    "TrapChannel": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "trap_channel": {
+          "additionalProperties": true,
+          "title": "Trap Channel",
+          "type": "object"
+        },
+        "can_edit": {
+          "title": "Can Edit",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "guild_id",
+        "trap_channel",
+        "can_edit"
+      ],
+      "title": "TrapChannel",
+      "type": "object"
+    },
+    "TrapChannelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Guild Id"
+        },
+        "trap_channel": {
+          "additionalProperties": true,
+          "title": "Trap Channel",
+          "type": "object"
+        }
+      },
+      "required": [
+        "guild_id",
+        "trap_channel"
+      ],
+      "title": "TrapChannelRequest",
+      "type": "object"
+    },
+    "TrapChannelSaved": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "trap_channel": {
+          "additionalProperties": true,
+          "title": "Trap Channel",
+          "type": "object"
+        }
+      },
+      "required": [
+        "success",
+        "trap_channel"
+      ],
+      "title": "TrapChannelSaved",
+      "type": "object"
+    },
+    "VoiceChannel": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Guild Id",
+          "type": "string"
+        },
+        "guild_name": {
+          "title": "Guild Name",
+          "type": "string"
+        },
+        "channel_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "channel_name": {
+          "title": "Channel Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id",
+        "guild_name",
+        "channel_id",
+        "channel_name"
+      ],
+      "title": "VoiceChannel",
+      "type": "object"
+    },
+    "Warnings": {
+      "additionalProperties": true,
+      "properties": {
+        "points": {
+          "title": "Points",
+          "type": "integer"
+        },
+        "warning_count": {
+          "title": "Warning Count",
+          "type": "integer"
+        },
+        "items": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points",
+        "warning_count",
+        "items"
+      ],
+      "title": "Warnings",
+      "type": "object"
+    },
+    "YouTubeChannel": {
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "avatar": {
+          "title": "Avatar",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "url",
+        "avatar"
+      ],
+      "title": "YouTubeChannel",
+      "type": "object"
+    }
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/internal/user/invalidate-locale",
+      "request": null,
+      "response": "Success"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/health",
+      "request": null,
+      "response": "Health"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cache-metrics",
+      "request": null,
+      "response": "CacheMetrics"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/ready",
+      "request": null,
+      "response": "Health"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/auth/check-admin",
+      "request": null,
+      "response": "Admin"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guilds/manageable",
+      "request": null,
+      "response": "GuildList"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/modules",
+      "request": null,
+      "response": "Modules"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/modules",
+      "request": "ModuleRequest",
+      "response": "Success"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/permissions",
+      "request": null,
+      "response": "Permissions"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/permissions",
+      "request": "PermissionsRequest",
+      "response": "Success"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/settings",
+      "request": null,
+      "response": "GuildSettings"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/autoplay/channel",
+      "request": null,
+      "response": "YouTubeChannel"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/settings",
+      "request": "GuildSettingsRequest",
+      "response": "Success"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/greetings",
+      "request": null,
+      "response": "Greetings"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/greetings",
+      "request": "GreetingsRequest",
+      "response": "GreetingsSaved"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/trap-channel",
+      "request": null,
+      "response": "TrapChannel"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/trap-channel",
+      "request": "TrapChannelRequest",
+      "response": "TrapChannelSaved"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/reaction-roles/generate",
+      "request": "ReactionRoleRequest",
+      "response": "ReactionRoleMessage"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/custom-commands",
+      "request": null,
+      "response": "Commands"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/custom-commands",
+      "request": "CommandRequest",
+      "response": "CommandSaved"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/custom-commands/update",
+      "request": "CommandRequest",
+      "response": "CommandSaved"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/custom-commands/delete",
+      "request": "CommandNameRequest",
+      "response": "Success"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/custom-commands/toggle",
+      "request": "CommandNameRequest",
+      "response": "Success"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/custom-commands/preview",
+      "request": "CommandPreviewRequest",
+      "response": "CommandPreview"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/giveaways",
+      "request": null,
+      "response": "Giveaways"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/giveaways",
+      "request": "GiveawayRequest",
+      "response": "GiveawaySaved"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/giveaways/enter",
+      "request": "MessageRequest",
+      "response": "GiveawayEntry"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/giveaways/end",
+      "request": "MessageRequest",
+      "response": "Success"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/giveaways/reroll",
+      "request": "RerollRequest",
+      "response": "GiveawayReroll"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/giveaways/delete",
+      "request": "MessageRequest",
+      "response": "Success"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/scheduler",
+      "request": null,
+      "response": "ScheduleList"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/scheduler",
+      "request": "ScheduleRequest",
+      "response": "ScheduleSaved"
+    },
+    {
+      "method": "PATCH",
+      "path": "/internal/guild/scheduler/{item_id}",
+      "request": "SchedulePatch",
+      "response": "ScheduleSaved"
+    },
+    {
+      "method": "DELETE",
+      "path": "/internal/guild/scheduler/{item_id}",
+      "request": null,
+      "response": "Success"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/tickets",
+      "request": null,
+      "response": "Tickets"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/tickets/{ticket_id}",
+      "request": null,
+      "response": "TicketDetail"
+    },
+    {
+      "method": "PATCH",
+      "path": "/internal/guild/tickets/{ticket_id}",
+      "request": "TicketRequest",
+      "response": "TicketSaved"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/tickets/{ticket_id}/transcript",
+      "request": null,
+      "response": null
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/tickets/panels",
+      "request": "PanelRequest",
+      "response": "PanelSaved"
+    },
+    {
+      "method": "PATCH",
+      "path": "/internal/guild/tickets/panels/{panel_id}",
+      "request": "PanelRequest",
+      "response": "PanelSaved"
+    },
+    {
+      "method": "DELETE",
+      "path": "/internal/guild/tickets/panels/{panel_id}",
+      "request": null,
+      "response": "Success"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/tickets/panels/{panel_id}/publish",
+      "request": "PublishPanelRequest",
+      "response": "PanelPublished"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/moderation/cases",
+      "request": null,
+      "response": "Paginated"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/moderation/cases",
+      "request": "ModerationRequest",
+      "response": "CaseSaved"
+    },
+    {
+      "method": "PATCH",
+      "path": "/internal/guild/moderation/cases/{case_id}",
+      "request": "ModerationPatch",
+      "response": "CaseSaved"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/moderation/cases/{case_id}/cleanup",
+      "request": "CaseCleanupRequest",
+      "response": "Success"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/moderation/cases/export",
+      "request": null,
+      "response": null
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/moderation/my-cases",
+      "request": null,
+      "response": "Paginated"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/moderation/members",
+      "request": null,
+      "response": "Members"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/moderation/warnings/{target_user_id}",
+      "request": null,
+      "response": "Warnings"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/moderation/evidence/upload",
+      "request": null,
+      "response": "EvidenceSaved"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/moderation/evidence/{evidence_id}",
+      "request": null,
+      "response": null
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/moderation/appeals",
+      "request": null,
+      "response": "Paginated"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/moderation/appeals",
+      "request": "AppealRequest",
+      "response": "AppealSaved"
+    },
+    {
+      "method": "PATCH",
+      "path": "/internal/guild/moderation/appeals/{case_id}",
+      "request": "ReviewAppealRequest",
+      "response": "Success"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/leveling/guilds",
+      "request": null,
+      "response": "GuildList"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/leveling/leaderboard/global",
+      "request": null,
+      "response": "Leaderboard"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/leveling/leaderboard/server/{guild_id}",
+      "request": null,
+      "response": "Leaderboard"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/guild/music-embed",
+      "request": null,
+      "response": "MusicEmbed"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/music-embed",
+      "request": "MusicEmbedRequest",
+      "response": "MusicEmbed"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/music-embed/reset",
+      "request": "MusicEmbedResetRequest",
+      "response": "MusicEmbed"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/guild/music-embed/preview",
+      "request": "MusicPreviewRequest",
+      "response": "MusicPreview"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/player/list",
+      "request": null,
+      "response": "PlayerList"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/player/state",
+      "request": null,
+      "response": "PlayerStateContract"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/player/control",
+      "request": "PlayerControl",
+      "response": "ControlResult"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/player/search",
+      "request": null,
+      "response": "SearchResult"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/player/lyrics",
+      "request": null,
+      "response": "Lyrics"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/player/sync-autoplay",
+      "request": "SyncAutoplayRequest",
+      "response": "AutoplaySynced"
+    }
+  ]
+}

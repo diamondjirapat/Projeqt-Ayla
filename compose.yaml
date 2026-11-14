@@ -1,0 +1,22 @@
+services:
+  bot:
+    build: .
+    image: projeqt-ayla-backend:local
+    command: ["python", "bot.py"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AYLA_INTERNAL_HOST: 0.0.0.0
+      AYLA_INTERNAL_PORT: "9000"
+      AYLA_INTERNAL_KEY: ${AYLA_INTERNAL_KEY:?Set a shared internal API key of at least 32 characters}
+    volumes:
+      - uploads:/app/static/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request; request = urllib.request.Request('http://127.0.0.1:9000/internal/ready', headers={'X-Internal-Key': os.environ['AYLA_INTERNAL_KEY']}); urllib.request.urlopen(request, timeout=3).close()"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+
+volumes:
+  uploads:

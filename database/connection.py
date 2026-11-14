@@ -1,5 +1,6 @@
-import motor.motor_asyncio
-from pymongo.errors import DuplicateKeyError
+from pymongo import AsyncMongoClient
+
+from database.indexes import INDEX_SPECS, IndexRequirementError, ensure_required_index, is_legacy_level_index
 
 from config import Config
 import logging
@@ -16,11 +17,11 @@ class DatabaseManager:
     async def connect(self) -> bool:
         """Connect to MongoDB"""
         if not Config.MONGODB_URI:
-            logger.error("MONGODB_URI is not configured")
+            logger.error('MONGODB_URI is not configured')
             return False
 
         try:
-            self.client = motor.motor_asyncio.AsyncIOMotorClient(
+            self.client = AsyncMongoClient(
                 Config.MONGODB_URI,
                 serverSelectionTimeoutMS=10_000,
             )
@@ -36,91 +37,67 @@ class DatabaseManager:
             self.db = self.client[db_name]
 
             await self.client.admin.command('ping')
-            logger.info(f"Connected to MongoDB: {db_name}")
+            logger.info(f'Connected to MongoDB: {db_name}')
 
             await self._ensure_indexes()
             return True
-        except Exception:
-            logger.exception("Failed to connect to MongoDB")
+        except Exception as error:
+            if isinstance(error, IndexRequirementError):
+                logger.error('Database integrity check failed: %s', error)
+            else:
+                logger.error('Failed to connect to MongoDB (%s)', type(error).__name__)
             if self.client is not None:
-                self.client.close()
+                await self.client.close()
             self.client = None
             self.db = None
             return False
 
     async def _ensure_indexes(self):
-        """Create indexes on the hot lookup fields and clean up legacy schema indexes.
-
-        Unique indexes enforce one document per entity/pair. If pre-existing duplicates
-        prevent a unique index from being created, we fall back to a non-unique index.
-        """
-        # Clean up legacy incorrect unique indexes
-        try:
-            user_levels_col = self.db['user_levels']
-            index_info = await user_levels_col.index_information()
-            for idx_name, idx_details in index_info.items():
-                keys = idx_details.get('key', [])
-                if idx_details.get('unique') and len(keys) == 1 and keys[0][0] == 'user_id':
-                    logger.warning(
-                        "Dropping legacy single-field unique index %r from user_levels "
-                        "in favor of compound (guild_id, user_id) index.",
-                        idx_name,
-                    )
-                    await user_levels_col.drop_index(idx_name)
-        except Exception:
-            logger.exception("Could not check/drop legacy index from user_levels")
-
-        index_specs = [
-            # Collection, Index Keys, Unique Flag
-            ('users', [('user_id', 1)], True),
-            ('guilds', [('guild_id', 1)], True),
-            ('user_prefixes', [('user_id', 1)], True),
-            ('guild_prefixes', [('guild_id', 1)], True),
-            # Leveling: compound unique per guild and user
-            ('user_levels', [('guild_id', 1), ('user_id', 1)], True),
-            # Leveling: query indexes for aggregations and leaderboards
-            ('user_levels', [('user_id', 1)], False),
-            ('user_levels', [('guild_id', 1), ('xp', -1)], False),
-            # Custom commands: unique command name per guild
-            ('custom_commands', [('guild_id', 1), ('name', 1)], True),
-            ('custom_commands', [('guild_id', 1)], False),
-            # Giveaways: message_id unique, guild queries, expiration queries
-            ('giveaways', [('message_id', 1)], True),
-            ('giveaways', [('guild_id', 1), ('ended', 1)], False),
-            ('giveaways', [('ended', 1), ('end_time', 1)], False),
-        ]
-        for collection_name, keys, unique in index_specs:
-            collection = self.db[collection_name]
+        """Require integrity/retention indexes before allowing application writes."""
+        failures = []
+        for spec in INDEX_SPECS:
+            if not spec.required:
+                continue
             try:
-                await collection.create_index(keys, unique=unique)
-            except DuplicateKeyError as exc:
-                if unique:
-                    logger.warning(
-                        "Unique index on %s.%s could not be created because duplicate "
-                        "records already exist (%s); creating a lookup index instead.",
-                        collection_name,
-                        keys,
-                        exc,
-                    )
-                    try:
-                        await collection.create_index(keys, unique=False)
-                    except Exception:
-                        logger.exception("Could not create index on %s.%s", collection_name, keys)
-                else:
-                    logger.exception("DuplicateKeyError creating index on %s.%s", collection_name, keys)
+                await ensure_required_index(self.db[spec.collection], spec)
+            except IndexRequirementError as error:
+                failures.append(str(error))
+        if failures:
+            raise IndexRequirementError('; '.join(failures))
+
+        # Only remove the old cross-guild restriction after the replacement
+        # compound unique index has been created and verified successfully.
+        levels = self.db['user_levels']
+        try:
+            indexes = await levels.index_information()
+            for name, metadata in indexes.items():
+                if is_legacy_level_index(metadata):
+                    logger.warning('Removing obsolete cross-guild user_levels index %s', name)
+                    await levels.drop_index(name)
+        except Exception as error:
+            raise IndexRequirementError('Could not remove the obsolete user_levels uniqueness rule') from error
+
+        for spec in INDEX_SPECS:
+            if spec.required:
+                continue
+            try:
+                await self.db[spec.collection].create_index(list(spec.keys), unique=False)
             except Exception:
-                logger.exception("Could not ensure index on %s.%s", collection_name, keys)
+                logger.warning('Optional lookup index unavailable: %s %s', spec.collection, spec.keys)
 
     async def disconnect(self):
+        from database.guild_cache import clear_guild_caches
+
+        clear_guild_caches()
         if self.client is not None:
-            self.client.close()
+            await self.client.close()
             self.client = None
             self.db = None
-            logger.info("Disconnected from MongoDB")
+            logger.info('Disconnected from MongoDB')
 
     def get_collection(self, collection_name: str):
         if self.db is None:
-            raise RuntimeError("Database not connected")
+            raise RuntimeError('Database not connected')
         return self.db[collection_name]
 
 

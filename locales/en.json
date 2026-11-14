@@ -1,4 +1,65 @@
 {
+  "social_alerts": {
+    "refreshStatus": "Refresh monitoring status",
+    "lastChecked": "Last checked: {date}",
+    "runtime.paused": "This alert is paused.",
+    "runtime.worker_disabled": "Social monitoring is disabled by the bot operator.",
+    "runtime.worker_offline": "The monitoring worker is offline. The bot operator needs to start or restart the bot.",
+    "runtime.missing_credentials": "This platform is not connected. The bot operator needs to configure its API credentials.",
+    "runtime.invalid_handle": "Enter an account handle or YouTube channel ID, rather than a full URL.",
+    "runtime.missing_channel": "Select an announcement channel before this alert can run.",
+    "runtime.unsupported_event": "Some selected events are unavailable for this platform. Supported events still work.",
+    "runtime.account_not_found": "The provider could not find this account. Check its handle or channel ID.",
+    "runtime.provider_auth_or_quota": "The provider rejected access or its quota was reached. The bot operator needs to check API access.",
+    "runtime.rate_limited": "The provider rate limit was reached. Monitoring will retry after a cooldown.",
+    "runtime.provider_unavailable": "The provider is temporarily unavailable. Monitoring will retry automatically.",
+    "runtime.invalid_provider_response": "The provider returned an unexpected response. Monitoring will retry.",
+    "runtime.discord_permissions": "Ayla cannot send to this channel. Check View Channel, Send Messages, and Embed Links permissions.",
+    "runtime.discord_rejected": "Discord rejected this notification. Check the destination and message settings.",
+    "runtime.delivery_uncertain": "A send could not be confirmed. Ayla is checking channel history and will not resend it automatically.",
+    "runtime.delivery_backlog": "Notifications are waiting for delivery. Check channel access before the backlog grows.",
+    "runtime.lease_lost": "Another worker is handling this alert. Monitoring will resume automatically.",
+    "runtime.status_unavailable": "Monitoring status could not be loaded. Try refreshing it.",
+    "runtime.waiting_first_check": "Waiting for the first check. Existing posts will be skipped.",
+    "runtime.watching": "Monitoring is active. New updates will be sent to your channel.",
+    "add": "Add alert",
+    "accounts": "Watched accounts",
+    "search": "Search accounts",
+    "filter": "Filter by platform",
+    "allPlatforms": "All platforms",
+    "untitled": "New alert",
+    "noChannel": "No channel selected",
+    "enabled": "Enabled",
+    "paused": "Paused",
+    "enable": "Enable this alert",
+    "edit": "Edit alert",
+    "back": "Back to accounts",
+    "autoSave": "Changes save automatically",
+    "pending": "Unsaved changes…",
+    "platform": "Platform",
+    "handle": "Account / handle",
+    "channel": "Announcement channel",
+    "selectChannel": "Select a text channel…",
+    "mention": "Mention on alert",
+    "noPing": "None (no ping)",
+    "notify": "Notify me about",
+    "message": "Message",
+    "messagePlaceholder": "Write the message to send with this alert…",
+    "variables": "Insert a variable into your message.",
+    "insertVariable": "Insert {variable}",
+    "preview": "Discord notification preview",
+    "sample": "Sample content",
+    "remove": "Remove alert",
+    "removeConfirm": "Remove the alert for {name}? This account will no longer send notifications.",
+    "noResults": "No accounts match your filters.",
+    "clearFilters": "Clear filters",
+    "empty": "No social alerts yet",
+    "emptyHint": "Follow Twitch, YouTube, and X accounts. Choose where their updates appear in your server.",
+    "limit": "You can configure up to 25 social alerts per server.",
+    "events.live": "Live streams",
+    "events.video": "New videos",
+    "events.post": "New posts"
+  },
   "commands": {
     "info": {
       "name": "info",
@@ -80,6 +141,67 @@
       "no_permission": "❌ I don't have permission to ban this member.",
       "hierarchy": "🚫 You can't ban {member} — their highest role is equal to or above yours.",
       "error": "❌ An error occurred: {error}"
+    },
+    "casebook": {
+      "reversal_failed": "Could not reverse the sanction. Check native Discord permissions and newer timeouts, then retry. The review has not been accepted.",
+      "warn_description": "Warn a member and create a moderation case",
+      "note_description": "Add a private moderation note about a member",
+      "timeout_description": "Timeout a member and create a moderation case",
+      "kick_case_description": "Kick a member and create a moderation case",
+      "ban_case_description": "Ban a member and create a moderation case",
+      "unban_description": "Unban a user and create a moderation case",
+      "case_description": "View a moderation case by its server case number",
+      "revoke_description": "Revoke an active moderation case",
+      "warnings_description": "Show a member warning summary",
+      "appeal_description": "Appeal one of your active moderation cases",
+      "review_appeal_description": "Accept or decline a pending moderation appeal",
+      "cleanup_description": "Delete recent messages from the member attached to a case",
+      "warn_member": "The member to warn",
+      "warn_points": "Warning points from 1 to 100",
+      "warn_reason": "The reason for this warning",
+      "notify": "Send the member a private notification",
+      "note_member": "The member to add a note about",
+      "internal_note": "The internal note",
+      "timeout_member": "The member to timeout",
+      "duration": "Timeout duration in seconds (60 to 2419200)",
+      "timeout_reason": "The reason for this timeout",
+      "kick_member": "The member to kick",
+      "kick_reason": "Reason for kicking",
+      "ban_member": "The member to ban",
+      "ban_reason": "Reason for banning",
+      "unban_user": "The user to unban",
+      "unban_reason": "Reason for unbanning",
+      "case_id": "The sequential moderation case number",
+      "revoke_reason": "Why this case is being revoked",
+      "warning_member": "The member whose active warning points should be shown",
+      "decay_days": "Decay window in days",
+      "appeal_case_id": "Your moderation case number",
+      "appeal_statement": "Why staff should review this case",
+      "review_case_id": "Moderation case number",
+      "appeal_decision": "Accept or decline",
+      "appeal_review_reason": "Staff review reason",
+      "cleanup_amount": "Maximum matching messages to delete (1-100)",
+      "hierarchy": "🚫 You can't moderate {member} because their highest role is equal to or above yours.",
+      "persistence_error": "❌ The action succeeded, but Ayla could not save its moderation case.",
+      "invalid_timeout": "❌ Timeout duration must be between 60 seconds and 28 days.",
+      "invalid_points": "❌ Warning points must be between 1 and 100.",
+      "invalid_decay": "❌ Warning decay must be between 1 and 3650 days.",
+      "warning_summary_title": "Warnings for {member}",
+      "warning_summary_description": "{points} active points across {count} warnings in the last {days} days.",
+      "appeal_not_found": "❌ An active case or pending appeal was not found.",
+      "appeal_submitted": "✅ Appeal for case #{case_id} was submitted for staff review.",
+      "invalid_appeal_decision": "❌ Decision must be accepted or declined.",
+      "appeal_reviewed": "✅ Appeal for case #{case_id} was marked {status}.",
+      "dm_notification": "You received a **{action}** action in **{server}**. Case: **#{case_id}**. Reason: {reason}\nYou can submit `/appeal {case_id}` in the server if you want staff to review it.",
+      "appeal_button": "Appeal this case",
+      "appeals_disabled": "❌ Appeals are disabled for this server.",
+      "escalation_failed": "⚠️ The warning was saved, but the configured automatic escalation could not be applied.",
+      "cleanup_complete": "✅ Deleted {count} messages connected to case #{case_id}.",
+      "bot_permission_error": "❌ I don't have permission to timeout this member.",
+      "action_error": "❌ Discord rejected this moderation action.",
+      "user_not_banned": "❌ That user is not currently banned.",
+      "not_found": "❌ Moderation case not found.",
+      "already_closed": "❌ That moderation case is already closed."
     },
     "purge": {
       "name": "purge",
@@ -166,6 +288,7 @@
     }
   },
   "errors": {
+    "module_disabled": "This module is disabled for this server.",
     "command_not_found": "Command not found",
     "missing_permissions": "❌ You don't have permission to use this command.",
     "missing_argument": "❌ Missing required argument: {param}",
@@ -195,7 +318,7 @@
     "effective_lang": "\n**You're currently using:** {effective_lang_name} ({effective_locale})",
     "commands_text": "`{prefix}mylang <code>` - Set your personal language\n",
     "commands_text2": "`{prefix}setlang <code>` - Set server language (Admin only)\n",
-    "commands_text3": "\n**Available:** English (en), ไทย (th)",
+    "commands_text3": "\n**Available:** {languages}",
     "tip": "Tip: Personal language overrides server language for you!",
     "how_it_works": "📊 How It Works",
     "current_settings": "⚙️ Current Settings",
@@ -284,6 +407,12 @@
   },
   "music": {
     "player": {
+      "directory": {
+        "title": "🎵 Music players",
+        "description": "Join a voice channel and type a song name or link here to play. Open your voice chat below for player controls.",
+        "empty": "No active voice players.",
+        "entry": "**{bot}** • {channel} — [Open player]({url})"
+      },
       "now_playing": "🎵 Now Playing `{title}`",
       "artist": "👤 **Artist:** {artist}",
       "duration_label": "⏳ **Duration:** {duration}",
@@ -308,9 +437,15 @@
     },
     "static_response": {
       "processed": "✅ I've processed your request in {channel}.\n",
-      "tip": "💡 **Tip**: You can use the player directly in {channel}!"
+      "tip": "💡 **Tip**: You can use the player directly in {channel}!",
+      "help_hint": "Type a song name or URL to play music. Use `/help` for available commands."
     },
     "playlist": {
+      "create_error": "Could not create the playlist. The name may already be in use.",
+      "delete_error": "Could not delete the playlist. Please try again.",
+      "cover_error": "Could not update the thumbnail. Please try again.",
+      "remove_error": "Could not remove the track. Refresh the playlist and try again.",
+      "source_unavailable": "The linked source is unavailable. Your manually added tracks are still available.",
       "created": "✅ Created playlist: `{name}`",
       "created_server": "✅ Created server playlist: `{name}`",
       "create_failed": "❌ Failed to create playlist: `{name}`",
@@ -539,7 +674,11 @@
         "setting_up": "🔄 Setting up music channel in {channel}...",
         "cleaning": "🧹 Cleaned {count} messages...",
         "warning_permissions": "⚠️ Warning: Cannot delete messages (missing permissions). Continuing anyway...",
-        "warning_error": "⚠️ Warning: Could not clean channel. Continuing anyway..."
+        "warning_error": "⚠️ Warning: Could not clean channel. Continuing anyway...",
+        "bound": "✅ Bound static music embed to message `{message_id}` in {channel}",
+        "invalid_message_id": "❌ Invalid message ID provided.",
+        "message_not_found": "❌ Message not found in {channel}.",
+        "not_bot_message": "❌ Cannot bind to a message sent by someone else. The message must be sent by the bot."
       },
       "247": {
         "enabled": "✅ **24/7 Mode** enabled. The bot will stay in the voice channel.",
@@ -549,6 +688,13 @@
         "enabled": "✅ **Autoplay** enabled. Songs will be added automatically.",
         "disabled": "❌ **Autoplay** disabled."
       },
+      "autoplay_block": {
+        "nothing_playing": "❌ No track is currently playing.",
+        "unavailable": "❌ The current track has no YouTube channel ID available. Reload the track after updating NodeLink, or enter its channel ID in Server Settings.",
+        "already_blocked": "ℹ️ Channel `{channel_id}` is already blocked from autoplay.",
+        "full": "❌ The autoplay blacklist is full (100 entries). Remove an entry in Server Settings first.",
+        "added": "✅ Channel `{channel_id}` is now blocked from autoplay for this server. The current track will finish normally."
+      },
       "queue_view": {
         "songs_count": "{count} songs",
         "empty_desc": "Queue is empty.",
@@ -557,6 +703,10 @@
         "next_btn": "Next",
         "cancel_btn": "Cancel",
         "title_with_count": "{title} ({count} songs)"
+      },
+      "lyrics": {
+        "nothing_playing": "❌ Nothing is playing right now.",
+        "not_found": "❌ No lyrics found for this song."
       }
     },
     "lastfm": {
@@ -572,6 +722,8 @@
       },
       "scrobbled": "📊 Scrobbled to Last.fm: {track}",
       "not_configured": "Last.fm is not configured on this bot.",
+      "dm_failed": "I could not DM you the Last.fm login link. Enable DMs from server members or use the `/lastfm login` slash command.",
+      "dm_sent": "I sent you the Last.fm login link in DMs.",
       "authorize_prompt": "Please authorize the bot by clicking the button below, then click **Verify Login**.",
       "info_status": "👤 **Last.fm Account:** `{username}`\n📡 **Scrobbling:** {status}",
       "scrobbling_enabled": "✅ Enabled",
@@ -588,7 +740,7 @@
       "connection_failed": "❌ Failed to connect to voice channel",
       "track_failed": "❌ Failed to load track: {error}",
       "lastfm_error": "❌ Last.fm error: {error}",
-      "wavelink_not_installed": "❌ Wavelink is not installed. Please install it with: pip install wavelink",
+      "wavelink_not_installed": "❌ lava-lyra is not installed. Please install it with: pip install lava-lyra",
       "no_permission": "❌ You don't have permission to use this command",
       "command_error": "❌ An error occurred: {error}",
       "no_nodes": "❌ No connected music nodes found.",
@@ -596,8 +748,33 @@
       "voice_channel_mismatch": "❌ You must be in the same voice channel as the bot to use this command.",
       "session_died": "The music session expired due to a server restart. I have disconnected, please try your command again!",
       "node_offline": "Music server is currently offline.",
-      "track_stuck": "⚠️ Playback stopped responding after {seconds} seconds. Trying to recover…"
+      "track_stuck": "⚠️ Playback stopped responding after {seconds} seconds. Trying to recover…",
+      "too_many_failures": "⛔ Stopped playback after {count} failed tracks in a row. Use /play or /skip to try again."
     }
+  },
+  "server": {
+    "musicAppearance": "Voice Player Appearance",
+    "musicAppearanceDesc": "Customize player embeds in voice-channel chats.",
+    "musicChannelAppearance": "Music Channel Appearance"
+  },
+  "musicAppearance": {
+    "title": "Voice Player Appearance",
+    "description": "Customize the appearance and variables of voice-chat player embeds.",
+    "nowPlaying": "Now Playing",
+    "idle": "Idle",
+    "enableCustom": "Enable custom player embed",
+    "enableCustomDesc": "Use your custom designed embed instead of the default layout.",
+    "reset": "Reset to Defaults",
+    "resetConfirm": "Are you sure you want to reset your music embed designs back to factory defaults?",
+    "savedSuccess": "Music embed appearance saved successfully."
+  },
+  "musicChannelAppearance": {
+    "title": "Music Channel Appearance",
+    "description": "Customize the directory embed in your dedicated music channel. Voice-player designs are saved separately.",
+    "directoryLabel": "Music channel directory",
+    "directoryTitle": "🎵 Music players",
+    "directoryDescription": "Join a voice channel and type a song name or link here to play. Open your voice chat below for player controls.",
+    "playerSample": "**Ayla** • #Music Lounge — [Open player](https://discord.com/channels/100/555)"
   },
   "reactionrole": {
     "help": "**Reaction Roles Commands:**\n`!reactionrole add <message_id> <emoji> <role>` - Add a reaction role\n`!reactionrole remove <message_id> [emoji]` - Remove reaction role(s)\n`!reactionrole list` - List all reaction roles\n`!reactionrole create <channel> <title> [description]` - Create a new reaction role message\n`!reactionrole update <message_id>` - Update message to show roles\n`!reactionrole edit <message_id> [title] [description]` - Edit message title/description",
@@ -651,7 +828,8 @@
       "success_title": "✅ Auto-Role Set",
       "success_description": "New members will automatically receive {role} when they join!",
       "role_too_high": "❌ I cannot assign this role because it's higher than my highest role.",
-      "role_managed": "❌ This role is managed by an integration and cannot be assigned manually."
+      "role_managed": "❌ This role is managed by an integration and cannot be assigned manually.",
+      "role_above_you": "❌ You cannot set an auto-role at or above your highest role."
     },
     "remove": {
       "success_title": "✅ Auto-Role Removed",
@@ -676,10 +854,10 @@
     "emoji_remove": "Emoji to remove (optional - removes all if not specified)",
     "scrobble_toggle": "Enable or disable scrobbling (on/off)",
     "message_id": "ID of the message",
-    "message_id_add": "ID of the message to add reaction role to",
-    "message_id_edit": "ID of the message to edit",
-    "message_id_update": "ID of the message to update",
-    "language_code": "Language code (en, th)",
+    "message_id_add": "ID or link of the message to add reaction role to",
+    "message_id_edit": "ID or link of the message to edit",
+    "message_id_update": "ID or link of the message to update",
+    "language_code": "Language code",
     "server_playlists_admin": "Manage server playlists (Admin only)",
     "member_add_xp": "Member to add XP to",
     "member_set_xp": "Member to set XP for",
@@ -717,6 +895,10 @@
     "set_xp_admin": "Set XP for a member in this server (Admin only).",
     "set_server_language": "Set server language",
     "set_personal_language": "Set your personal language preference",
+    "static_music_channel_set": "Set the static music channel, optionally binding an existing message ID",
+    "static_music_channel": "The text channel linking to active voice-chat players",
+    "static_music_message_id_optional": "Optional existing message ID to bind as the static embed",
+    "static_music_message_id": "The ID of the bot message to bind as the static music embed",
     "language_info": "Show language priority and current settings",
     "song_query": "Song name, URL, or playlist name",
     "member_ban": "The member to ban",
@@ -752,7 +934,34 @@
     "giveaway_winners": "Number of winners to pick (default: 1)",
     "giveaway_prize": "The prize or item being given away",
     "giveaway_message_id": "Message ID of the giveaway to manage",
-    "giveaway_title": "Optional custom title for the giveaway"
+    "giveaway_title": "Optional custom title for the giveaway",
+    "ticket_panel_description": "Publish a basic persistent ticket panel",
+    "ticket_priority_description": "Set this ticket priority",
+    "ticket_transfer_description": "Transfer this ticket to another staff member",
+    "ticket_rename_description": "Rename this ticket channel",
+    "ticket_add_member_description": "Add a member to this ticket",
+    "ticket_remove_member_description": "Remove a member from this ticket",
+    "ticket_note_description": "Add a private staff note",
+    "ticket_delete_description": "Delete a closed ticket channel and retain its transcript",
+    "filter_tremolo_desc": "Add tremolo effect",
+    "filter_tremolo_freq": "Tremolo frequency in Hz (1-20, default 4)",
+    "filter_vibrato_desc": "Add vibrato effect",
+    "filter_vibrato_freq": "Vibrato frequency in Hz (1-14, default 4)",
+    "filter_8d_desc": "Toggle 8D audio effect",
+    "filter_vaporwave_desc": "Slow down the song (vaporwave effect)",
+    "filter_vaporwave_speed": "Playback speed multiplier (0.5-1.0, default 0.75)",
+    "filter_nightcore_desc": "Speed up the song (nightcore effect)",
+    "filter_nightcore_speed": "Playback speed multiplier (1.0-2.0, default 1.25)",
+    "filter_bassboost_desc": "Boost the bass",
+    "filter_bassboost_intensity": "Bass boost intensity (1-50, default 20)",
+    "filter_karaoke_desc": "Toggle karaoke (vocal removal) effect",
+    "filter_distortion_desc": "Toggle distortion effect",
+    "filter_filters_desc": "Show active audio filters",
+    "filter_clear_desc": "Clear all audio filters",
+    "trap_channel_name": "Name of the new trap channel",
+    "trap_timeout_minutes": "Timeout length in minutes (default 30)",
+    "trap_existing_channel": "Existing channel to turn into a trap",
+    "trap_action": "What happens to someone who posts in the trap channel"
   },
   "giveaway": {
     "title": "🎉 GIVEAWAY 🎉",
@@ -780,7 +989,33 @@
     "list_empty": "No active giveaways in this server.",
     "list_item": "• **{prize}** ({winners} winner(s)) — Ends: <t:{end_timestamp}:R> [Jump to message]({jump_url})",
     "no_permission": "❌ You need 'Manage Server' permission to manage giveaways.",
-    "error": "❌ An error occurred: {error}"
+    "error": "❌ An error occurred: {error}",
+    "guild_only": "❌ Giveaways can only be used inside a server.",
+    "not_ended": "❌ This giveaway is still running. You can reroll it after it ends.",
+    "invalid_prize": "❌ Prize must be between 1 and 1000 characters.",
+    "invalid_title": "❌ Title must be 256 characters or fewer."
+  },
+  "scheduler": {
+    "no_guild": "❌ Schedules can only be managed inside a server.",
+    "created": "✅ Scheduled {kind} created for <t:{timestamp}:F>.",
+    "list_title": "📅 Upcoming schedules for {server}",
+    "list_empty": "No upcoming schedules in this server.",
+    "list_item": "• `{id}` **{title}** — <t:{timestamp}:R> in {channel}",
+    "cancelled": "✅ Cancelled scheduled item `{id}`.",
+    "not_found": "❌ Scheduled item not found.",
+    "invalid_datetime": "❌ Invalid date/time. Use ISO-8601, e.g. `2026-09-25T18:00:00Z`.",
+    "past_time": "❌ Scheduled time must be in the future.",
+    "invalid_field": "❌ Invalid schedule: {error}",
+    "no_permission": "❌ You need 'Manage Server' permission to manage schedules.",
+    "error": "❌ An error occurred: {error}",
+    "param_channel": "Announcement channel",
+    "param_start": "Start time in ISO-8601 format",
+    "param_message": "Announcement message",
+    "param_kind": "Announcement or event",
+    "param_title": "Optional title",
+    "param_recurrence": "Repeat schedule",
+    "param_location": "Optional event location",
+    "param_item_id": "Scheduled item ID"
   },
   "custom_commands": {
     "menu_title": "✨ Custom Commands",
@@ -878,9 +1113,11 @@
     "volume default": "Set the default volume for the server",
     "musicchannel": "Manage static music channel",
     "musicchannel set": "Set the static music channel",
+    "musicchannel bind": "Bind the static music embed to an existing message ID",
     "musicchannel remove": "Remove the static music channel",
     "247": "Toggle 24/7 mode",
     "autoplay": "Toggle Autoplay mode",
+    "autoplayblock": "Block the current track's YouTube channel from server autoplay",
     "lastfm": "Last.fm integration",
     "lastfm login": "Login to Last.fm",
     "lastfm info": "View your Last.fm account info",
@@ -905,7 +1142,17 @@
     "giveaway end": "End a giveaway immediately and pick winners",
     "giveaway reroll": "Reroll winners for an ended giveaway",
     "giveaway list": "List all active giveaways in this server",
-    "giveaway delete": "Delete a giveaway and remove its message"
+    "giveaway delete": "Delete a giveaway and remove its message",
+    "schedule": "Manage scheduled announcements and events",
+    "schedule create": "Schedule an announcement or event",
+    "schedule list": "List upcoming scheduled announcements and events",
+    "schedule cancel": "Cancel a scheduled announcement or event",
+    "trapchannel": "View the trap channel settings",
+    "trapchannel create": "Create a trap channel that times out anyone who posts in it",
+    "trapchannel set": "Turn an existing channel into the trap channel",
+    "trapchannel penalty": "Change the trap channel penalty",
+    "trapchannel refresh": "Repost or update the trap channel warning",
+    "trapchannel disable": "Stop the trap channel (the channel itself is kept)"
   },
   "leveling": "View current leveling system settings",
   "leveling enable": "Enable leveling and XP tracking for this server",
@@ -916,5 +1163,264 @@
   "levelchannel disable": "Disable level-up alert announcements",
   "levelchannel toggle": "Toggle level-up alert announcements on/off",
   "levelchannel set": "Bind leveling alerts to a specific text channel and enable them",
-  "levelchannel remove": "Remove the bound leveling alert channel"
+  "levelchannel remove": "Remove the bound leveling alert channel",
+  "discover": {
+    "backToDiscover": "Back to Discover",
+    "backToArtists": "Back to Favorite Artists",
+    "viewArtist": "View artist",
+    "artistPopularSongs": "Popular songs",
+    "heading": "Discover",
+    "tagline": "Find something to listen to",
+    "quickStarts": "What are you in the mood for?",
+    "quickSubtitle": "Choose a sound and make it yours.",
+    "random": "Random",
+    "randomDescription": "Let Ayla choose your next mood",
+    "moreMoods": "More moods",
+    "moreMoodsSubtitle": "A listening shortcut for every moment.",
+    "showAllMoods": "Show all moods",
+    "showLess": "Show less",
+    "showMore": "Show more",
+    "scrollLeft": "Scroll left: {section}",
+    "scrollRight": "Scroll right: {section}",
+    "addToQueue": "Add to queue",
+    "queueAll": "Queue all shown",
+    "pending": "Adding…",
+    "playbackError": "Could not add this selection. Try again.",
+    "addedFeedback": "Added {title} to the queue.",
+    "startedFeedback": "Playback request accepted for {title}.",
+    "queueProgress": "Added {added} of {total} selections…",
+    "queuePartial": "Added {added} selections; {failed} could not be added.",
+    "queueComplete": "Added {added} selections to the queue.",
+    "sectionError": "Could not load this section. Try again.",
+    "sectionEmpty": "Nothing here yet. Try again later.",
+    "forYouSubtitle": "Songs inspired by your Last.fm listening.",
+    "sectionPartial": "Some results could not be loaded. Try again for more.",
+    "connectShort": "Connect Last.fm for picks inspired by your taste.",
+    "yourFavorites": "Your favorites",
+    "scrobbles": "{count} scrobbles",
+    "mood": {
+      "lofi": {
+        "title": "Lo-fi",
+        "description": "Relax and settle into a rhythm"
+      },
+      "gaming": {
+        "title": "Gaming",
+        "description": "Electronic energy for your next session"
+      },
+      "phonk": {
+        "title": "Phonk",
+        "description": "Heavy bass and drift beats"
+      },
+      "pop": {
+        "title": "Acoustic pop",
+        "description": "Warm vocals and familiar melodies"
+      },
+      "anime": {
+        "title": "Anime",
+        "description": "Openings, endings and soundtracks"
+      },
+      "kpop": {
+        "title": "K-pop",
+        "description": "Bright hooks and dance favorites"
+      },
+      "rock": {
+        "title": "Rock & indie",
+        "description": "Guitars with a little edge"
+      },
+      "jazz": {
+        "title": "Midnight jazz",
+        "description": "Soft piano and late-night soul"
+      },
+      "gym": {
+        "title": "Workout",
+        "description": "Keep moving with high-energy beats"
+      },
+      "ambient": {
+        "title": "Ambient",
+        "description": "Slow down with quiet soundscapes"
+      },
+      "rnb": {
+        "title": "R&B & soul",
+        "description": "Smooth vocals and late-night grooves"
+      },
+      "synthwave": {
+        "title": "Synthwave",
+        "description": "Retro synths and neon nights"
+      },
+      "metal": {
+        "title": "Metal",
+        "description": "Heavy riffs and powerful drums"
+      },
+      "coffeeshop": {
+        "title": "Coffee shop",
+        "description": "Soft acoustic sounds for a cozy break"
+      },
+      "cyberpunk": {
+        "title": "Cyberpunk",
+        "description": "Dark synths and industrial rhythms"
+      },
+      "hiphop": {
+        "title": "90s hip-hop",
+        "description": "Classic samples and boom-bap drums"
+      },
+      "classical": {
+        "title": "Classical",
+        "description": "Piano and strings for a clear mind"
+      },
+      "tropical": {
+        "title": "Tropical house",
+        "description": "Sunny melodies and laid-back rhythms"
+      },
+      "coding": {
+        "title": "Coding",
+        "description": "Steady rhythms for deeper focus"
+      },
+      "chillhop": {
+        "title": "Chillhop",
+        "description": "Jazzy beats and warm vinyl sounds"
+      },
+      "trap": {
+        "title": "Trap",
+        "description": "Heavy 808s and rolling hi-hats"
+      },
+      "indie": {
+        "title": "Indie folk",
+        "description": "Gentle guitars and dreamy vocals"
+      },
+      "edm": {
+        "title": "Festival EDM",
+        "description": "Big drops and festival energy"
+      },
+      "reggae": {
+        "title": "Reggae",
+        "description": "Island rhythms and easy grooves"
+      }
+    }
+  },
+  "moderation_ui": {
+    "casesTab": "Cases",
+    "policyTab": "Policy",
+    "moreFilters": "More filters",
+    "clearFilters": "Clear filters",
+    "export": "Export",
+    "caseCount": "{count} cases",
+    "workspaceTitle": "Moderation",
+    "workspaceSubtitle": "Review cases and resolve appeals.",
+    "settings": "Moderation settings",
+    "settingsHelp": "Manage appeals, warnings, and case history.",
+    "backWorkspace": "Back to moderation",
+    "backCases": "Back to cases",
+    "appealsSettings": "Member appeals",
+    "appealsHelp": "Let members request a review of an active case from My Appeals.",
+    "warningSettings": "Warnings",
+    "warningHelp": "Warning points track repeated issues. Automatic actions are configured separately below.",
+    "automaticActions": "Automatic actions",
+    "automaticHelp": "These rules apply Discord actions when a member reaches a warning threshold.",
+    "noAutomaticActions": "No automatic actions configured.",
+    "advancedSettings": "Case history and module settings",
+    "moduleHelp": "Enable casebook commands and create moderation cases from the dashboard.",
+    "moduleDisabled": "Creating cases is disabled. Enable the casebook in Moderation settings.",
+    "createHelp": "Choose a member, explain the reason, then review the action.",
+    "reviewAction": "Review action",
+    "reviewHelp": "Check the member and action before submitting.",
+    "confirmAction": "Confirm action",
+    "changeMember": "Change",
+    "noMembers": "No members found. Try a name or Discord ID.",
+    "durationMinutes": "Timeout duration (minutes)",
+    "reasonHelp": "Explain what happened and why this action is needed.",
+    "optionalDetails": "Staff notes, evidence, and warning points",
+    "reviewAppealsHelp": "Open the original case for context, then accept or decline with a review reason.",
+    "settingsSaved": "Moderation settings saved.",
+    "caseCreated": "Moderation action completed and case recorded.",
+    "caseSaved": "Case changes saved.",
+    "appealReviewed": "Appeal review saved.",
+    "policyLoadFailed": "Could not load moderation settings.",
+    "memberSearchFailed": "Could not search members. Try again.",
+    "appealsLoadFailed": "Could not load pending appeals.",
+    "action.warn": "Warn",
+    "action.note": "Staff note",
+    "action.timeout": "Timeout",
+    "action.kick": "Kick",
+    "action.ban": "Ban",
+    "action.unban": "Unban",
+    "actionHelp.warn": "Record a warning with points for this member.",
+    "actionHelp.note": "Add a private staff note without applying a punishment.",
+    "actionHelp.timeout": "Temporarily prevent this member from sending messages and speaking.",
+    "actionHelp.kick": "Remove this member from the server. They can rejoin with an invite.",
+    "actionHelp.ban": "Ban this member from the server until the ban is removed.",
+    "notification": "Member notification"
+  },
+  "leveling_ui": {
+    "levelAppearanceDescription": "Customize the level-up message and preview it before saving.",
+    "levelMediaFooter": "Images and footer",
+    "levelCommands": "Discord commands"
+  },
+  "header": {
+    "music": "Music",
+    "featureNavigation": "Main navigation",
+    "developmentTitle": "Very early development",
+    "developmentNotice": "Ayla is in very early development. Expect plenty of bugs, unfinished features, and things that don’t make sense yet and mostly nonsense debug stuff."
+  },
+  "api_errors": {
+    "400": "Bad request",
+    "401": "Unauthorized",
+    "403": "Forbidden",
+    "404": "Not found",
+    "409": "Conflict",
+    "413": "Payload too large",
+    "422": "Validation error",
+    "429": "Too many requests",
+    "500": "Internal error",
+    "502": "Upstream error",
+    "503": "Service unavailable",
+    "504": "Gateway timeout"
+  },
+  "trap_channel": {
+    "channel_topic": "⚠️ Do not send messages here. Anything posted in this channel is deleted and the sender is penalised automatically.",
+    "units": {
+      "minute": "{count} minute",
+      "minutes": "{count} minutes",
+      "hour": "{count} hour",
+      "hours": "{count} hours",
+      "day": "{count} day",
+      "days": "{count} days"
+    },
+    "penalty": {
+      "timeout": "timed out for {duration}",
+      "kick": "kicked from the server",
+      "ban": "banned from the server",
+      "delete": "has the message deleted",
+      "success": "✅ Trap Channel Penalty Updated"
+    },
+    "info": {
+      "title": "🪤 Trap Channel",
+      "channel": "Channel",
+      "not_set": "Not set",
+      "status": "Status",
+      "enabled": "🟢 Active",
+      "disabled": "⚪ Off",
+      "penalty": "Penalty",
+      "missing_permissions": "⚠️ Missing bot permissions",
+      "dashboard_hint": "Customise the warning embed and penalty from the web dashboard.",
+      "usage": "`{prefix}trapchannel create [name] [timeout_minutes]` - Create a new trap channel\n`{prefix}trapchannel set <channel> [timeout_minutes]` - Use an existing channel\n`{prefix}trapchannel penalty <timeout|kick|ban|delete> [timeout_minutes]` - Change the penalty\n`{prefix}trapchannel refresh` - Repost the warning\n`{prefix}trapchannel disable` - Turn the trap off"
+    },
+    "create": {
+      "success": "✅ Trap Channel Created"
+    },
+    "set": {
+      "success": "✅ Trap Channel Set"
+    },
+    "refresh": {
+      "success": "✅ Trap Channel Warning Updated"
+    },
+    "disable": {
+      "success": "⏸️ Trap Channel Disabled"
+    },
+    "errors": {
+      "invalid_minutes": "❌ The timeout must be between 1 and {max} minutes.",
+      "create_failed": "❌ I could not create the channel. Check that I have the Manage Channels permission.",
+      "publish_failed": "❌ I could not post the warning in the trap channel. Check that I can send messages and embeds there.",
+      "not_configured": "❌ No trap channel is active. Use `{prefix}trapchannel create` or `{prefix}trapchannel set` first."
+    }
+  }
 }

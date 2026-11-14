@@ -1,0 +1,6 @@
+# Development and CI tooling on top of the runtime requirements.
+-r requirements.txt
+# FastAPI's TestClient (tests only)
+httpcore==1.0.9
+httpx==0.28.1
+ruff==0.12.12

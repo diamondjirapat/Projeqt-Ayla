@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from database.models import GuildModel
+from database.guild_cache import GuildDocCache
+from runtime.bots import is_primary_for_guild
 from utils.i18n import i18n
 import logging
 
@@ -14,62 +16,53 @@ class AutoRole(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.guild_model = GuildModel()
-        self._role_cache = {}
-        self._cache_loaded = False
+        # Guild writes invalidate this cache across local bot/repository instances.
+        # Read directly on expiry even when the general guild TTL mode is enabled.
+        self._role_cache = GuildDocCache(ttl=60, max_size=2000, name='guild.autoroles')
 
-    async def _ensure_cache(self):
-        """Load autoroles into cache if not loaded"""
-        if self._cache_loaded:
-            return
-
-        try:
-            cursor = self.guild_model.collection.find(
-                {'auto_role_id': {'$exists': True, '$ne': None}}
-            )
-            async for guild_data in cursor:
-                self._role_cache[guild_data['guild_id']] = guild_data['auto_role_id']
-
-            self._cache_loaded = True
-            logger.info(f"Loaded {len(self._role_cache)} autorole configurations")
-        except Exception as e:
-            logger.error(f"Failed to load autorole cache: {e}")
+    async def _get_role_id(self, guild_id):
+        doc = await self._role_cache.get_or_load(
+            guild_id,
+            lambda: self.guild_model.collection.find_one({'guild_id': int(guild_id)}, {'auto_role_id': 1}),
+        )
+        return doc.get('auto_role_id') if doc else None
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await self._ensure_cache()
         logger.info(f'{self.__class__.__name__} cog loaded')
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Automatically assign a role when a new member joins"""
-        if member.bot:
+        if member.bot or not is_primary_for_guild(self.bot, member.guild.id):
             return
 
-        if not self._cache_loaded:
-            await self._ensure_cache()
-
-        role_id = self._role_cache.get(member.guild.id)
+        try:
+            role_id = await self._get_role_id(member.guild.id)
+        except Exception:
+            logger.exception('Failed to refresh auto-role for guild %s', member.guild.id)
+            return
         if not role_id:
             return
 
         role = member.guild.get_role(role_id)
 
         if not role:
-            logger.warning(f"Auto-role {role_id} not found in guild {member.guild.id}, removing from cache.")
-            del self._role_cache[member.guild.id]
+            logger.warning(f'Auto-role {role_id} not found in guild {member.guild.id}, removing from cache.')
+            self._role_cache.invalidate(member.guild.id)
             await self.guild_model.update_guild(member.guild.id, {'auto_role_id': None})
             return
 
         try:
-            await member.add_roles(role, reason="Auto-role on join")
-            logger.info(f"Assigned auto-role {role.name} to {member} in {member.guild.name}")
+            await member.add_roles(role, reason='Auto-role on join')
+            logger.info(f'Assigned auto-role {role.name} to {member} in {member.guild.name}')
         except discord.Forbidden:
-            logger.debug(f"Missing permissions to assign auto-role in {member.guild.name}")
+            logger.debug(f'Missing permissions to assign auto-role in {member.guild.name}')
         except Exception as e:
-            logger.error(f"Error assigning auto-role: {e}")
+            logger.error(f'Error assigning auto-role: {e}')
 
     @commands.hybrid_group(name='autorole', fallback='info')
-    @commands.has_permissions(manage_roles=True)
+    @commands.has_guild_permissions(manage_roles=True)
     async def autorole(self, ctx: commands.Context):
         """View current auto-role settings"""
         guild_data = await self.guild_model.get_guild(ctx.guild.id)
@@ -96,8 +89,8 @@ class AutoRole(commands.Cog):
         await ctx.send(embed=embed)
 
     @autorole.command(name='set')
-    @commands.has_permissions(manage_roles=True)
-    @app_commands.describe(role="The role to auto-assign to new members")
+    @commands.has_guild_permissions(manage_roles=True)
+    @app_commands.describe(role='The role to auto-assign to new members')
     async def autorole_set(self, ctx: commands.Context, role: discord.Role):
         """Set the auto-role for new members"""
         if role >= ctx.guild.me.top_role:
@@ -110,6 +103,10 @@ class AutoRole(commands.Cog):
             await ctx.send(error_msg)
             return
 
+        if ctx.author.id != ctx.guild.owner_id and role >= ctx.author.top_role:
+            await ctx.send(await i18n.t(ctx, 'autorole.set.role_above_you'))
+            return
+
         # Update DB
         guild_data = await self.guild_model.get_guild(ctx.guild.id)
         if not guild_data:
@@ -117,22 +114,15 @@ class AutoRole(commands.Cog):
         else:
             await self.guild_model.update_guild(ctx.guild.id, {'auto_role_id': role.id})
 
-        # Update Cache
-        self._role_cache[ctx.guild.id] = role.id
-
         title = await i18n.t(ctx, 'autorole.set.success_title')
         description = await i18n.t(ctx, 'autorole.set.success_description', role=role.mention)
 
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.green()
-        )
+        embed = discord.Embed(title=title, description=description, color=discord.Color.green())
         await ctx.send(embed=embed)
-        logger.info(f"Auto-role set to {role.name} in {ctx.guild.name}")
+        logger.info(f'Auto-role set to {role.name} in {ctx.guild.name}')
 
     @autorole.command(name='remove')
-    @commands.has_permissions(manage_roles=True)
+    @commands.has_guild_permissions(manage_roles=True)
     async def autorole_remove(self, ctx: commands.Context):
         """Remove the auto-role"""
         guild_data = await self.guild_model.get_guild(ctx.guild.id)
@@ -145,20 +135,12 @@ class AutoRole(commands.Cog):
         # Update DB
         await self.guild_model.update_guild(ctx.guild.id, {'auto_role_id': None})
 
-        # Update Cache
-        if ctx.guild.id in self._role_cache:
-            del self._role_cache[ctx.guild.id]
-
         title = await i18n.t(ctx, 'autorole.remove.success_title')
         description = await i18n.t(ctx, 'autorole.remove.success_description')
 
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.green()
-        )
+        embed = discord.Embed(title=title, description=description, color=discord.Color.green())
         await ctx.send(embed=embed)
-        logger.info(f"Auto-role removed in {ctx.guild.name}")
+        logger.info(f'Auto-role removed in {ctx.guild.name}')
 
     @autorole.error
     async def autorole_error(self, ctx: commands.Context, error):
@@ -168,7 +150,7 @@ class AutoRole(commands.Cog):
         else:
             error_msg = await i18n.t(ctx, 'autorole.errors.command_error', error=str(error))
             await ctx.send(error_msg)
-            logger.error(f"Auto-role command error: {error}")
+            logger.error(f'Auto-role command error: {error}')
 
 
 async def setup(bot):

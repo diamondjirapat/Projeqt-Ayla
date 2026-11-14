@@ -11,7 +11,7 @@ COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN chown -R botuser:botuser /app
+RUN mkdir -p /app/static/uploads && chown -R botuser:botuser /app
 
 USER botuser
 

@@ -1,0 +1,380 @@
+{
+  "valid": [
+    {
+      "name": "connected state with unchanged timeline",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true,
+        "guild_id": "123",
+        "guild_name": "Guild",
+        "channel_id": "456",
+        "channel_name": "Voice",
+        "bitrate": 64,
+        "is_playing": true,
+        "is_paused": false,
+        "volume": 25,
+        "position": 100,
+        "loop_mode": "OFF",
+        "autoplay": true,
+        "current_track": null,
+        "timeline_revision": "revision"
+      }
+    },
+    {
+      "name": "empty player list",
+      "contract": "PlayerList",
+      "value": []
+    },
+    {
+      "name": "exact IDs in player list",
+      "contract": "PlayerList",
+      "value": [
+        {
+          "guild_id": "1134567890123456789",
+          "guild_name": "Guild",
+          "channel_name": "Voice",
+          "is_playing": true,
+          "current_track": "Track"
+        }
+      ]
+    },
+    {
+      "name": "connected player with track",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true,
+        "guild_id": "1134567890123456789",
+        "guild_name": "Guild",
+        "channel_id": "1234567890123456789",
+        "channel_name": "Voice",
+        "bitrate": 64,
+        "is_playing": true,
+        "is_paused": false,
+        "volume": 25,
+        "position": 1200,
+        "loop_mode": "OFF",
+        "autoplay": true,
+        "current_track": {
+          "title": "Track",
+          "author": "Artist",
+          "uri": "https://example.com/track",
+          "length": 180000
+        },
+        "queue": [],
+        "history": []
+      }
+    },
+    {
+      "name": "startup state",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": false,
+        "msg": "Bot is starting..."
+      }
+    },
+    {
+      "name": "disconnected voice channel",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": false,
+        "user_voice": {
+          "guild_id": "1134567890123456789",
+          "guild_name": "Guild",
+          "channel_id": "1234567890123456789",
+          "channel_name": "Voice"
+        }
+      }
+    },
+    {
+      "name": "control request with exact ID",
+      "contract": "PlayerControl",
+      "value": {
+        "action": "pause",
+        "guild_id": "1134567890123456789"
+      }
+    },
+    {
+      "name": "control request with small numeric ID",
+      "contract": "PlayerControl",
+      "value": {
+        "action": "seek",
+        "value": 1000,
+        "guild_id": 123
+      }
+    },
+    {
+      "name": "control success",
+      "contract": "ControlResult",
+      "value": {
+        "success": true
+      }
+    },
+    {
+      "name": "search result",
+      "contract": "SearchResult",
+      "value": {
+        "mode": "youtube",
+        "is_playlist": false,
+        "playlist_name": null,
+        "tracks": [
+          {
+            "title": "Track",
+            "author": "Artist",
+            "uri": "https://example.com/track",
+            "length": 180000
+          }
+        ],
+        "playlists": []
+      }
+    },
+    {
+      "name": "forward compatible response extension",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true,
+        "guild_id": "1134567890123456789",
+        "guild_name": "Guild",
+        "channel_id": "1234567890123456789",
+        "channel_name": "Voice",
+        "bitrate": 64,
+        "is_playing": true,
+        "is_paused": false,
+        "volume": 25,
+        "position": 1200,
+        "loop_mode": "OFF",
+        "autoplay": true,
+        "current_track": {
+          "title": "Track",
+          "author": "Artist",
+          "uri": "https://example.com/track",
+          "length": 180000
+        },
+        "queue": [],
+        "history": [],
+        "future_field": {
+          "enabled": true
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "removed gapless toggle",
+      "contract": "PlayerControl",
+      "value": {"action": "gapless", "value": false, "guild_id": "123"}
+    },
+    {
+      "name": "omitted timeline without revision",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true, "guild_id": "123", "guild_name": "Guild", "channel_id": "456",
+        "channel_name": "Voice", "bitrate": 64, "is_playing": true, "is_paused": false,
+        "volume": 25, "position": 100, "loop_mode": "OFF", "autoplay": true, "current_track": null
+      }
+    },
+    {
+      "name": "partial timeline despite revision",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true, "guild_id": "123", "guild_name": "Guild", "channel_id": "456",
+        "channel_name": "Voice", "bitrate": 64, "is_playing": true, "is_paused": false,
+        "volume": 25, "position": 100, "loop_mode": "OFF", "autoplay": true, "current_track": null,
+        "timeline_revision": "revision", "queue": []
+      }
+    },
+    {
+      "name": "missing player field",
+      "contract": "PlayerList",
+      "value": [
+        {
+          "guild_id": "123"
+        }
+      ]
+    },
+    {
+      "name": "numeric response ID",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true,
+        "guild_id": 123,
+        "guild_name": "Guild",
+        "channel_id": "1234567890123456789",
+        "channel_name": "Voice",
+        "bitrate": 64,
+        "is_playing": true,
+        "is_paused": false,
+        "volume": 25,
+        "position": 1200,
+        "loop_mode": "OFF",
+        "autoplay": true,
+        "current_track": {
+          "title": "Track",
+          "author": "Artist",
+          "uri": "https://example.com/track",
+          "length": 180000
+        },
+        "queue": [],
+        "history": []
+      }
+    },
+    {
+      "name": "rounded numeric request ID",
+      "contract": "PlayerControl",
+      "value": {
+        "action": "pause",
+        "guild_id": 1134567890123456800
+      }
+    },
+    {
+      "name": "negative request ID",
+      "contract": "PlayerControl",
+      "value": {
+        "action": "pause",
+        "guild_id": -1
+      }
+    },
+    {
+      "name": "missing action",
+      "contract": "PlayerControl",
+      "value": {
+        "value": 1
+      }
+    },
+    {
+      "name": "unknown action",
+      "contract": "PlayerControl",
+      "value": {
+        "action": "unknown"
+      }
+    },
+    {
+      "name": "string boolean",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true,
+        "guild_id": "1134567890123456789",
+        "guild_name": "Guild",
+        "channel_id": "1234567890123456789",
+        "channel_name": "Voice",
+        "bitrate": 64,
+        "is_playing": "true",
+        "is_paused": false,
+        "volume": 25,
+        "position": 1200,
+        "loop_mode": "OFF",
+        "autoplay": true,
+        "current_track": {
+          "title": "Track",
+          "author": "Artist",
+          "uri": "https://example.com/track",
+          "length": 180000
+        },
+        "queue": [],
+        "history": []
+      }
+    },
+    {
+      "name": "incomplete connected response",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true
+      }
+    },
+    {
+      "name": "invalid track duration",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": true,
+        "guild_id": "1134567890123456789",
+        "guild_name": "Guild",
+        "channel_id": "1234567890123456789",
+        "channel_name": "Voice",
+        "bitrate": 64,
+        "is_playing": true,
+        "is_paused": false,
+        "volume": 25,
+        "position": 1200,
+        "loop_mode": "OFF",
+        "autoplay": true,
+        "current_track": {
+          "title": "Track",
+          "author": "Artist",
+          "uri": "https://example.com/track",
+          "length": "180000"
+        },
+        "queue": [],
+        "history": []
+      }
+    },
+    {
+      "name": "false success",
+      "contract": "ControlResult",
+      "value": {
+        "success": false
+      }
+    },
+    {
+      "name": "old search payload",
+      "contract": "SearchResult",
+      "value": {
+        "results": [
+          {
+            "title": "Track",
+            "author": "Artist",
+            "uri": "https://example.com/track",
+            "length": 180000
+          }
+        ]
+      }
+    },
+    {
+      "name": "disconnected state with guild ID",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": false,
+        "guild_id": "123"
+      }
+    },
+    {
+      "name": "numeric connected flag",
+      "contract": "PlayerStateContract",
+      "value": {
+        "connected": 1,
+        "guild_id": "1134567890123456789",
+        "guild_name": "Guild",
+        "channel_id": "1234567890123456789",
+        "channel_name": "Voice",
+        "bitrate": 64,
+        "is_playing": true,
+        "is_paused": false,
+        "volume": 25,
+        "position": 1200,
+        "loop_mode": "OFF",
+        "autoplay": true,
+        "current_track": {
+          "title": "Track",
+          "author": "Artist",
+          "uri": "https://example.com/track",
+          "length": 180000
+        },
+        "queue": [],
+        "history": []
+      }
+    },
+    {
+      "name": "numeric success flag",
+      "contract": "ControlResult",
+      "value": {
+        "success": 1
+      }
+    },
+    {
+      "name": "non-ASCII ID digits",
+      "contract": "PlayerControl",
+      "value": {
+        "action": "pause",
+        "guild_id": "1\u0661"
+      }
+    }
+  ]
+}

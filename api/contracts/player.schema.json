@@ -1,0 +1,489 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ConnectedState": {
+      "additionalProperties": true,
+      "anyOf": [
+        {
+          "required": [
+            "queue",
+            "history"
+          ]
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "queue"
+                ]
+              },
+              {
+                "required": [
+                  "history"
+                ]
+              }
+            ]
+          },
+          "properties": {
+            "timeline_revision": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "timeline_revision"
+          ]
+        }
+      ],
+      "properties": {
+        "connected": {
+          "const": true,
+          "title": "Connected",
+          "type": "boolean"
+        },
+        "guild_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Guild Id",
+          "type": "string"
+        },
+        "guild_name": {
+          "title": "Guild Name",
+          "type": "string"
+        },
+        "channel_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "channel_name": {
+          "title": "Channel Name",
+          "type": "string"
+        },
+        "bitrate": {
+          "title": "Bitrate",
+          "type": "number"
+        },
+        "is_playing": {
+          "title": "Is Playing",
+          "type": "boolean"
+        },
+        "is_paused": {
+          "title": "Is Paused",
+          "type": "boolean"
+        },
+        "volume": {
+          "title": "Volume",
+          "type": "number"
+        },
+        "position": {
+          "title": "Position",
+          "type": "number"
+        },
+        "loop_mode": {
+          "enum": [
+            "OFF",
+            "TRACK",
+            "QUEUE"
+          ],
+          "title": "Loop Mode",
+          "type": "string"
+        },
+        "autoplay": {
+          "title": "Autoplay",
+          "type": "boolean"
+        },
+        "gapless": {
+          "default": true,
+          "title": "Gapless",
+          "type": "boolean"
+        },
+        "current_track": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Track"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "queue": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "Queue",
+          "type": "array"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "timeline_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeline Revision"
+        }
+      },
+      "required": [
+        "connected",
+        "guild_id",
+        "guild_name",
+        "channel_id",
+        "channel_name",
+        "bitrate",
+        "is_playing",
+        "is_paused",
+        "volume",
+        "position",
+        "loop_mode",
+        "autoplay",
+        "current_track"
+      ],
+      "title": "ConnectedState",
+      "type": "object"
+    },
+    "ControlResult": {
+      "additionalProperties": true,
+      "properties": {
+        "success": {
+          "const": true,
+          "title": "Success",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "title": "ControlResult",
+      "type": "object"
+    },
+    "DisconnectedState": {
+      "additionalProperties": true,
+      "properties": {
+        "connected": {
+          "const": false,
+          "title": "Connected",
+          "type": "boolean"
+        },
+        "msg": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Msg"
+        },
+        "guild_id": {
+          "default": null,
+          "title": "Guild Id",
+          "type": "null"
+        },
+        "channel_id": {
+          "default": null,
+          "title": "Channel Id",
+          "type": "null"
+        },
+        "user_voice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VoiceChannel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "volume": {
+          "default": 25,
+          "title": "Volume",
+          "type": "number"
+        },
+        "current_track": {
+          "default": null,
+          "title": "Current Track",
+          "type": "null"
+        },
+        "queue": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "Queue",
+          "type": "array"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "History",
+          "type": "array"
+        }
+      },
+      "required": [
+        "connected"
+      ],
+      "title": "DisconnectedState",
+      "type": "object"
+    },
+    "PlayerControl": {
+      "additionalProperties": true,
+      "properties": {
+        "action": {
+          "enum": [
+            "play",
+            "pause",
+            "resume",
+            "skip",
+            "previous",
+            "volume",
+            "seek",
+            "shuffle",
+            "repeat",
+            "autoplay",
+            "queue_remove",
+            "queue_jump",
+            "history_jump",
+            "queue_clear",
+            "queue_move",
+            "history_move",
+            "history_to_queue",
+            "queue_to_history",
+            "current_to_queue",
+            "current_to_history"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value"
+        },
+        "guild_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Guild Id"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "PlayerControl",
+      "type": "object"
+    },
+    "PlayerList": {
+      "items": {
+        "$ref": "#/$defs/PlayerListItem"
+      },
+      "title": "PlayerList",
+      "type": "array"
+    },
+    "PlayerListItem": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Guild Id",
+          "type": "string"
+        },
+        "guild_name": {
+          "title": "Guild Name",
+          "type": "string"
+        },
+        "channel_name": {
+          "title": "Channel Name",
+          "type": "string"
+        },
+        "is_playing": {
+          "title": "Is Playing",
+          "type": "boolean"
+        },
+        "current_track": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Track"
+        }
+      },
+      "required": [
+        "guild_id",
+        "guild_name",
+        "channel_name",
+        "is_playing"
+      ],
+      "title": "PlayerListItem",
+      "type": "object"
+    },
+    "PlayerStateContract": {
+      "discriminator": {
+        "mapping": {
+          "False": "#/$defs/DisconnectedState",
+          "True": "#/$defs/ConnectedState"
+        },
+        "propertyName": "connected"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ConnectedState"
+        },
+        {
+          "$ref": "#/$defs/DisconnectedState"
+        }
+      ],
+      "title": "PlayerStateContract"
+    },
+    "SearchResult": {
+      "additionalProperties": true,
+      "properties": {
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "is_playlist": {
+          "title": "Is Playlist",
+          "type": "boolean"
+        },
+        "playlist_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Playlist Name"
+        },
+        "playlist_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Playlist Url"
+        },
+        "tracks": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "title": "Tracks",
+          "type": "array"
+        },
+        "playlists": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Playlists",
+          "type": "array"
+        }
+      },
+      "required": [
+        "mode",
+        "is_playlist",
+        "playlist_name",
+        "tracks",
+        "playlists"
+      ],
+      "title": "SearchResult",
+      "type": "object"
+    },
+    "Track": {
+      "additionalProperties": true,
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        },
+        "length": {
+          "title": "Length",
+          "type": "number"
+        }
+      },
+      "required": [
+        "title",
+        "author",
+        "uri",
+        "length"
+      ],
+      "title": "Track",
+      "type": "object"
+    },
+    "VoiceChannel": {
+      "additionalProperties": true,
+      "properties": {
+        "guild_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Guild Id",
+          "type": "string"
+        },
+        "guild_name": {
+          "title": "Guild Name",
+          "type": "string"
+        },
+        "channel_id": {
+          "pattern": "^[1-9][0-9]{0,18}$",
+          "title": "Channel Id",
+          "type": "string"
+        },
+        "channel_name": {
+          "title": "Channel Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "guild_id",
+        "guild_name",
+        "channel_id",
+        "channel_name"
+      ],
+      "title": "VoiceChannel",
+      "type": "object"
+    }
+  }
+}

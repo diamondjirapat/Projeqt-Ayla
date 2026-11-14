@@ -5,38 +5,65 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import logging
+import random
 import re
 from typing import Any, Literal, Mapping, Optional
 from urllib.parse import quote, urlparse
 
 import aiohttp
 
+from utils.cache import CACHE_MISS, AsyncTTLCache, TTLCache
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_ARTWORK = "/default_artwork.jpg"
-LASTFM_MISSING_IMAGE_ID = "2a96cbd8b46e442fc41c2b86b821562f"
+DEFAULT_ARTWORKS = (
+    '/default_artwork.jpg',
+    '/default_artwork_1.jpg',
+    '/default_artwork_2.jpg',
+    '/default_artwork_3.jpg',
+    '/default_artwork_4.jpg',
+    '/default_artwork_5.jpg',
+)
+DEFAULT_ARTWORK = DEFAULT_ARTWORKS[0]
+LASTFM_MISSING_IMAGE_ID = '2a96cbd8b46e442fc41c2b86b821562f'
 
-ArtworkSource = Literal["provider", "youtube", "itunes", "deezer", "lastfm", "custom", "default"]
-MediaKind = Literal["track", "artist", "album", "playlist", "vibe"]
+ArtworkSource = Literal['provider', 'youtube', 'itunes', 'deezer', 'lastfm', 'custom', 'default']
+MediaKind = Literal['track', 'artist', 'album', 'playlist', 'vibe']
 
 
-def _value(item: Any, name: str, default: Any = "") -> Any:
+def _value(item: Any, name: str, default: Any = '') -> Any:
     if isinstance(item, Mapping):
         return item.get(name, default)
     return getattr(item, name, default)
 
 
+def is_youtube_thumbnail(url: Any) -> bool:
+    """Return True when the URL is a YouTube thumbnail hosted on YouTube CDN domains."""
+    if not isinstance(url, str):
+        return False
+    try:
+        hostname = (urlparse(url.strip()).hostname or '').lower()
+        return hostname == 'i.ytimg.com' or hostname == 'img.youtube.com' or hostname.endswith('.ytimg.com')
+    except Exception:
+        return False
+
+
+def random_default_artwork() -> str:
+    """Pick one of the bundled default covers at random."""
+    return random.choice(DEFAULT_ARTWORKS)
+
+
 def _clean_url(value: Any) -> str:
     if not isinstance(value, str):
-        return ""
+        return ''
     value = value.strip()
-    if not value or value == DEFAULT_ARTWORK or LASTFM_MISSING_IMAGE_ID in value:
-        return ""
-    if value.startswith("/"):
+    if not value or value in DEFAULT_ARTWORKS or LASTFM_MISSING_IMAGE_ID in value:
+        return ''
+    if value.startswith('/'):
         return value
     parsed = urlparse(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return ""
+    if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+        return ''
     return value
 
 
@@ -44,28 +71,33 @@ def normalize_artwork_url(value: Any) -> str:
     """Validate an artwork URL and normalize unreliable YouTube sizes."""
     url = _clean_url(value)
     if not url:
-        return ""
-    return url.replace("maxresdefault.jpg", "hqdefault.jpg")
+        return ''
+    return url.replace('maxresdefault.jpg', 'hqdefault.jpg')
 
 
 def extract_youtube_id(item_or_url: Any) -> str:
     """Extract 11-character YouTube video ID from a track object or URL string."""
-    identifier = str(_value(item_or_url, "identifier", "") or "").strip()
-    source = str(_value(item_or_url, "source", "") or "").lower()
-    uri = str(_value(item_or_url, "uri", "") or _value(item_or_url, "url", "") or "")
-    if re.fullmatch(r"[0-9A-Za-z_-]{11}", identifier) and (
-        source in {"youtube", "youtubemusic"} or "youtu" in uri.lower() or not uri
+    identifier = str(_value(item_or_url, 'identifier', '') or '').strip()
+    source = str(_value(item_or_url, 'source', '') or '').lower()
+    track_type = _value(item_or_url, 'track_type', None)
+    if track_type is not None:
+        track_type_val = str(getattr(track_type, 'value', track_type) or '').lower()
+        if track_type_val in {'youtube', 'ytmusic'}:
+            source = track_type_val
+    uri = str(_value(item_or_url, 'uri', '') or _value(item_or_url, 'url', '') or '')
+    if re.fullmatch(r'[0-9A-Za-z_-]{11}', identifier) and (
+        source in {'youtube', 'youtubemusic', 'ytmusic'} or 'youtu' in uri.lower() or not uri
     ):
         return identifier
     if not uri and isinstance(item_or_url, str):
         uri = item_or_url
     match = re.search(
-        r"(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:embed/|v/|shorts/|watch\?(?:[^#]*&)?v=))"
-        r"([0-9A-Za-z_-]{11})(?:[^0-9A-Za-z_-]|$)",
+        r'(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:embed/|v/|shorts/|watch\?(?:[^#]*&)?v=))'
+        r'([0-9A-Za-z_-]{11})(?:[^0-9A-Za-z_-]|$)',
         uri,
         re.IGNORECASE,
     )
-    return match.group(1) if match else ""
+    return match.group(1) if match else ''
 
 
 @dataclass(frozen=True)
@@ -77,20 +109,20 @@ class ArtworkResult:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "artwork": self.artwork,
-            "artwork_fallbacks": list(self.artwork_fallbacks),
-            "artwork_source": self.artwork_source,
-            "media_kind": self.media_kind,
+            'artwork': self.artwork,
+            'artwork_fallbacks': list(self.artwork_fallbacks),
+            'artwork_source': self.artwork_source,
+            'media_kind': self.media_kind,
         }
 
 
 def _provider_artwork(item: Any) -> str:
     # custom_artwork is intentionally excluded to prevent unverified client override
-    for field in ("_artwork", "artwork", "artwork_url", "thumbnail"):
-        value = normalize_artwork_url(_value(item, field, ""))
+    for field in ('_artwork', 'artwork', 'artwork_url', 'thumbnail'):
+        value = normalize_artwork_url(_value(item, field, ''))
         if value:
             return value
-    return ""
+    return ''
 
 
 class ArtworkResolver:
@@ -98,152 +130,211 @@ class ArtworkResolver:
 
     def __init__(self) -> None:
         self._session: Optional[aiohttp.ClientSession] = None
-        self._cache: dict[str, ArtworkResult] = {}
+        self._cache: TTLCache[str, ArtworkResult] = TTLCache(ttl=3600, max_size=2000, name='artwork.results')
+        self._lookups: AsyncTTLCache[tuple, ArtworkResult] = AsyncTTLCache(
+            ttl=60, max_size=2000, name='artwork.lookups'
+        )
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
-                headers={"User-Agent": "ProjeqtAyla/1.0 (Artwork Resolver)"},
+                headers={'User-Agent': 'ProjeqtAyla/1.0 (Artwork Resolver)'},
                 timeout=aiohttp.ClientTimeout(total=3.0),
             )
         return self._session
 
     async def close(self) -> None:
+        self._cache.clear()
+        self._lookups.clear()
         if self._session and not self._session.closed:
             await self._session.close()
             self._session = None
 
     def resolve_track(self, track: Any) -> ArtworkResult:
         """Synchronous in-memory track artwork resolution."""
-        author = str(_value(track, "author", "") or _value(track, "artist", "") or "").strip()
-        title = str(_value(track, "title", "") or _value(track, "name", "") or "").strip()
-        cache_key = f"track:{author.lower()}:{title.lower()}"
-        if author and title and cache_key in self._cache:
-            return self._cache[cache_key]
+        author = str(_value(track, 'author', '') or _value(track, 'artist', '') or '').strip()
+        title = str(_value(track, 'title', '') or _value(track, 'name', '') or '').strip()
+        cache_key = f'track:{author.lower()}:{title.lower()}'
+        cached = self._cache.get(cache_key)
+        if author and title and cached is not CACHE_MISS:
+            return cached
 
         provider = _provider_artwork(track)
         if provider:
-            source: ArtworkSource = "lastfm" if "last.fm" in provider or "lastfm" in provider else "provider"
-            res = ArtworkResult(provider, (), source, "track")
+            if is_youtube_thumbnail(provider):
+                source: ArtworkSource = 'youtube'
+                res = ArtworkResult(provider, (random_default_artwork(),), source, 'track')
+            elif 'last.fm' in provider or 'lastfm' in provider:
+                source: ArtworkSource = 'lastfm'
+                res = ArtworkResult(provider, (), source, 'track')
+            else:
+                source: ArtworkSource = 'provider'
+                res = ArtworkResult(provider, (), source, 'track')
             if author and title:
-                self._cache[cache_key] = res
+                self._cache.set(cache_key, res)
             return res
 
         yt_id = extract_youtube_id(track)
         if yt_id:
-            yt_art = f"https://i.ytimg.com/vi/{yt_id}/hqdefault.jpg"
-            res = ArtworkResult(yt_art, (), "youtube", "track")
+            yt_art = f'https://i.ytimg.com/vi/{yt_id}/hqdefault.jpg'
+            # Random bundled cover so clients can immediately override the
+            # thumbnail when i.ytimg.com answers 404 for a removed video.
+            res = ArtworkResult(yt_art, (random_default_artwork(),), 'youtube', 'track')
             if author and title:
-                self._cache[cache_key] = res
+                self._cache.set(cache_key, res)
             return res
 
-        return ArtworkResult(DEFAULT_ARTWORK, (), "default", "track")
+        return ArtworkResult(DEFAULT_ARTWORK, (), 'default', 'track')
 
     def resolve_track_sync(self, track: Any) -> ArtworkResult:
         return self.resolve_track(track)
 
     async def resolve_track_async(self, track: Any) -> ArtworkResult:
+        key = (
+            'track',
+            str(_value(track, 'author', '') or _value(track, 'artist', '') or '').strip().lower(),
+            str(_value(track, 'title', '') or _value(track, 'name', '') or '').strip().lower(),
+            str(_value(track, 'uri', '') or _value(track, 'url', '') or ''),
+            str(_value(track, 'identifier', '') or ''),
+            _provider_artwork(track),
+        )
+        return await self._lookups.get_or_load(key, lambda: self._resolve_track_async(track))
+
+    async def _resolve_track_async(self, track: Any) -> ArtworkResult:
         """Asynchronous track artwork resolution with iTunes and Deezer fallback."""
         sync_res = self.resolve_track(track)
-        if sync_res.artwork != DEFAULT_ARTWORK:
-            return sync_res
-
-        author = str(_value(track, "author", "") or _value(track, "artist", "") or "").strip()
-        title = str(_value(track, "title", "") or _value(track, "name", "") or "").strip()
-        if not title or title.lower() in {"unknown", "unknown track"}:
-            return sync_res
-
-        cache_key = f"track:{author.lower()}:{title.lower()}"
-        if cache_key in self._cache:
-            return self._cache[cache_key]
-
+        if sync_res.artwork == DEFAULT_ARTWORK:
+            author = str(_value(track, 'author', '') or _value(track, 'artist', '') or '').strip()
+            title = str(_value(track, 'title', '') or _value(track, 'name', '') or '').strip()
+            if f'track:{author.lower()}:{title.lower()}' in self._cache:
+                return sync_res
         session = await self._get_session()
+
+        # If sync_res points to a YouTube thumbnail, verify it does not return 404
+        if is_youtube_thumbnail(sync_res.artwork):
+            is_valid = True
+            try:
+                async with session.head(sync_res.artwork, allow_redirects=True) as resp:
+                    if resp.status >= 400:
+                        is_valid = False
+            except Exception:
+                try:
+                    async with session.get(sync_res.artwork, allow_redirects=True) as resp:
+                        if resp.status >= 400:
+                            is_valid = False
+                except Exception:
+                    is_valid = False
+            if is_valid:
+                return sync_res
+        elif sync_res.artwork != DEFAULT_ARTWORK:
+            return sync_res
+
+        author = str(_value(track, 'author', '') or _value(track, 'artist', '') or '').strip()
+        title = str(_value(track, 'title', '') or _value(track, 'name', '') or '').strip()
+        if not title or title.lower() in {'unknown', 'unknown track'}:
+            return ArtworkResult(DEFAULT_ARTWORK, (), 'default', 'track')
+
+        cache_key = f'track:{author.lower()}:{title.lower()}'
+        cached = self._cache.get(cache_key)
+        if cached is not CACHE_MISS and cached.artwork != DEFAULT_ARTWORK and not is_youtube_thumbnail(cached.artwork):
+            return cached
 
         # 1. Try iTunes Search API
         try:
-            query = quote(f"{author} {title}".strip())
-            url = f"https://itunes.apple.com/search?term={query}&entity=song&limit=1"
+            query = quote(f'{author} {title}'.strip())
+            url = f'https://itunes.apple.com/search?term={query}&entity=song&limit=1'
             async with session.get(url) as resp:
                 if resp.status == 200:
                     data = await resp.json(content_type=None)
-                    if data.get("resultCount", 0) > 0:
-                        art = data["results"][0].get("artworkUrl100", "")
+                    if data.get('resultCount', 0) > 0:
+                        art = data['results'][0].get('artworkUrl100', '')
                         if art:
-                            res = ArtworkResult(art.replace("100x100bb", "600x600bb"), (), "itunes", "track")
-                            self._cache[cache_key] = res
+                            res = ArtworkResult(art.replace('100x100bb', '600x600bb'), (), 'itunes', 'track')
+                            self._cache.set(cache_key, res)
                             return res
         except Exception as e:
-            logger.debug(f"[ARTWORK] iTunes lookup failed for {author} - {title}: {e}")
+            logger.debug(f'[ARTWORK] iTunes lookup failed for {author} - {title}: {e}')
 
         # 2. Try Deezer API
         try:
-            query = quote(f"{author} {title}".strip())
-            url = f"https://api.deezer.com/search?q={query}&limit=1"
+            query = quote(f'{author} {title}'.strip())
+            url = f'https://api.deezer.com/search?q={query}&limit=1'
             async with session.get(url) as resp:
                 if resp.status == 200:
                     data = await resp.json(content_type=None)
-                    if data.get("data"):
-                        album_obj = data["data"][0].get("album", {})
-                        cover = album_obj.get("cover_big") or album_obj.get("cover_medium") or album_obj.get("cover_xl")
+                    if data.get('data'):
+                        album_obj = data['data'][0].get('album', {})
+                        cover = album_obj.get('cover_big') or album_obj.get('cover_medium') or album_obj.get('cover_xl')
                         if cover:
-                            res = ArtworkResult(cover, (), "deezer", "track")
-                            self._cache[cache_key] = res
+                            res = ArtworkResult(cover, (), 'deezer', 'track')
+                            self._cache.set(cache_key, res)
                             return res
         except Exception as e:
-            logger.debug(f"[ARTWORK] Deezer lookup failed for {author} - {title}: {e}")
+            logger.debug(f'[ARTWORK] Deezer lookup failed for {author} - {title}: {e}')
 
-        self._cache[cache_key] = sync_res
-        return sync_res
+        default_res = ArtworkResult(DEFAULT_ARTWORK, (), 'default', 'track')
+        self._cache.set(cache_key, default_res, ttl=60)
+        return default_res
 
     def resolve_artist(self, artist: Any) -> ArtworkResult:
         """Synchronous artist artwork resolution."""
-        name = str(_value(artist, "name", "") or _value(artist, "author", "") or "").strip()
-        cache_key = f"artist:{name.lower()}"
-        if name and cache_key in self._cache:
-            return self._cache[cache_key]
+        name = str(_value(artist, 'name', '') or _value(artist, 'author', '') or '').strip()
+        cache_key = f'artist:{name.lower()}'
+        cached = self._cache.get(cache_key)
+        if name and cached is not CACHE_MISS:
+            return cached
 
         provider = _provider_artwork(artist)
         if provider:
-            source: ArtworkSource = "lastfm" if "last.fm" in provider or "lastfm" in provider else "provider"
-            res = ArtworkResult(provider, (), source, "artist")
+            source: ArtworkSource = 'lastfm' if 'last.fm' in provider or 'lastfm' in provider else 'provider'
+            res = ArtworkResult(provider, (), source, 'artist')
             if name:
-                self._cache[cache_key] = res
+                self._cache.set(cache_key, res)
             return res
 
-        return ArtworkResult(DEFAULT_ARTWORK, (), "default", "artist")
+        return ArtworkResult(DEFAULT_ARTWORK, (), 'default', 'artist')
 
     async def resolve_artist_async(self, artist: Any) -> ArtworkResult:
+        key = (
+            'artist',
+            str(_value(artist, 'name', '') or _value(artist, 'author', '') or '').strip().lower(),
+            _provider_artwork(artist),
+        )
+        return await self._lookups.get_or_load(key, lambda: self._resolve_artist_async(artist))
+
+    async def _resolve_artist_async(self, artist: Any) -> ArtworkResult:
         """Asynchronous artist artwork resolution with Deezer lookup."""
         sync_res = self.resolve_artist(artist)
         if sync_res.artwork != DEFAULT_ARTWORK:
             return sync_res
 
-        name = str(_value(artist, "name", "") or _value(artist, "author", "") or "").strip()
-        if not name or name.lower() in {"unknown", "unknown artist"}:
+        name = str(_value(artist, 'name', '') or _value(artist, 'author', '') or '').strip()
+        if not name or name.lower() in {'unknown', 'unknown artist'}:
             return sync_res
 
-        cache_key = f"artist:{name.lower()}"
-        if cache_key in self._cache:
-            return self._cache[cache_key]
+        cache_key = f'artist:{name.lower()}'
+        cached = self._cache.get(cache_key)
+        if cached is not CACHE_MISS:
+            return cached
 
         session = await self._get_session()
 
         try:
             query = quote(name)
-            url = f"https://api.deezer.com/search/artist?q={query}&limit=1"
+            url = f'https://api.deezer.com/search/artist?q={query}&limit=1'
             async with session.get(url) as resp:
                 if resp.status == 200:
                     data = await resp.json(content_type=None)
-                    if data.get("data"):
-                        pic = data["data"][0].get("picture_big") or data["data"][0].get("picture_medium")
+                    if data.get('data'):
+                        pic = data['data'][0].get('picture_big') or data['data'][0].get('picture_medium')
                         if pic:
-                            res = ArtworkResult(pic, (), "deezer", "artist")
-                            self._cache[cache_key] = res
+                            res = ArtworkResult(pic, (), 'deezer', 'artist')
+                            self._cache.set(cache_key, res)
                             return res
         except Exception as e:
-            logger.debug(f"[ARTWORK] Deezer artist lookup failed for {name}: {e}")
+            logger.debug(f'[ARTWORK] Deezer artist lookup failed for {name}: {e}')
 
-        self._cache[cache_key] = sync_res
+        self._cache.set(cache_key, sync_res, ttl=60)
         return sync_res
 
     async def resolve_tracks_batch(self, tracks: list[Any]) -> list[ArtworkResult]:
@@ -270,52 +361,52 @@ class ArtworkResolver:
         self,
         collection: Any,
         *,
-        kind: Literal["album", "playlist"] = "playlist",
+        kind: Literal['album', 'playlist'] = 'playlist',
         tracks: list[Any] | None = None,
     ) -> ArtworkResult:
-        custom = normalize_artwork_url(_value(collection, "cover", "") or _value(collection, "custom_cover", ""))
+        custom = normalize_artwork_url(_value(collection, 'cover', '') or _value(collection, 'custom_cover', ''))
         if custom:
-            return ArtworkResult(custom, (), "custom", kind)
+            return ArtworkResult(custom, (), 'custom', kind)
 
         provider = _provider_artwork(collection)
         if provider:
-            return ArtworkResult(provider, (), "provider", kind)
+            return ArtworkResult(provider, (), 'provider', kind)
 
-        for track in tracks or _value(collection, "tracks", []) or []:
+        for track in tracks or _value(collection, 'tracks', []) or []:
             candidate = self.resolve_track(track).artwork
             if candidate != DEFAULT_ARTWORK:
-                return ArtworkResult(candidate, (), "provider", kind)
+                return ArtworkResult(candidate, (), 'provider', kind)
 
-        return ArtworkResult(DEFAULT_ARTWORK, (), "default", kind)
+        return ArtworkResult(DEFAULT_ARTWORK, (), 'default', kind)
 
 
 artwork_resolver = ArtworkResolver()
 
 
-def artwork_contract(item: Any, *, kind: MediaKind = "track") -> dict[str, Any]:
-    if kind == "artist":
+def artwork_contract(item: Any, *, kind: MediaKind = 'track') -> dict[str, Any]:
+    if kind == 'artist':
         return artwork_resolver.resolve_artist(item).as_dict()
-    if kind in {"album", "playlist"}:
+    if kind in {'album', 'playlist'}:
         return artwork_resolver.resolve_collection(item, kind=kind).as_dict()
-    if kind == "vibe":
-        return ArtworkResult(DEFAULT_ARTWORK, (), "default", "vibe").as_dict()
+    if kind == 'vibe':
+        return ArtworkResult(DEFAULT_ARTWORK, (), 'default', 'vibe').as_dict()
     return artwork_resolver.resolve_track(item).as_dict()
 
 
 def normalize_saved_track(track: Mapping[str, Any] | None) -> dict[str, Any]:
     """Normalize saved track dictionary representation."""
     source = dict(track or {})
-    canonical_url = str(source.get("canonical_url") or source.get("uri") or source.get("url") or "").strip()
+    canonical_url = str(source.get('canonical_url') or source.get('uri') or source.get('url') or '').strip()
     normalized = {
-        "title": source.get("title") or "Unknown",
-        "author": source.get("author") or "Unknown",
-        "url": canonical_url,
-        "uri": canonical_url,
-        "canonical_url": canonical_url,
-        "length": source.get("length") or 0,
+        'title': source.get('title') or 'Unknown',
+        'author': source.get('author') or 'Unknown',
+        'url': canonical_url,
+        'uri': canonical_url,
+        'canonical_url': canonical_url,
+        'length': source.get('length') or 0,
     }
-    if source.get("source"):
-        normalized["source"] = source["source"]
+    if source.get('source'):
+        normalized['source'] = source['source']
     candidate = {**source, **normalized}
-    normalized.update(artwork_contract(candidate, kind="track"))
+    normalized.update(artwork_contract(candidate, kind='track'))
     return normalized
