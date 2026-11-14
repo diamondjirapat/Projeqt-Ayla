@@ -144,9 +144,11 @@ class AutoplayBlockCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_manage_server_permission_is_required(self):
         self.ctx.permissions = discord.Permissions.none()
+        # Checks may be plain or async functions, and discord.py reverses their order each time the
+        # cog is instantiated, so evaluate them all without assuming either.
         with self.assertRaises(commands.MissingPermissions):
             for check in Music.autoplay_block.checks:
-                await check(self.ctx)
+                await discord.utils.maybe_coroutine(check, self.ctx)
 
 
 class PrefetchedChannelTests(unittest.TestCase):
